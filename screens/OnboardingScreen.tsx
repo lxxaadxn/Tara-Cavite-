@@ -5,7 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   Dimensions,
-  TouchableOpacity,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -71,6 +71,13 @@ const OnboardingScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      <View style={styles.logoContainer}>
+        <Image
+          source={require('../assets/images/cavitour-logo.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+      </View>
       <ScrollView
         ref={scrollViewRef}
         horizontal
@@ -117,6 +124,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.primary,
+  },
+  logoContainer: {
+    paddingTop: 50,
+    alignItems: 'center',
+    paddingBottom: Theme.spacing.md,
+  },
+  logo: {
+    height: 36,
+    width: 160,
   },
   slide: {
     width,

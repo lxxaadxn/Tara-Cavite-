@@ -12,21 +12,23 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Theme } from '../constants/Theme';
 import { Header } from '../components/Header';
-import { Card } from '../components/Card';
-import { categories, mockPlaces } from '../data/mockData';
+import { nearbyPlaces } from '../data/mockData';
 
 const HomeScreen: React.FC = () => {
   const navigation = useNavigation();
-  const [selectedCategory, setSelectedCategory] = useState<string>('1');
   const [searchQuery, setSearchQuery] = useState('');
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <Header title="" showBack={false} showNotification={false} />
-      <View style={styles.content}>
-        {/* Search Bar */}
+      <Header
+        title=""
+        showLogo
+        onMenuPress={() => {}}
+      />
+      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Search bar - dark teal */}
         <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color={Colors.text.secondary} />
+          <Ionicons name="search" size={20} color={Colors.text.light} />
           <TextInput
             style={styles.searchInput}
             placeholder="Where are you going?"
@@ -34,83 +36,56 @@ const HomeScreen: React.FC = () => {
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
-          <Ionicons name="location" size={20} color={Colors.primary} />
+          <Ionicons name="location" size={20} color={Colors.text.light} />
         </View>
 
-        {/* Category Chips */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.categoriesContainer}
-          contentContainerStyle={styles.categoriesContent}
-        >
-          {categories.map((category) => (
+        {/* Main content - dark teal background */}
+        <View style={styles.mainSection}>
+          {/* Terminals & Fare guide cards */}
+          <View style={styles.cardsRow}>
             <TouchableOpacity
-              key={category.id}
-              style={[
-                styles.categoryChip,
-                selectedCategory === category.id && styles.categoryChipActive,
-              ]}
-              onPress={() => setSelectedCategory(category.id)}
+              style={styles.quickCard}
+              onPress={() => navigation.navigate('Terminals' as never)}
+              activeOpacity={0.8}
             >
-              <Ionicons
-                name={category.icon as any}
-                size={18}
-                color={selectedCategory === category.id ? Colors.primary : Colors.text.secondary}
-              />
-              <Text
-                style={[
-                  styles.categoryText,
-                  selectedCategory === category.id && styles.categoryTextActive,
-                ]}
-              >
-                {category.name}
-              </Text>
+              <Ionicons name="bus" size={40} color={Colors.primary} />
+              <Text style={styles.quickCardText}>Terminals</Text>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Map View Placeholder */}
-        <View style={styles.mapContainer}>
-          <View style={styles.mapPlaceholder}>
-            <Ionicons name="map" size={48} color={Colors.text.light} />
-            <Text style={styles.mapPlaceholderText}>Map View</Text>
-            <Text style={styles.mapPlaceholderSubtext}>
-              Map integration would go here
-            </Text>
+            <TouchableOpacity
+              style={styles.quickCard}
+              onPress={() => {}}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="cash-outline" size={40} color={Colors.primary} />
+              <Text style={styles.quickCardText}>Fare guide</Text>
+            </TouchableOpacity>
           </View>
-        </View>
 
-        {/* Nearby Places Card */}
-        <Card style={styles.nearbyCard}>
-          <Text style={styles.nearbyTitle}>Nearby Places</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.placesContent}
-          >
-            {mockPlaces.map((place) => (
+          {/* Nearby Places card */}
+          <View style={styles.nearbyCard}>
+            <Text style={styles.nearbyTitle}>Nearby Places</Text>
+            {nearbyPlaces.map((place) => (
               <TouchableOpacity
                 key={place.id}
-                style={styles.placeItem}
+                style={styles.placeRow}
                 onPress={() =>
                   navigation.navigate('PlaceDetail' as never, { place } as never)
                 }
               >
-                <View style={styles.placeIcon}>
-                  <Ionicons name="location" size={20} color={Colors.primary} />
+                <Ionicons name="location" size={20} color={Colors.accent} />
+                <View style={styles.placeTextWrap}>
+                  <Text style={styles.placeName} numberOfLines={1}>
+                    {place.name}
+                  </Text>
+                  <Text style={styles.placeAddress} numberOfLines={1}>
+                    {place.address}
+                  </Text>
                 </View>
-                <Text style={styles.placeName} numberOfLines={1}>
-                  {place.name}
-                </Text>
-                <Text style={styles.placeAddress} numberOfLines={1}>
-                  {place.address}
-                </Text>
               </TouchableOpacity>
             ))}
-          </ScrollView>
-        </Card>
-      </View>
+          </View>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 };
@@ -120,118 +95,87 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  content: {
+  scroll: {
     flex: 1,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.primary,
     borderRadius: Theme.borderRadius.md,
     paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.sm,
+    paddingVertical: Theme.spacing.sm + 4,
     marginHorizontal: Theme.spacing.md,
-    marginTop: Theme.spacing.md,
-    marginBottom: Theme.spacing.sm,
-    ...Theme.shadows.card,
+    marginTop: Theme.spacing.sm,
+    marginBottom: Theme.spacing.md,
   },
   searchInput: {
     flex: 1,
     marginLeft: Theme.spacing.sm,
     fontSize: 16,
-    color: Colors.text.primary,
+    color: Colors.white,
   },
-  categoriesContainer: {
-    marginVertical: Theme.spacing.md,
-  },
-  categoriesContent: {
+  mainSection: {
+    flex: 1,
+    backgroundColor: Colors.primary,
+    borderTopLeftRadius: Theme.borderRadius.lg,
+    borderTopRightRadius: Theme.borderRadius.lg,
     paddingHorizontal: Theme.spacing.md,
+    paddingTop: Theme.spacing.lg,
+    paddingBottom: Theme.spacing.xl + 80,
   },
-  categoryChip: {
+  cardsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.white,
-    borderRadius: Theme.borderRadius.md,
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.sm,
-    marginRight: Theme.spacing.sm,
-    ...Theme.shadows.card,
+    gap: Theme.spacing.md,
+    marginBottom: Theme.spacing.lg,
   },
-  categoryChipActive: {
-    backgroundColor: Colors.primary + '10',
-  },
-  categoryText: {
-    marginLeft: Theme.spacing.xs,
-    fontSize: 14,
-    color: Colors.text.secondary,
-  },
-  categoryTextActive: {
-    color: Colors.primary,
-    fontWeight: '600',
-  },
-  mapContainer: {
+  quickCard: {
     flex: 1,
-    marginHorizontal: Theme.spacing.md,
-    marginBottom: Theme.spacing.md,
-    borderRadius: Theme.borderRadius.md,
-    overflow: 'hidden',
-  },
-  mapPlaceholder: {
-    flex: 1,
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.background,
+    borderRadius: Theme.borderRadius.lg,
+    paddingVertical: Theme.spacing.xl,
     alignItems: 'center',
     justifyContent: 'center',
     ...Theme.shadows.card,
   },
-  mapPlaceholderText: {
-    fontSize: 18,
+  quickCardText: {
+    fontSize: 16,
     fontWeight: '600',
-    color: Colors.text.secondary,
+    color: Colors.primary,
     marginTop: Theme.spacing.sm,
   },
-  mapPlaceholderSubtext: {
-    fontSize: 12,
-    color: Colors.text.light,
-    marginTop: Theme.spacing.xs,
-  },
   nearbyCard: {
-    marginHorizontal: Theme.spacing.md,
-    marginBottom: Theme.spacing.md,
+    backgroundColor: Colors.background,
+    borderRadius: Theme.borderRadius.lg,
+    padding: Theme.spacing.lg,
+    ...Theme.shadows.card,
   },
   nearbyTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: Colors.text.primary,
+    color: Colors.primary,
     marginBottom: Theme.spacing.md,
   },
-  placesContent: {
-    paddingRight: Theme.spacing.md,
-  },
-  placeItem: {
-    width: 120,
-    marginRight: Theme.spacing.md,
+  placeRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: Theme.spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.text.light + '40',
   },
-  placeIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.primary + '20',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Theme.spacing.sm,
+  placeTextWrap: {
+    marginLeft: Theme.spacing.sm,
+    flex: 1,
   },
   placeName: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
-    color: Colors.text.primary,
-    textAlign: 'center',
-    marginBottom: Theme.spacing.xs,
+    color: Colors.primary,
   },
   placeAddress: {
-    fontSize: 12,
+    fontSize: 13,
     color: Colors.text.secondary,
-    textAlign: 'center',
+    marginTop: 2,
   },
 });
 

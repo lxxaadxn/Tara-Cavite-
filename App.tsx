@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text } from 'react-native';
+import { View, Image } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SplashScreen from 'expo-splash-screen';
 
 import { Colors } from './constants/Colors';
+import { supabase } from './lib/supabase';
+
+// Keep native splash (CaviTour logo) visible until app is ready
+SplashScreen.preventAutoHideAsync();
 
 // Screens
 import OnboardingScreen from './screens/OnboardingScreen';
@@ -16,6 +21,8 @@ import SignUpScreen from './screens/SignUpScreen';
 import HomeScreen from './screens/HomeScreen';
 import PlaceDetailScreen from './screens/PlaceDetailScreen';
 import DirectionsScreen from './screens/DirectionsScreen';
+import TerminalsScreen from './screens/TerminalsScreen';
+import TerminalDetailScreen from './screens/TerminalDetailScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import UserDetailsScreen from './screens/UserDetailsScreen';
 import PreferencesScreen from './screens/PreferencesScreen';
@@ -38,6 +45,8 @@ const AuthStack = () => (
 const HomeStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="HomeMain" component={HomeScreen} />
+    <Stack.Screen name="Terminals" component={TerminalsScreen} />
+    <Stack.Screen name="TerminalDetail" component={TerminalDetailScreen} />
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
     <Stack.Screen name="Directions" component={DirectionsScreen} />
   </Stack.Navigator>
@@ -81,13 +90,12 @@ const MainTabs = () => (
 
         return <Ionicons name={iconName} size={size} color={color} />;
       },
-      tabBarActiveTintColor: Colors.primary,
-      tabBarInactiveTintColor: Colors.text.light,
+      tabBarActiveTintColor: Colors.white,
+      tabBarInactiveTintColor: 'rgba(255,255,255,0.6)',
       headerShown: false,
       tabBarStyle: {
-        backgroundColor: Colors.background,
-        borderTopWidth: 1,
-        borderTopColor: Colors.text.light,
+        backgroundColor: Colors.primary,
+        borderTopWidth: 0,
       },
     })}
   >
@@ -105,19 +113,9 @@ export default function App() {
     let interval: any;
 
     const init = async () => {
-      // Always start a fresh session when the app loads in Expo Go:
-      // - show onboarding first
-      // - require login again before entering the main app
-      try {
-        await AsyncStorage.multiRemove(['onboardingComplete', 'isAuthenticated']);
-      } catch {
-        // ignore errors here; we'll fall back to default state below
-      }
-
       await checkOnboardingStatus();
       await checkAuthStatus();
-
-      // Keep polling storage so SignIn/SignUp and logout changes are picked up
+      // Keep polling so SignIn/SignUp and logout are picked up
       interval = setInterval(() => {
         checkOnboardingStatus();
         checkAuthStatus();
@@ -133,6 +131,32 @@ export default function App() {
     };
   }, []);
 
+  // Sync auth state with Supabase session (persisted across app restarts)
+  useEffect(() => {
+    const updateAuthFromSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const isSignedIn = !!session;
+        await AsyncStorage.setItem('isAuthenticated', isSignedIn ? 'true' : 'false');
+        setIsAuthenticated(isSignedIn);
+      } catch {
+        setIsAuthenticated(false);
+      }
+    };
+
+    updateAuthFromSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const isSignedIn = !!session;
+      await AsyncStorage.setItem('isAuthenticated', isSignedIn ? 'true' : 'false');
+      setIsAuthenticated(isSignedIn);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
   const checkOnboardingStatus = async () => {
     try {
       const value = await AsyncStorage.getItem('onboardingComplete');
@@ -144,18 +168,33 @@ export default function App() {
 
   const checkAuthStatus = async () => {
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setIsAuthenticated(true);
+        return;
+      }
       const value = await AsyncStorage.getItem('isAuthenticated');
       setIsAuthenticated(value === 'true');
-    } catch (error) {
+    } catch {
       setIsAuthenticated(false);
     }
   };
 
+  // Hide native splash once we know initial state (show our in-app loading or main UI)
+  useEffect(() => {
+    if (isOnboardingComplete !== null) {
+      SplashScreen.hideAsync();
+    }
+  }, [isOnboardingComplete]);
+
   if (isOnboardingComplete === null) {
     return (
       <SafeAreaProvider>
-        <View style={{ flex: 1, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center' }}>
-          <Text style={{ color: Colors.primary }}>Loading...</Text>
+        <View style={{ flex: 1, backgroundColor: '#000000', justifyContent: 'center', alignItems: 'center' }}>
+          <Image
+            source={require('./assets/images/cavitour-logo.png')}
+            style={{ width: 200, height: 60, resizeMode: 'contain' }}
+          />
         </View>
       </SafeAreaProvider>
     );

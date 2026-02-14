@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -16,24 +17,45 @@ import { Header } from '../components/Header';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
+import { supabase } from '../lib/supabase';
+import { withAuthRetry, isNetworkErrorMsg, NETWORK_ERROR_USER_MESSAGE } from '../lib/authHelpers';
 
 const SignInScreen: React.FC = () => {
   const navigation = useNavigation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleGoBackToOnboarding = async () => {
+    await AsyncStorage.setItem('onboardingComplete', 'false');
+    // App.tsx polling will switch to Onboarding stack
+  };
 
   const handleSignIn = async () => {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password) {
+      Alert.alert('Missing fields', 'Please enter your email and password.');
+      return;
+    }
+    setLoading(true);
     try {
+      const { error } = await withAuthRetry(() =>
+        supabase.auth.signInWithPassword({ email: trimmedEmail, password })
+      );
+      if (error) throw error;
       await AsyncStorage.setItem('isAuthenticated', 'true');
-      // Navigation handled by App.tsx
-    } catch (error) {
-      console.error('Error signing in:', error);
+      // App.tsx polling will pick up the change and navigate to Main
+    } catch (error: unknown) {
+      const message = isNetworkErrorMsg(error) ? NETWORK_ERROR_USER_MESSAGE : (error instanceof Error ? error.message : String(error));
+      Alert.alert('Sign in failed', message);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <Header title="Sign in" showBack />
+      <Header title="Sign in" showBack onBackPress={handleGoBackToOnboarding} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.content}
@@ -65,7 +87,12 @@ const SignInScreen: React.FC = () => {
           </TouchableOpacity>
 
           <View style={styles.buttonContainer}>
-            <Button title="SIGN IN" onPress={handleSignIn} />
+            <Button
+              title="SIGN IN"
+              onPress={handleSignIn}
+              loading={loading}
+              disabled={loading}
+            />
           </View>
 
           <View style={styles.googleButton}>

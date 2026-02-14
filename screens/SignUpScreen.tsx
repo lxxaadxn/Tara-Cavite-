@@ -5,6 +5,8 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Alert,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -14,19 +16,73 @@ import { Header } from '../components/Header';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
+import { supabase } from '../lib/supabase';
+import { withAuthRetry, isNetworkErrorMsg, NETWORK_ERROR_USER_MESSAGE } from '../lib/authHelpers';
+
+const MIN_PASSWORD_LENGTH = 6;
+const hasUppercase = (str: string) => /[A-Z]/.test(str);
 
 const SignUpScreen: React.FC = () => {
   const navigation = useNavigation();
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
 
   const handleSignUp = async () => {
+    const trimmedEmail = email.trim();
+    setConfirmPasswordError('');
+
+    if (!trimmedEmail || !password || !confirmPassword) {
+      Alert.alert('Missing fields', 'Please fill in all fields.');
+      return;
+    }
+    const trimmedUsername = username.trim() || trimmedEmail.split('@')[0];
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      Alert.alert(
+        'Invalid password',
+        'Password must be at least 6 characters and contain at least one uppercase letter.'
+      );
+      return;
+    }
+    if (!hasUppercase(password)) {
+      Alert.alert(
+        'Invalid password',
+        'Password must contain at least one uppercase letter.'
+      );
+      return;
+    }
+    if (password !== confirmPassword) {
+      setConfirmPasswordError('Password do not match.');
+      return;
+    }
+    setLoading(true);
     try {
-      await AsyncStorage.setItem('isAuthenticated', 'true');
-      // Navigation handled by App.tsx
-    } catch (error) {
-      console.error('Error signing up:', error);
+      const { data, error } = await withAuthRetry(() =>
+        supabase.auth.signUp({
+          email: trimmedEmail,
+          password,
+          options: { data: { username: trimmedUsername } },
+        })
+      );
+      if (error) throw error;
+      if (data.session) {
+        await AsyncStorage.setItem('isAuthenticated', 'true');
+        // App.tsx will navigate to Main
+      } else {
+        Alert.alert(
+          'Check your email',
+          'We sent you a confirmation link. Open it to activate your account, then sign in.'
+        );
+        navigation.goBack();
+      }
+    } catch (error: unknown) {
+      const message = isNetworkErrorMsg(error) ? NETWORK_ERROR_USER_MESSAGE : (error instanceof Error ? error.message : String(error));
+      Alert.alert('Sign up failed', message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -44,6 +100,13 @@ const SignUpScreen: React.FC = () => {
           </Text>
 
           <Input
+            label="Username"
+            placeholder="Choose a username"
+            value={username}
+            onChangeText={setUsername}
+          />
+
+          <Input
             label="Email"
             placeholder="Enter Email"
             value={email}
@@ -53,32 +116,43 @@ const SignUpScreen: React.FC = () => {
 
           <Input
             label="Password"
-            placeholder="Enter Password"
+            placeholder="Enter Password (min 6 chars, one uppercase)"
             value={password}
-            onChangeText={setPassword}
+            onChangeText={(text) => {
+              setPassword(text);
+              setConfirmPasswordError('');
+            }}
             secureTextEntry
           />
 
           <Input
             label="Confirm Password"
-            placeholder="retype password"
+            placeholder="Retype password"
             value={confirmPassword}
-            onChangeText={setConfirmPassword}
+            onChangeText={(text) => {
+              setConfirmPassword(text);
+              setConfirmPasswordError('');
+            }}
             secureTextEntry
           />
+          {confirmPasswordError ? (
+            <Text style={styles.errorText}>{confirmPasswordError}</Text>
+          ) : null}
 
           <View style={styles.buttonContainer}>
-            <Button title="SIGN UP" onPress={handleSignUp} />
+            <Button
+              title="SIGN UP"
+              onPress={handleSignUp}
+              loading={loading}
+              disabled={loading}
+            />
           </View>
 
           <View style={styles.signInContainer}>
             <Text style={styles.signInText}>Already have an account? </Text>
-            <Text
-              style={styles.signInLink}
-              onPress={() => navigation.goBack()}
-            >
-              Sign in
-            </Text>
+            <TouchableOpacity onPress={() => navigation.goBack()}>
+              <Text style={styles.signInLink}>Sign in</Text>
+            </TouchableOpacity>
           </View>
         </Card>
       </KeyboardAvoidingView>
@@ -128,6 +202,12 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: 14,
     fontWeight: '600',
+  },
+  errorText: {
+    color: '#c62828',
+    fontSize: 13,
+    marginTop: -Theme.spacing.sm,
+    marginBottom: Theme.spacing.sm,
   },
 });
 

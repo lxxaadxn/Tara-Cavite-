@@ -49,10 +49,57 @@ export interface Notification {
   time: string;
 }
 
-// Mock places
-export const mockPlaces: Place[] = [
+export interface Terminal {
+  id: string;
+  name: string;
+  category: 'dasma-bayan' | 'other';
+  transportTypes: string[];
+  status: 'OPEN' | 'CLOSED';
+  operatingHours: string;
+  averageFare: string;
+  paymentType: string;
+  primaryRoutes: { label: string; fare: string }[];
+  reminders: string[];
+  latitude: number;
+  longitude: number;
+}
+
+// Nearby places for home (SM Dasmariñas, People's Park Tagaytay, Starbucks Silang)
+export const nearbyPlaces: Place[] = [
   {
     id: '1',
+    name: 'SM Dasmariñas',
+    address: 'Dasmariñas City, Cavite',
+    type: 'Shopping Mall',
+    hours: '10:00 AM - 9:00 PM',
+    latitude: 14.3297,
+    longitude: 120.9367,
+  },
+  {
+    id: '2',
+    name: "People's Park Tagaytay",
+    address: 'Tagaytay City, Cavite',
+    type: 'Park',
+    hours: 'Open 24 hours',
+    latitude: 14.1133,
+    longitude: 120.9383,
+  },
+  {
+    id: '3',
+    name: 'Starbucks Silang',
+    address: 'Silang, Cavite',
+    type: 'Cafe',
+    hours: '7:00 AM - 9:00 PM',
+    latitude: 14.2311,
+    longitude: 120.9753,
+  },
+];
+
+// Mock places (full list)
+export const mockPlaces: Place[] = [
+  ...nearbyPlaces,
+  {
+    id: '4',
     name: 'Tagaytay Picnic Grove',
     address: 'Tagaytay City, Cavite',
     type: 'Tourist Spot',
@@ -61,16 +108,7 @@ export const mockPlaces: Place[] = [
     longitude: 120.9383,
   },
   {
-    id: '2',
-    name: 'SM Dasmarinas',
-    address: 'Dasmarinas City, Cavite',
-    type: 'Shopping Mall',
-    hours: '10:00 AM - 9:00 PM',
-    latitude: 14.3297,
-    longitude: 120.9367,
-  },
-  {
-    id: '3',
+    id: '5',
     name: 'Robinsons Place Imus',
     address: 'Imus City, Cavite',
     type: 'Shopping Mall',
@@ -225,4 +263,110 @@ export const categories = [
   { id: '2', name: 'Jeepney Stops', icon: 'car' },
   { id: '3', name: 'Tricycle Stops', icon: 'bicycle' },
   { id: '4', name: 'Bus Stops', icon: 'bus' },
+];
+
+// Mock terminals
+export const mockTerminals: Terminal[] = [
+  {
+    id: '1',
+    name: 'Robinsons Pala-pala terminal',
+    category: 'dasma-bayan',
+    transportTypes: ['Jeepney', 'Bus', 'Tricycle'],
+    status: 'OPEN',
+    operatingHours: '5AM - 12MN',
+    averageFare: 'PHP 15 - 100',
+    paymentType: 'Cash',
+    primaryRoutes: [
+      { label: 'To Tagaytay (Bus/Jeep)', fare: '₱50 approx.' },
+      { label: 'To Dasma Bayan (Bus/Jeep)', fare: '₱11-20' },
+    ],
+    reminders: [
+      'Expect long lines from 5:00 PM to 8:00 PM',
+      'Reminder to have Student/Senior Citizen/PWD IDs ready for the 20% discount.',
+    ],
+    latitude: 14.3297,
+    longitude: 120.9367,
+  },
+  {
+    id: '2',
+    name: 'SM Pala-pala terminal',
+    category: 'dasma-bayan',
+    transportTypes: ['Jeepney', 'Bus', 'Tricycle'],
+    status: 'OPEN',
+    operatingHours: '5AM - 12MN',
+    averageFare: 'PHP 15 - 100',
+    paymentType: 'Cash',
+    primaryRoutes: [
+      { label: 'To Tagaytay (Bus/Jeep)', fare: '₱50 approx.' },
+      { label: 'To Dasma Bayan (Bus/Jeep)', fare: '₱11-20' },
+    ],
+    reminders: [
+      'Expect long lines from 5:00 PM to 8:00 PM',
+      'Reminder to have Student/Senior Citizen/PWD IDs ready for the 20% discount.',
+    ],
+    latitude: 14.3300,
+    longitude: 120.9370,
+  },
+  {
+    id: '3',
+    name: 'SM Dasmariñas Pala-pala Terminal',
+    category: 'dasma-bayan',
+    transportTypes: ['Jeepney', 'Bus', 'Tricycle'],
+    status: 'OPEN',
+    operatingHours: '5AM - 12MN',
+    averageFare: 'PHP 15 - 100',
+    paymentType: 'Cash',
+    primaryRoutes: [
+      { label: 'To Tagaytay (Bus/Jeep)', fare: '₱50 approx.' },
+      { label: 'To Dasma Bayan (Bus/Jeep)', fare: '₱11-20' },
+    ],
+    reminders: [
+      'Expect long lines from 5:00 PM to 8:00 PM',
+      'Reminder to have Student/Senior Citizen/PWD IDs ready for the 20% discount.',
+    ],
+    latitude: 14.3297,
+    longitude: 120.9367,
+  },
+  {
+    id: '4',
+    name: 'General Trias terminal',
+    category: 'other',
+    transportTypes: ['Jeepney', 'Tricycle'],
+    status: 'OPEN',
+    operatingHours: '5AM - 10PM',
+    averageFare: 'PHP 12 - 50',
+    paymentType: 'Cash',
+    primaryRoutes: [{ label: 'To Baclaran', fare: '₱35 approx.' }],
+    reminders: [],
+    latitude: 14.4167,
+    longitude: 120.8833,
+  },
+  {
+    id: '5',
+    name: 'Imus terminal',
+    category: 'other',
+    transportTypes: ['Jeepney', 'Bus', 'Tricycle'],
+    status: 'OPEN',
+    operatingHours: '5AM - 12MN',
+    averageFare: 'PHP 15 - 80',
+    paymentType: 'Cash',
+    primaryRoutes: [{ label: 'To Manila', fare: '₱45-80' }],
+    reminders: [],
+    latitude: 14.4297,
+    longitude: 120.9367,
+  },
+  {
+    id: '6',
+    name: 'All Homes terminal',
+    category: 'other',
+    transportTypes: ['Jeepney'],
+    status: 'OPEN',
+    operatingHours: '6AM - 8PM',
+    averageFare: 'PHP 10 - 30',
+    paymentType: 'Cash',
+    primaryRoutes: [],
+    reminders: [],
+    latitude: 14.3500,
+    longitude: 120.9200,
+  },
 ];

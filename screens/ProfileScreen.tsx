@@ -1,12 +1,14 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Theme } from '../constants/Theme';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
+import { supabase } from '../lib/supabase';
+import type { User } from '@supabase/supabase-js';
 
 interface MenuItem {
   id: string;
@@ -23,8 +25,23 @@ const menuItems: MenuItem[] = [
   { id: '5', title: 'Preferences', icon: 'settings', screen: 'Preferences' },
 ];
 
+const displayName = (user: User | null) =>
+  (user?.user_metadata?.username as string) || user?.email?.split('@')[0] || 'User';
+
 const ProfileScreen: React.FC = () => {
   const navigation = useNavigation();
+  const [user, setUser] = useState<User | null>(null);
+
+  const loadUser = async () => {
+    const { data: { user: u } } = await supabase.auth.getUser();
+    setUser(u);
+  };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      loadUser();
+    }, [])
+  );
 
   const handleLogout = async () => {
     Alert.alert(
@@ -40,8 +57,10 @@ const ProfileScreen: React.FC = () => {
           style: 'destructive',
           onPress: async () => {
             try {
+              await supabase.auth.signOut();
               await AsyncStorage.removeItem('isAuthenticated');
-              // The App.tsx will detect the change and navigate to Auth screen
+              await AsyncStorage.setItem('onboardingComplete', 'false');
+              // App.tsx polling will show Onboarding, then Auth after GET STARTED
             } catch (error) {
               console.error('Error during logout:', error);
               Alert.alert('Error', 'Failed to log out. Please try again.');
@@ -62,15 +81,23 @@ const ProfileScreen: React.FC = () => {
       />
       <ScrollView style={styles.content}>
         {/* Profile Info */}
-        <View style={styles.profileSection}>
+        <TouchableOpacity
+          style={styles.profileSection}
+          onPress={() => navigation.navigate('UserDetails' as never)}
+          activeOpacity={0.8}
+        >
           <View style={styles.avatarContainer}>
-            <View style={styles.avatar}>
-              <Ionicons name="person" size={48} color={Colors.primary} />
-            </View>
+            {user?.user_metadata?.avatar_url ? (
+              <Image source={{ uri: user.user_metadata.avatar_url }} style={styles.avatar} />
+            ) : (
+              <View style={styles.avatar}>
+                <Ionicons name="person" size={48} color={Colors.primary} />
+              </View>
+            )}
           </View>
-          <Text style={styles.username}>Username</Text>
-          <Text style={styles.email}>username@gmail.com</Text>
-        </View>
+          <Text style={styles.username}>{displayName(user)}</Text>
+          <Text style={styles.email}>{user?.email ?? '—'}</Text>
+        </TouchableOpacity>
 
         {/* Menu Items */}
         {menuItems.map((item) => (

@@ -28,3 +28,9 @@ export const Theme = {
     },
   },
 };
+
+// Fonts used by app/(tabs)/explore.tsx (imports from @/constants/theme)
+export const Fonts = {
+  rounded: 'System',
+  mono: 'System',
+};
