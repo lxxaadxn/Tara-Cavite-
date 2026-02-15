@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+:root {
+  --cavitour-green: #22a447;
+  --cavitour-green-dark: #1a8236;
+  --cavitour-teal: #1f6a6e;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: system-ui, -apple-system, sans-serif;
+}
