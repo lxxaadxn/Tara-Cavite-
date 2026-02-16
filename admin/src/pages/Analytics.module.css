@@ -1,0 +1,64 @@
+.page {
+  max-width: 1400px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.header h1 {
+  margin: 0 0 4px;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.header p {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-secondary);
+}
+
+.filter {
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  border: 1px solid #e2e8f0;
+  font-size: 14px;
+}
+
+.charts {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 24px;
+  box-shadow: var(--shadow);
+}
+
+.card h3 {
+  margin: 0 0 20px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.chartWrap {
+  width: 100%;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 900px) {
+  .grid2 {
+    grid-template-columns: 1fr;
+  }
+}

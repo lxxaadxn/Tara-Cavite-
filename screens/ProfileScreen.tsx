@@ -1,14 +1,14 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Theme } from '../constants/Theme';
-import { Header } from '../components/Header';
-import { Card } from '../components/Card';
-import { supabase } from '../lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { User } from '@supabase/supabase-js';
+import React, { useState } from 'react';
+import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Card } from '../components/Card';
+import { Header } from '../components/Header';
+import { Colors, Theme } from '../constants/Theme';
+import { supabase } from '../lib/supabase';
 
 interface MenuItem {
   id: string;

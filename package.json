@@ -3,6 +3,7 @@
   "main": "index.js",
   "version": "1.0.0",
   "scripts": {
+    "admin": "cd admin && npm run dev",
     "start": "expo start --tunnel",
     "start:clear": "expo start --clear --tunnel",
     "start:lan": "expo start",

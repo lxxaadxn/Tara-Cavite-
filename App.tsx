@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { View, Image } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SplashScreen from 'expo-splash-screen';
+import React, { useEffect, useState } from 'react';
+import { Image, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { Colors } from './constants/Colors';
 import { supabase } from './lib/supabase';
@@ -15,20 +15,20 @@ import { supabase } from './lib/supabase';
 SplashScreen.preventAutoHideAsync();
 
 // Screens
+import DirectionsScreen from './screens/DirectionsScreen';
+import HistoryScreen from './screens/HistoryScreen';
+import HomeScreen from './screens/HomeScreen';
+import NotificationsScreen from './screens/NotificationsScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
+import PlaceDetailScreen from './screens/PlaceDetailScreen';
+import PreferencesScreen from './screens/PreferencesScreen';
+import ProfileScreen from './screens/ProfileScreen';
+import SavedListScreen from './screens/SavedListScreen';
 import SignInScreen from './screens/SignInScreen';
 import SignUpScreen from './screens/SignUpScreen';
-import HomeScreen from './screens/HomeScreen';
-import PlaceDetailScreen from './screens/PlaceDetailScreen';
-import DirectionsScreen from './screens/DirectionsScreen';
-import TerminalsScreen from './screens/TerminalsScreen';
 import TerminalDetailScreen from './screens/TerminalDetailScreen';
-import ProfileScreen from './screens/ProfileScreen';
+import TerminalsScreen from './screens/TerminalsScreen';
 import UserDetailsScreen from './screens/UserDetailsScreen';
-import PreferencesScreen from './screens/PreferencesScreen';
-import HistoryScreen from './screens/HistoryScreen';
-import SavedListScreen from './screens/SavedListScreen';
-import NotificationsScreen from './screens/NotificationsScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();

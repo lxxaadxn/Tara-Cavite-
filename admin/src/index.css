@@ -1,0 +1,33 @@
+:root {
+  --primary: #6B8E23;
+  --primary-dark: #5a7a1e;
+  --accent: #9acd32;
+  --bg: #F5F6F7;
+  --card: #ffffff;
+  --text: #2d3748;
+  --text-secondary: #718096;
+  --radius: 18px;
+  --shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
+
+input, select {
+  font-family: inherit;
+}

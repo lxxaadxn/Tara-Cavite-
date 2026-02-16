@@ -53,9 +53,11 @@ const SignInScreen: React.FC = () => {
     }
   };
 
+  const onBackPress = Platform.OS === 'web' ? () => navigation.goBack() : handleGoBackToOnboarding;
+
   return (
     <SafeAreaView style={styles.container}>
-      <Header title="Sign in" showBack onBackPress={handleGoBackToOnboarding} />
+      <Header title="Sign in" showBack onBackPress={onBackPress} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.content}
