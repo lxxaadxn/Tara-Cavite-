@@ -10,6 +10,7 @@ import { mockNotifications, Notification } from '../data/mockData';
 interface GroupedNotification {
   group: string;
   notifications: Notification[];
+  timeLabel?: string;
 }
 
 const NotificationsScreen: React.FC = () => {
@@ -20,99 +21,118 @@ const NotificationsScreen: React.FC = () => {
     {
       group: 'Today',
       notifications: mockNotifications.filter((n) => n.date === '2026-02-13'),
+      timeLabel: '53mins',
     },
     {
       group: 'Yesterday',
       notifications: mockNotifications.filter((n) => n.date === '2026-02-12'),
+      timeLabel: '13hrs',
     },
   ].filter((group) => group.notifications.length > 0);
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case 'traffic':
-        return 'alert-circle';
+        return { name: 'alert-circle', color: '#F44336' };
       case 'arrival':
-        return 'location';
+        return { name: 'location', color: Colors.accent };
       case 'route-change':
-        return 'swap-horizontal';
+        return { name: 'swap-horizontal', color: Colors.primary };
       default:
-        return 'notifications';
+        return { name: 'notifications', color: Colors.primary };
     }
   };
 
-  const renderNotification = ({ item }: { item: Notification }) => (
-    <Card style={styles.notificationCard}>
-      <View style={styles.notificationHeader}>
-        <Ionicons
-          name={getNotificationIcon(item.type) as any}
-          size={24}
-          color={Colors.primary}
-        />
-        <Text style={styles.notificationTitle}>{item.title}</Text>
-      </View>
-      <Text style={styles.notificationMessage}>{item.message}</Text>
-    </Card>
-  );
+  const renderNotification = ({ item }: { item: Notification }) => {
+    const icon = getNotificationIcon(item.type);
+    return (
+      <TouchableOpacity
+        activeOpacity={0.7}
+        accessibilityLabel={`${item.title}, ${item.message}`}
+        accessibilityRole="button"
+      >
+        <Card style={styles.notificationCard}>
+          <View style={styles.notificationContent}>
+            <View style={[styles.iconContainer, { backgroundColor: icon.color + '20' }]}>
+              <Ionicons name={icon.name as any} size={30} color={icon.color} />
+            </View>
+            <View style={styles.notificationText}>
+              <Text style={styles.notificationTitle}>{item.title}</Text>
+              <Text style={styles.notificationMessage}>{item.message}</Text>
+            </View>
+          </View>
+        </Card>
+      </TouchableOpacity>
+    );
+  };
 
   const renderGroup = ({ item }: { item: GroupedNotification }) => (
     <View style={styles.group}>
       <View style={styles.groupHeader}>
         <Text style={styles.groupTitle}>{item.group}</Text>
-        {item.group === 'Today' && (
-          <Text style={styles.groupTime}>53mins</Text>
-        )}
-        {item.group === 'Yesterday' && (
-          <Text style={styles.groupTime}>13hrs</Text>
-        )}
+        {item.timeLabel && <Text style={styles.groupTime}>{item.timeLabel}</Text>}
       </View>
       {item.notifications.map((notification) => (
-        <View key={notification.id}>
-          {renderNotification({ item: notification })}
-        </View>
+        <View key={notification.id}>{renderNotification({ item: notification })}</View>
       ))}
     </View>
   );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <Header title="Notifications" showBack showNotification={false} />
+      <Header
+        title="Notifications"
+        showBack
+        darkBackground
+      />
       <View style={styles.content}>
         <View style={styles.filterContainer}>
           <TouchableOpacity
             style={styles.filterButton}
             onPress={() => setShowFilter(!showFilter)}
+            accessibilityLabel="Filter notifications"
+            accessibilityRole="button"
+            accessibilityExpanded={showFilter}
           >
-            <Ionicons name="filter" size={20} color={Colors.primary} />
+            <Ionicons name="filter" size={16} color={Colors.text.primary} />
             <Text style={styles.filterText}>Filter</Text>
             <Ionicons
               name={showFilter ? 'chevron-up' : 'chevron-down'}
-              size={16}
-              color={Colors.primary}
+              size={11}
+              color={Colors.text.primary}
             />
           </TouchableOpacity>
         </View>
 
         {showFilter && (
-          <Card style={styles.filterDropdown}>
+          <View style={styles.filterDropdown}>
             <TouchableOpacity
               style={styles.filterOption}
               onPress={() => setShowFilter(false)}
+              accessibilityLabel="Filter by today"
+              accessibilityRole="button"
             >
               <Text style={styles.filterOptionText}>Today</Text>
             </TouchableOpacity>
+            <View style={styles.filterDivider} />
             <TouchableOpacity
               style={styles.filterOption}
               onPress={() => setShowFilter(false)}
+              accessibilityLabel="Filter by yesterday"
+              accessibilityRole="button"
             >
               <Text style={styles.filterOptionText}>Yesterday</Text>
             </TouchableOpacity>
+            <View style={styles.filterDivider} />
             <TouchableOpacity
               style={styles.filterOption}
               onPress={() => setShowFilter(false)}
+              accessibilityLabel="Filter by last month"
+              accessibilityRole="button"
             >
               <Text style={styles.filterOptionText}>Last month</Text>
             </TouchableOpacity>
-          </Card>
+          </View>
         )}
 
         <FlatList
@@ -120,6 +140,7 @@ const NotificationsScreen: React.FC = () => {
           renderItem={renderGroup}
           keyExtractor={(item) => item.group}
           contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
         />
       </View>
     </SafeAreaView>
@@ -142,26 +163,43 @@ const styles = StyleSheet.create({
   filterButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 2,
+    paddingHorizontal: 7,
   },
   filterText: {
-    marginLeft: Theme.spacing.xs,
-    marginRight: Theme.spacing.xs,
-    fontSize: 14,
-    color: Colors.primary,
-    fontWeight: '600',
+    marginLeft: 7,
+    marginRight: 7,
+    fontSize: 15,
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    color: Colors.text.primary,
   },
   filterDropdown: {
+    backgroundColor: Colors.white,
     marginHorizontal: Theme.spacing.md,
     marginBottom: Theme.spacing.sm,
+    borderRadius: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
   },
   filterOption: {
-    paddingVertical: Theme.spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.background,
+    paddingVertical: Theme.spacing.sm,
+    paddingHorizontal: Theme.spacing.md,
   },
   filterOptionText: {
-    fontSize: 16,
+    fontSize: 12,
+    fontFamily: 'Poppins',
+    fontWeight: '500',
     color: Colors.text.primary,
+    textAlign: 'center',
+  },
+  filterDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.text.light,
+    marginHorizontal: Theme.spacing.sm,
   },
   listContent: {
     paddingHorizontal: Theme.spacing.md,
@@ -177,33 +215,56 @@ const styles = StyleSheet.create({
     marginBottom: Theme.spacing.sm,
   },
   groupTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: Colors.text.primary,
+    fontSize: 20,
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    color: Colors.primary,
   },
   groupTime: {
-    fontSize: 14,
+    fontSize: 11,
+    fontFamily: 'Poppins',
+    fontWeight: '600',
     color: Colors.text.secondary,
   },
   notificationCard: {
-    marginBottom: Theme.spacing.sm,
+    backgroundColor: Colors.white,
+    borderRadius: 9,
     padding: Theme.spacing.md,
-  },
-  notificationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
     marginBottom: Theme.spacing.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  notificationContent: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  iconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Theme.spacing.md,
+  },
+  notificationText: {
+    flex: 1,
   },
   notificationTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Poppins',
+    fontWeight: '500',
     color: Colors.text.primary,
-    marginLeft: Theme.spacing.sm,
+    marginBottom: Theme.spacing.xs,
   },
   notificationMessage: {
-    fontSize: 14,
+    fontSize: 11,
+    fontFamily: 'Poppins',
+    fontWeight: '500',
     color: Colors.text.secondary,
-    lineHeight: 20,
+    lineHeight: 16,
   },
 });
 

@@ -12,6 +12,7 @@ interface HeaderProps {
   showLogo?: boolean;
   onNotificationPress?: () => void;
   onMenuPress?: () => void;
+  darkBackground?: boolean; // For dark teal background headers
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -22,21 +23,33 @@ export const Header: React.FC<HeaderProps> = ({
   showLogo = false,
   onNotificationPress,
   onMenuPress,
+  darkBackground = false,
 }) => {
   const navigation = useNavigation();
 
+  const headerStyle = darkBackground ? styles.darkHeader : styles.lightHeader;
+  const textColor = darkBackground ? Colors.white : Colors.primary;
+  const iconColor = darkBackground ? Colors.white : Colors.primary;
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, headerStyle]}>
       {showBack ? (
         <TouchableOpacity
           onPress={onBackPress ?? (() => navigation.goBack())}
           style={styles.iconButton}
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
         >
-          <Ionicons name="arrow-back" size={24} color={Colors.white} />
+          <Ionicons name="arrow-back" size={24} color={iconColor} />
         </TouchableOpacity>
       ) : showLogo && onMenuPress ? (
-        <TouchableOpacity onPress={onMenuPress} style={styles.iconButton}>
-          <Ionicons name="menu" size={24} color={Colors.primary} />
+        <TouchableOpacity
+          onPress={onMenuPress}
+          style={styles.iconButton}
+          accessibilityLabel="Open menu"
+          accessibilityRole="button"
+        >
+          <Ionicons name="menu" size={29} color={iconColor} />
         </TouchableOpacity>
       ) : (
         <View style={styles.iconButton} />
@@ -46,16 +59,19 @@ export const Header: React.FC<HeaderProps> = ({
           source={require('../assets/images/cavitour-logo.png')}
           style={styles.logo}
           resizeMode="contain"
+          accessibilityLabel="CaviTour logo"
         />
       ) : (
-        <Text style={styles.title}>{title}</Text>
+        <Text style={[styles.title, { color: textColor }]}>{title}</Text>
       )}
       {showNotification ? (
         <TouchableOpacity
           onPress={onNotificationPress}
           style={styles.iconButton}
+          accessibilityLabel="View notifications"
+          accessibilityRole="button"
         >
-          <Ionicons name="notifications-outline" size={24} color={Colors.white} />
+          <Ionicons name="notifications-outline" size={28} color={iconColor} />
         </TouchableOpacity>
       ) : (
         <View style={styles.iconButton} />
@@ -66,7 +82,6 @@ export const Header: React.FC<HeaderProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.background,
     paddingTop: 50,
     paddingBottom: 16,
     paddingHorizontal: Theme.spacing.md,
@@ -74,16 +89,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  lightHeader: {
+    backgroundColor: Colors.white,
+  },
+  darkHeader: {
+    backgroundColor: Colors.primary,
+  },
   title: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.primary,
+    fontFamily: 'Poppins',
+    fontWeight: '500',
     flex: 1,
     textAlign: 'center',
   },
   logo: {
-    height: 32,
-    width: 140,
+    height: 36,
+    width: 160,
   },
   iconButton: {
     width: 40,

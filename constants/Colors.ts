@@ -3,17 +3,17 @@
  * Dark teal #2D545E, lime green #9ACD32, off-white #F8F8F8
  */
 export const Colors = {
-  primary: '#2D545E', // Dark teal-green (main content, headers)
+  primary: '#1F4F59', // Dark teal-green (rgba(31, 79, 89, 1)) - main content, headers
   primaryLight: '#1B4D4D', // Slightly darker teal
-  accent: '#9ACD32', // Lime green (Cavi in logo, pins)
-  cta: '#9ACD32', // Lime green for CTA buttons
+  accent: '#7EA00E', // Lime green (rgba(126, 160, 14, 1)) - Cavi in logo, pins
+  cta: '#7EA00E', // Lime green for CTA buttons
   background: '#F8F8F8', // Off-white background
   white: '#FFFFFF',
   black: '#000000',
   text: {
-    primary: '#2D545E',
-    secondary: '#666666',
-    light: '#999999',
+    primary: '#1F4F59', // Dark teal
+    secondary: '#7A7878', // rgba(122, 120, 120, 1)
+    light: '#AFA7A7', // rgba(175, 167, 167, 1)
   },
   card: {
     background: '#FFFFFF',

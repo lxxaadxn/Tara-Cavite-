@@ -11,6 +11,7 @@ import { mockRoutes, Route } from '../data/mockData';
 interface GroupedRoute {
   group: string;
   routes: Route[];
+  timeLabel?: string;
 }
 
 const HistoryScreen: React.FC = () => {
@@ -23,31 +24,47 @@ const HistoryScreen: React.FC = () => {
     {
       group: 'Today',
       routes: mockRoutes.filter((r) => r.date === '2026-02-13'),
+      timeLabel: '53mins',
     },
     {
       group: 'Yesterday',
       routes: mockRoutes.filter((r) => r.date === '2026-02-12'),
+      timeLabel: '13hrs',
     },
     {
       group: 'Last month',
       routes: mockRoutes.filter((r) => r.date < '2026-02-12'),
+      timeLabel: 'Jan 1',
     },
   ].filter((group) => group.routes.length > 0);
 
+  const filteredRoutes = selectedFilter === 'all'
+    ? groupedRoutes
+    : groupedRoutes.filter((g) => {
+        if (selectedFilter === 'today') return g.group === 'Today';
+        if (selectedFilter === 'yesterday') return g.group === 'Yesterday';
+        if (selectedFilter === 'last-month') return g.group === 'Last month';
+        return true;
+      });
+
   const renderRouteItem = ({ item }: { item: Route }) => (
-    <TouchableOpacity>
-      <Card style={styles.routeCard}>
+    <TouchableOpacity
+      activeOpacity={0.7}
+      accessibilityLabel={`${item.name}, Departed ${item.departureTime}, Duration ${item.duration}`}
+      accessibilityRole="button"
+    >
+      <View style={styles.routeCard}>
         <View style={styles.routeContent}>
-          <Ionicons name="time" size={24} color={Colors.primary} />
+          <Ionicons name="time-outline" size={24} color={Colors.primary} />
           <View style={styles.routeInfo}>
             <Text style={styles.routeName}>{item.name}</Text>
             <Text style={styles.routeMeta}>
               Departed {item.departureTime} | {item.duration}
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color={Colors.text.light} />
+          <Ionicons name="chevron-forward" size={17} color={Colors.text.light} />
         </View>
-      </Card>
+      </View>
     </TouchableOpacity>
   );
 
@@ -55,12 +72,7 @@ const HistoryScreen: React.FC = () => {
     <View style={styles.group}>
       <View style={styles.groupHeader}>
         <Text style={styles.groupTitle}>{item.group}</Text>
-        {item.group === 'Yesterday' && (
-          <Text style={styles.groupDuration}>13hrs</Text>
-        )}
-        {item.group === 'Today' && (
-          <Text style={styles.groupDuration}>53mins</Text>
-        )}
+        {item.timeLabel && <Text style={styles.groupDuration}>{item.timeLabel}</Text>}
       </View>
       {item.routes.map((route) => (
         <View key={route.id}>{renderRouteItem({ item: route })}</View>
@@ -74,6 +86,7 @@ const HistoryScreen: React.FC = () => {
         title="History"
         showBack
         showNotification
+        darkBackground
         onNotificationPress={() => navigation.navigate('Notifications' as never)}
       />
       <View style={styles.content}>
@@ -81,54 +94,66 @@ const HistoryScreen: React.FC = () => {
           <TouchableOpacity
             style={styles.filterButton}
             onPress={() => setShowFilter(!showFilter)}
+            accessibilityLabel="Filter history"
+            accessibilityRole="button"
+            accessibilityExpanded={showFilter}
           >
-            <Ionicons name="filter" size={20} color={Colors.primary} />
+            <Ionicons name="filter" size={16} color={Colors.text.primary} />
             <Text style={styles.filterText}>Filter</Text>
             <Ionicons
               name={showFilter ? 'chevron-up' : 'chevron-down'}
-              size={16}
-              color={Colors.primary}
+              size={11}
+              color={Colors.text.primary}
             />
           </TouchableOpacity>
         </View>
 
         {showFilter && (
-          <Card style={styles.filterDropdown}>
+          <View style={styles.filterDropdown}>
             <TouchableOpacity
               style={styles.filterOption}
               onPress={() => {
                 setSelectedFilter('today');
                 setShowFilter(false);
               }}
+              accessibilityLabel="Filter by today"
+              accessibilityRole="button"
             >
               <Text style={styles.filterOptionText}>Today</Text>
             </TouchableOpacity>
+            <View style={styles.filterDivider} />
             <TouchableOpacity
               style={styles.filterOption}
               onPress={() => {
                 setSelectedFilter('yesterday');
                 setShowFilter(false);
               }}
+              accessibilityLabel="Filter by yesterday"
+              accessibilityRole="button"
             >
               <Text style={styles.filterOptionText}>Yesterday</Text>
             </TouchableOpacity>
+            <View style={styles.filterDivider} />
             <TouchableOpacity
               style={styles.filterOption}
               onPress={() => {
                 setSelectedFilter('last-month');
                 setShowFilter(false);
               }}
+              accessibilityLabel="Filter by last month"
+              accessibilityRole="button"
             >
               <Text style={styles.filterOptionText}>Last month</Text>
             </TouchableOpacity>
-          </Card>
+          </View>
         )}
 
         <FlatList
-          data={groupedRoutes}
+          data={filteredRoutes}
           renderItem={renderGroup}
           keyExtractor={(item) => item.group}
           contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
         />
       </View>
     </SafeAreaView>
@@ -151,26 +176,43 @@ const styles = StyleSheet.create({
   filterButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 2,
+    paddingHorizontal: 7,
   },
   filterText: {
-    marginLeft: Theme.spacing.xs,
-    marginRight: Theme.spacing.xs,
-    fontSize: 14,
-    color: Colors.primary,
-    fontWeight: '600',
+    marginLeft: 7,
+    marginRight: 7,
+    fontSize: 15,
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    color: Colors.text.primary,
   },
   filterDropdown: {
+    backgroundColor: Colors.white,
     marginHorizontal: Theme.spacing.md,
     marginBottom: Theme.spacing.sm,
+    borderRadius: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
   },
   filterOption: {
-    paddingVertical: Theme.spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.background,
+    paddingVertical: Theme.spacing.sm,
+    paddingHorizontal: Theme.spacing.md,
   },
   filterOptionText: {
-    fontSize: 16,
+    fontSize: 12,
+    fontFamily: 'Poppins',
+    fontWeight: '500',
     color: Colors.text.primary,
+    textAlign: 'center',
+  },
+  filterDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.text.light,
+    marginHorizontal: Theme.spacing.sm,
   },
   listContent: {
     paddingHorizontal: Theme.spacing.md,
@@ -186,17 +228,23 @@ const styles = StyleSheet.create({
     marginBottom: Theme.spacing.sm,
   },
   groupTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: Colors.text.primary,
+    fontSize: 20,
+    fontFamily: 'Poppins',
+    fontWeight: '500',
+    color: Colors.primary,
   },
   groupDuration: {
-    fontSize: 14,
+    fontSize: 11,
+    fontFamily: 'Poppins',
+    fontWeight: '600',
     color: Colors.text.secondary,
   },
   routeCard: {
-    marginBottom: Theme.spacing.sm,
-    padding: Theme.spacing.md,
+    backgroundColor: Colors.white,
+    borderRadius: 0,
+    paddingVertical: 9,
+    paddingHorizontal: 20,
+    marginBottom: Theme.spacing.xs,
   },
   routeContent: {
     flexDirection: 'row',
@@ -208,12 +256,15 @@ const styles = StyleSheet.create({
   },
   routeName: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Poppins',
+    fontWeight: '500',
     color: Colors.text.primary,
     marginBottom: Theme.spacing.xs,
   },
   routeMeta: {
-    fontSize: 14,
+    fontSize: 11,
+    fontFamily: 'Poppins',
+    fontWeight: '500',
     color: Colors.text.secondary,
   },
 });

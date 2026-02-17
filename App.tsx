@@ -29,6 +29,8 @@ import SignUpScreen from './screens/SignUpScreen';
 import TerminalDetailScreen from './screens/TerminalDetailScreen';
 import TerminalsScreen from './screens/TerminalsScreen';
 import UserDetailsScreen from './screens/UserDetailsScreen';
+import NewListScreen from './screens/NewListScreen';
+import CategoriesScreen from './screens/CategoriesScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -49,6 +51,7 @@ const HomeStack = () => (
     <Stack.Screen name="TerminalDetail" component={TerminalDetailScreen} />
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
     <Stack.Screen name="Directions" component={DirectionsScreen} />
+    <Stack.Screen name="Categories" component={CategoriesScreen} />
   </Stack.Navigator>
 );
 
@@ -67,6 +70,7 @@ const ProfileStack = () => (
     <Stack.Screen name="Preferences" component={PreferencesScreen} />
     <Stack.Screen name="History" component={HistoryScreen} />
     <Stack.Screen name="SavedList" component={SavedListScreen} />
+    <Stack.Screen name="NewList" component={NewListScreen} />
     <Stack.Screen name="Notifications" component={NotificationsScreen} />
   </Stack.Navigator>
 );
