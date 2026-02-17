@@ -1,49 +1,67 @@
-import React, { useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Dimensions,
-  Image,
-} from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Dimensions, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Colors, Theme } from '../constants/Theme';
+import { Colors, Theme } from '../constants/theme';
 import { Button } from '../components/Button';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
 
-interface OnboardingSlide {
+interface FeatureSlide {
   title: string;
   subtitle: string;
-  illustration: string;
 }
 
-const slides: OnboardingSlide[] = [
+const featureSlides: FeatureSlide[] = [
   {
-    title: 'Commute',
-    subtitle: 'Plan your trip with step-by-step terminal or roadside routes, including clear fare and time estimates.',
-    illustration: '🚌',
+    title: 'Explore Destinations',
+    subtitle:
+      'Browse tourist destinations by city and attraction type, with details, photos, and operating hours for easy trip planning.',
   },
   {
-    title: 'Terminals',
-    subtitle: 'Access a directory of Cavite\'s transport hubs with available routes, vehicle types, and nearby landmarks.',
-    illustration: '🏢',
+    title: 'Map View',
+    subtitle:
+      'View tourist spots on an integrated map and get navigation from your current location.',
   },
   {
-    title: 'Saved Routes',
-    subtitle: 'Bookmark your frequent trips and preferred terminals for instant, one-tap access.',
-    illustration: '⭐',
+    title: 'Plan & Save',
+    subtitle:
+      'Search and filter destinations by location, category, or popularity, save favorites, and create simple itineraries.',
   },
+  {
+    title: 'Get Around',
+    subtitle:
+      'Get a transportation guide with jeepneys, buses, and vans, including routes and estimated travel times within the province.',
+  },
+];
+
+const STARTUP_ICONS: (keyof typeof Ionicons.glyphMap)[] = [
+  'calendar-outline',
+  'map-outline',
+  'navigate-outline',
+  'compass-outline',
 ];
 
 const OnboardingScreen: React.FC = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [showStartup, setShowStartup] = useState(true);
   const scrollViewRef = useRef<ScrollView>(null);
+  const [startupIcon] = useState<keyof typeof Ionicons.glyphMap>(() => {
+    const randomIndex = Math.floor(Math.random() * STARTUP_ICONS.length);
+    return STARTUP_ICONS[randomIndex];
+  });
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setShowStartup(false);
+    }, 2000);
+    return () => clearTimeout(timeout);
+  }, []);
 
   const handleNext = () => {
-    if (currentIndex < slides.length - 1) {
+    if (currentIndex < featureSlides.length - 1) {
       const nextIndex = currentIndex + 1;
       scrollViewRef.current?.scrollTo({
         x: nextIndex * width,
@@ -69,15 +87,32 @@ const OnboardingScreen: React.FC = () => {
     setCurrentIndex(slideIndex);
   };
 
+  if (showStartup) {
+    return (
+      <SafeAreaView style={styles.startupContainer}>
+        <View style={styles.startupIconWrapper}>
+          <Ionicons
+            name={startupIcon}
+            size={40}
+            color={Colors.cta}
+            accessibilityRole="image"
+            accessibilityLabel="Startup icon"
+          />
+        </View>
+        <View style={styles.startupLogoWrapper}>
+          <Image
+            source={require('../assets/images/cavitour-logo.png')}
+            style={styles.startupLogo}
+            resizeMode="contain"
+          />
+        </View>
+        <Text style={styles.startupCopyright}>© CaviTour 2026</Text>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.logoContainer}>
-        <Image
-          source={require('../assets/images/cavitour-logo.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
-      </View>
       <ScrollView
         ref={scrollViewRef}
         horizontal
@@ -86,36 +121,51 @@ const OnboardingScreen: React.FC = () => {
         onScroll={handleScroll}
         scrollEventThrottle={16}
       >
-        {slides.map((slide, index) => (
-          <View key={index} style={styles.slide}>
-            <View style={styles.illustrationContainer}>
-              <Text style={styles.illustration}>{slide.illustration}</Text>
+        {featureSlides.map((slide, index) => (
+          <View key={slide.title} style={styles.slide}>
+            <LinearGradient
+              colors={['#1F4F59', '#54C0CC']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.gradientBackground}
+            />
+            <View style={styles.content}>
+              <View style={styles.pictureGroup}>
+                <View style={styles.pictureCircle} />
+              </View>
+
+              <View style={styles.textGroup}>
+                <Text style={styles.title}>{slide.title}</Text>
+                <Text style={styles.subtitle}>{slide.subtitle}</Text>
+              </View>
+
+              <View style={styles.sliderGroup} accessible accessibilityRole="adjustable">
+                {featureSlides.map((_, dotIndex) => (
+                  <View
+                    key={dotIndex}
+                    style={[
+                      styles.sliderDot,
+                      dotIndex === index && styles.sliderDotActive,
+                    ]}
+                  />
+                ))}
+              </View>
+
+              <View style={styles.buttonContainer}>
+                <Button
+                  title="GET STARTED"
+                  onPress={index === featureSlides.length - 1 ? handleGetStarted : handleNext}
+                  accessibilityLabel={
+                    index === featureSlides.length - 1
+                      ? 'Finish onboarding and get started'
+                      : 'Go to next feature'
+                  }
+                />
+              </View>
             </View>
-            <Text style={styles.title}>{slide.title}</Text>
-            <Text style={styles.subtitle}>{slide.subtitle}</Text>
           </View>
         ))}
       </ScrollView>
-
-      <View style={styles.footer}>
-        <View style={styles.dots}>
-          {slides.map((_, index) => (
-            <View
-              key={index}
-              style={[
-                styles.dot,
-                index === currentIndex && styles.activeDot,
-              ]}
-            />
-          ))}
-        </View>
-        <View style={styles.buttonContainer}>
-          <Button
-            title={currentIndex === slides.length - 1 ? 'GET STARTED' : 'NEXT'}
-            onPress={handleNext}
-          />
-        </View>
-      </View>
     </SafeAreaView>
   );
 };
@@ -125,71 +175,102 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.primary,
   },
-  logoContainer: {
-    paddingTop: 50,
+  startupContainer: {
+    flex: 1,
+    backgroundColor: Colors.white,
     alignItems: 'center',
-    paddingBottom: Theme.spacing.md,
+    justifyContent: 'center',
   },
-  logo: {
-    height: 36,
-    width: 160,
+  startupIconWrapper: {
+    position: 'absolute',
+    top: 116,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  startupLogoWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  startupLogo: {
+    width: 200,
+    height: 80,
+  },
+  startupCopyright: {
+    position: 'absolute',
+    bottom: 40,
+    fontSize: 14,
+    color: '#535862',
   },
   slide: {
     width,
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Theme.spacing.xl,
   },
-  illustrationContainer: {
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  gradientBackground: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  content: {
+    width: 320,
+    height: 638,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  pictureGroup: {
+    width: 315,
+    height: 315,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Theme.spacing.xl,
   },
-  illustration: {
-    fontSize: 80,
+  pictureCircle: {
+    width: 315,
+    height: 315,
+    borderRadius: 179.5,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  pictureImage: {
+    width: '100%',
+    height: '100%',
+  },
+  textGroup: {
+    alignItems: 'center',
+    paddingHorizontal: Theme.spacing.md,
   },
   title: {
-    fontSize: 32,
-    fontWeight: 'bold',
+    fontSize: 25,
+    fontWeight: '800',
     color: Colors.white,
-    marginBottom: Theme.spacing.md,
+    marginBottom: Theme.spacing.sm,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 15,
     color: Colors.white,
     textAlign: 'center',
-    opacity: 0.9,
-    lineHeight: 24,
+    opacity: 0.95,
+    lineHeight: 28,
   },
-  footer: {
-    paddingHorizontal: Theme.spacing.xl,
-    paddingBottom: Theme.spacing.xl,
-  },
-  dots: {
+  sliderGroup: {
     flexDirection: 'row',
     justifyContent: 'center',
+    marginTop: Theme.spacing.lg,
     marginBottom: Theme.spacing.lg,
   },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.white,
-    opacity: 0.3,
+  sliderDot: {
+    width: 29,
+    height: 3,
+    borderRadius: 19.5,
+    backgroundColor: 'rgba(175,167,167,1)',
     marginHorizontal: 4,
   },
-  activeDot: {
-    opacity: 1,
-    width: 24,
+  sliderDotActive: {
+    backgroundColor: Colors.white,
   },
   buttonContainer: {
-    width: '100%',
+    width: 318,
+    marginTop: Theme.spacing.sm,
   },
 });
 

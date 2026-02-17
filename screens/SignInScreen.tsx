@@ -7,13 +7,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Theme } from '../constants/Theme';
-import { Header } from '../components/Header';
+import { Colors, Theme } from '../constants/theme';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
@@ -33,8 +33,13 @@ const SignInScreen: React.FC = () => {
 
   const handleSignIn = async () => {
     const trimmedEmail = email.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!trimmedEmail || !password) {
       Alert.alert('Missing fields', 'Please enter your email and password.');
+      return;
+    }
+    if (!emailRegex.test(trimmedEmail)) {
+      Alert.alert('Invalid email', 'Please enter a valid email address.');
       return;
     }
     setLoading(true);
@@ -53,62 +58,71 @@ const SignInScreen: React.FC = () => {
     }
   };
 
-  const onBackPress = Platform.OS === 'web' ? () => navigation.goBack() : handleGoBackToOnboarding;
-
   return (
     <SafeAreaView style={styles.container}>
-      <Header title="Sign in" showBack onBackPress={onBackPress} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.content}
       >
-        <Card style={styles.card}>
-          <Text style={styles.title}>Sign in</Text>
-          <Text style={styles.subtitle}>
-            Welcome back! Sign in to access your saved routes and resume your journey.
-          </Text>
+        <View style={styles.cardWrapper}>
+          <Card style={styles.card}>
+            <View style={styles.logoContainer}>
+              <Image
+                source={require('../assets/images/cavitour-logo.png')}
+                style={styles.logo}
+                resizeMode="contain"
+              />
+            </View>
+            <View style={styles.titleGroup}>
+              <Text style={styles.title}>Sign in</Text>
+              <Text style={styles.subtitle}>
+                Welcome back! Sign in to resume your journey.
+              </Text>
+            </View>
 
-          <Input
-            label="Email"
-            placeholder="Enter Email"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-          />
-
-          <Input
-            label="Password"
-            placeholder="Enter Password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
-
-          <TouchableOpacity style={styles.forgotPassword}>
-            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-          </TouchableOpacity>
-
-          <View style={styles.buttonContainer}>
-            <Button
-              title="SIGN IN"
-              onPress={handleSignIn}
-              loading={loading}
-              disabled={loading}
+            <Input
+              label="Email"
+              placeholder="Enter Email"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
             />
-          </View>
 
-          <View style={styles.googleButton}>
-            <Ionicons name="logo-google" size={20} color={Colors.text.primary} />
-            <Text style={styles.googleButtonText}>Log in with Google</Text>
-          </View>
+            <Input
+              label="Password"
+              placeholder="Enter Password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
 
-          <View style={styles.signUpContainer}>
-            <Text style={styles.signUpText}>Don't have an account? </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('SignUp' as never)}>
-              <Text style={styles.signUpLink}>Sign up</Text>
+            <TouchableOpacity style={styles.forgotPassword}>
+              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
             </TouchableOpacity>
-          </View>
-        </Card>
+
+            <View style={styles.buttonContainer}>
+              <Button
+                title="SIGN IN"
+                onPress={handleSignIn}
+                loading={loading}
+                disabled={loading}
+                accessibilityLabel="Sign in to your CaviTour account"
+              />
+            </View>
+
+            <View style={styles.googleButton}>
+              <Ionicons name="logo-google" size={20} color={Colors.text.primary} />
+              <Text style={styles.googleButtonText}>Log in with Google</Text>
+            </View>
+
+            <View style={styles.signUpContainer}>
+              <Text style={styles.signUpText}>Don’t have an account? </Text>
+              <TouchableOpacity onPress={() => navigation.navigate('SignUp' as never)}>
+                <Text style={styles.signUpLink}>Sign up</Text>
+              </TouchableOpacity>
+            </View>
+          </Card>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -117,27 +131,47 @@ const SignInScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.primary,
   },
   content: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     paddingHorizontal: Theme.spacing.lg,
+    paddingBottom: Theme.spacing.lg,
+  },
+  cardWrapper: {
+    flex: 1,
+    marginTop: 40,
+    alignItems: 'center',
   },
   card: {
     padding: Theme.spacing.xl,
+    borderRadius: 24,
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: Theme.spacing.lg,
+  },
+  logo: {
+    width: 140,
+    height: 40,
+  },
+  titleGroup: {
+    alignItems: 'center',
+    marginBottom: Theme.spacing.lg,
   },
   title: {
-    fontSize: 28,
+    fontSize: 25,
     fontWeight: 'bold',
     color: Colors.text.primary,
-    marginBottom: Theme.spacing.sm,
   },
   subtitle: {
-    fontSize: 14,
+    marginTop: 4,
+    fontSize: 13,
     color: Colors.text.secondary,
+    textAlign: 'center',
     marginBottom: Theme.spacing.xl,
-    lineHeight: 20,
+    lineHeight: 28,
   },
   forgotPassword: {
     alignSelf: 'flex-end',

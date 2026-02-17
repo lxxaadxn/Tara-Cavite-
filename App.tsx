@@ -113,6 +113,10 @@ export default function App() {
     let interval: any;
 
     const init = async () => {
+      // For development / QR-code launches, always start from onboarding.
+      // This clears any previous onboarding flag on each fresh app start,
+      // but handleGetStarted() can still mark it true for this session.
+      await AsyncStorage.removeItem('onboardingComplete');
       await checkOnboardingStatus();
       await checkAuthStatus();
       // Keep polling so SignIn/SignUp and logout are picked up
