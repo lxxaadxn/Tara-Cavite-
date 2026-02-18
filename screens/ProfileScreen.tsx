@@ -7,34 +7,46 @@ import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card } from '../components/Card';
 import { Header } from '../components/Header';
-import { Colors, Theme } from '../constants/Theme';
+import { Colors, Theme } from '../constants/theme';
 import { supabase } from '../lib/supabase';
 
 interface MenuItem {
   id: string;
   title: string;
-  icon: string;
+  icon: keyof typeof Ionicons.glyphMap;
   screen: string;
 }
 
 const menuItems: MenuItem[] = [
-  { id: '1', title: 'User Details', icon: 'person', screen: 'UserDetails' },
-  { id: '2', title: 'History', icon: 'time', screen: 'History' },
-  { id: '3', title: 'Fare Guide', icon: 'car', screen: 'Preferences' },
-  { id: '4', title: 'Saved list', icon: 'bookmark', screen: 'SavedList' },
-  { id: '5', title: 'Preferences', icon: 'settings', screen: 'Preferences' },
+  { id: '1', title: 'User Details', icon: 'person-outline', screen: 'UserDetails' },
+  { id: '2', title: 'History', icon: 'time-outline', screen: 'History' },
+  { id: '3', title: 'Saved list', icon: 'bookmark-outline', screen: 'SavedList' },
+  { id: '4', title: 'Preferences', icon: 'settings-outline', screen: 'Preferences' },
 ];
-
-const displayName = (user: User | null) =>
-  (user?.user_metadata?.username as string) || user?.email?.split('@')[0] || 'User';
 
 const ProfileScreen: React.FC = () => {
   const navigation = useNavigation();
   const [user, setUser] = useState<User | null>(null);
+  const [displayName, setDisplayName] = useState('Username');
 
   const loadUser = async () => {
     const { data: { user: u } } = await supabase.auth.getUser();
     setUser(u);
+    
+    if (u) {
+      // Try to get from user_profiles table first
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('username')
+        .eq('id', u.id)
+        .single();
+      
+      const name = profile?.username || 
+                   (u.user_metadata?.username as string) || 
+                   u.email?.split('@')[0] || 
+                   'Username';
+      setDisplayName(name);
+    }
   };
 
   useFocusEffect(
@@ -77,50 +89,56 @@ const ProfileScreen: React.FC = () => {
         title="Profile Settings"
         showBack={false}
         showNotification
+        darkBackground
         onNotificationPress={() => navigation.navigate('Notifications' as never)}
       />
-      <ScrollView style={styles.content}>
-        {/* Profile Info */}
-        <TouchableOpacity
-          style={styles.profileSection}
-          onPress={() => navigation.navigate('UserDetails' as never)}
-          activeOpacity={0.8}
-        >
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Profile Info Section */}
+        <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
             {user?.user_metadata?.avatar_url ? (
-              <Image source={{ uri: user.user_metadata.avatar_url }} style={styles.avatar} />
+              <Image
+                source={{ uri: user.user_metadata.avatar_url }}
+                style={styles.avatar}
+                accessibilityLabel="Profile picture"
+              />
             ) : (
-              <View style={styles.avatar}>
-                <Ionicons name="person" size={48} color={Colors.primary} />
+              <View style={styles.avatarPlaceholder}>
+                <Ionicons name="person" size={60} color={Colors.primary} />
               </View>
             )}
           </View>
-          <Text style={styles.username}>{displayName(user)}</Text>
-          <Text style={styles.email}>{user?.email ?? '—'}</Text>
-        </TouchableOpacity>
+          <Text style={styles.username}>{displayName}</Text>
+          <Text style={styles.email}>{user?.email ?? 'username@gmail.com'}</Text>
+        </View>
 
         {/* Menu Items */}
         {menuItems.map((item) => (
           <TouchableOpacity
             key={item.id}
             onPress={() => navigation.navigate(item.screen as never)}
+            activeOpacity={0.7}
+            accessibilityLabel={`Navigate to ${item.title}`}
+            accessibilityRole="button"
           >
             <Card style={styles.menuItem}>
               <View style={styles.menuItemContent}>
-                <Ionicons name={item.icon as any} size={24} color={Colors.primary} />
+                <Ionicons name={item.icon} size={24} color={Colors.primary} />
                 <Text style={styles.menuItemText}>{item.title}</Text>
-                <Ionicons name="chevron-forward" size={20} color={Colors.text.light} />
+                <Ionicons name="chevron-forward" size={24} color={Colors.text.light} />
               </View>
             </Card>
           </TouchableOpacity>
         ))}
 
         {/* Log Out Button */}
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.logoutButton}
           onPress={handleLogout}
+          accessibilityLabel="Log out"
+          accessibilityRole="button"
         >
-          <Ionicons name="log-out-outline" size={20} color={Colors.text.primary} />
+          <Ionicons name="log-out-outline" size={24} color={Colors.primary} />
           <Text style={styles.logoutText}>Log out</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -138,34 +156,51 @@ const styles = StyleSheet.create({
   },
   profileSection: {
     alignItems: 'center',
-    paddingVertical: Theme.spacing.xl,
-    backgroundColor: Colors.white,
+    paddingTop: Theme.spacing.xl,
+    paddingBottom: Theme.spacing.lg,
     marginBottom: Theme.spacing.md,
   },
   avatarContainer: {
     marginBottom: Theme.spacing.md,
   },
   avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: Colors.primary + '20',
+    width: 132,
+    height: 130,
+    borderRadius: 66,
+    backgroundColor: Colors.background,
+  },
+  avatarPlaceholder: {
+    width: 132,
+    height: 130,
+    borderRadius: 66,
+    backgroundColor: Colors.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
   username: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.text.primary,
+    fontSize: 24,
+    fontFamily: 'Poppins',
+    fontWeight: '600',
+    color: Colors.primary,
     marginBottom: Theme.spacing.xs,
   },
   email: {
-    fontSize: 14,
-    color: Colors.text.secondary,
+    fontSize: 13,
+    fontFamily: 'Poppins',
+    fontWeight: '400',
+    color: Colors.text.light,
   },
   menuItem: {
     marginHorizontal: Theme.spacing.md,
     marginBottom: Theme.spacing.sm,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   menuItemContent: {
     flexDirection: 'row',
@@ -174,7 +209,9 @@ const styles = StyleSheet.create({
   menuItemText: {
     flex: 1,
     fontSize: 16,
-    color: Colors.text.primary,
+    fontFamily: 'Poppins',
+    fontWeight: '600',
+    color: Colors.primary,
     marginLeft: Theme.spacing.md,
   },
   logoutButton: {
@@ -188,7 +225,9 @@ const styles = StyleSheet.create({
   logoutText: {
     marginLeft: Theme.spacing.sm,
     fontSize: 16,
-    color: Colors.text.primary,
+    fontFamily: 'Poppins',
+    fontWeight: '600',
+    color: Colors.primary,
   },
 });
 

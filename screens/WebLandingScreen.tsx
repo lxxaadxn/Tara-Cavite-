@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors, Theme } from '../constants/Theme';
+import { Colors, Theme } from '../constants/theme';
 
 const WebLandingScreen: React.FC = () => {
   const navigation = useNavigation();

@@ -10,6 +10,7 @@ export interface Place {
   hours: string;
   latitude: number;
   longitude: number;
+  image?: any; // For require() statements or URI strings
 }
 
 export interface Route {
@@ -64,7 +65,54 @@ export interface Terminal {
   longitude: number;
 }
 
-// Nearby places for home (SM Dasmariñas, People's Park Tagaytay, Starbucks Silang)
+// Trending Tourist Spots for home screen
+export const trendingSpots: Place[] = [
+  {
+    id: '1',
+    name: 'Tinatangi Cafe',
+    address: 'Dasmariñas City, Cavite',
+    type: 'Cafe',
+    hours: '8:00 AM - 10:00 PM',
+    latitude: 14.3297,
+    longitude: 120.9367,
+    image: require('../assets/images/Tinatangi_home.webp'),
+  },
+  {
+    id: '2',
+    name: 'Perlas ng Silang',
+    address: 'Silang Cavite',
+    type: 'Tourist Spot',
+    hours: 'Open 24 hours',
+    latitude: 14.2311,
+    longitude: 120.9753,
+    image: require('../assets/images/Perlasngsilang_home.webp'),
+  },
+  {
+    id: '3',
+    name: "People's Park",
+    address: 'Tagaytay City, Cavite',
+    type: 'Park',
+    hours: 'Open 24 hours',
+    latitude: 14.1133,
+    longitude: 120.9383,
+    image: require('../assets/images/Peoplespark_home.webp'),
+  },
+  {
+    id: '4',
+    name: 'Aguinaldo Shrine',
+    address: 'Kawit, Cavite',
+    type: 'Historical Site',
+    hours: '8:00 AM - 4:00 PM',
+    latitude: 14.4444,
+    longitude: 120.9056,
+    image: require('../assets/images/Aguinaldoshrine_home.webp'),
+  },
+];
+
+// Recent searches (empty initially, will be populated from user's search history)
+export const recentSearches: string[] = [];
+
+// Nearby places for home (SM Dasmariñas, Tagaytay Picnic Grove, Starbucks Silang, Robinsons Dasma)
 export const nearbyPlaces: Place[] = [
   {
     id: '1',
@@ -77,7 +125,7 @@ export const nearbyPlaces: Place[] = [
   },
   {
     id: '2',
-    name: "People's Park Tagaytay",
+    name: 'Tagaytay Picnic Grove',
     address: 'Tagaytay City, Cavite',
     type: 'Park',
     hours: 'Open 24 hours',
@@ -93,29 +141,21 @@ export const nearbyPlaces: Place[] = [
     latitude: 14.2311,
     longitude: 120.9753,
   },
+  {
+    id: '4',
+    name: 'Robinsons Dasma',
+    address: 'Silang, Cavite',
+    type: 'Shopping Mall',
+    hours: '10:00 AM - 9:00 PM',
+    latitude: 14.3300,
+    longitude: 120.9370,
+  },
 ];
 
 // Mock places (full list)
 export const mockPlaces: Place[] = [
   ...nearbyPlaces,
-  {
-    id: '4',
-    name: 'Tagaytay Picnic Grove',
-    address: 'Tagaytay City, Cavite',
-    type: 'Tourist Spot',
-    hours: 'Open 24 hours',
-    latitude: 14.1133,
-    longitude: 120.9383,
-  },
-  {
-    id: '5',
-    name: 'Robinsons Place Imus',
-    address: 'Imus City, Cavite',
-    type: 'Shopping Mall',
-    hours: '10:00 AM - 9:00 PM',
-    latitude: 14.4297,
-    longitude: 120.9367,
-  },
+  ...trendingSpots,
 ];
 
 // Mock routes/history
@@ -146,6 +186,33 @@ export const mockRoutes: Route[] = [
     departureTime: '10:00 AM',
     duration: '40mins',
     date: '2026-02-12',
+  },
+  {
+    id: '4',
+    name: 'SM Dasma to Perlas ng Silang',
+    from: 'SM Dasma',
+    to: 'Perlas ng Silang',
+    departureTime: '10:00 AM',
+    duration: '50mins',
+    date: '2026-02-12',
+  },
+  {
+    id: '5',
+    name: 'NU Dasma to Balisasayaw Silang',
+    from: 'NU Dasma',
+    to: 'Balisasayaw Silang',
+    departureTime: '1:00 PM',
+    duration: '40mins',
+    date: '2026-02-12',
+  },
+  {
+    id: '6',
+    name: 'General Trias to Vermosa',
+    from: 'General Trias',
+    to: 'Vermosa',
+    departureTime: '12:00 NN',
+    duration: '30mins',
+    date: '2026-01-01',
   },
 ];
 

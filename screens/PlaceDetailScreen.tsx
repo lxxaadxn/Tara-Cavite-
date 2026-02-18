@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Theme } from '../constants/Theme';
+import { Colors, Theme } from '../constants/theme';
 import { Header } from '../components/Header';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
@@ -52,11 +52,22 @@ const PlaceDetailScreen: React.FC = () => {
             </View>
           </View>
 
-          {/* Image Placeholder */}
-          <View style={styles.imageContainer}>
-            <Ionicons name="image" size={48} color={Colors.text.light} />
-            <Text style={styles.imagePlaceholder}>Place Image</Text>
-          </View>
+          {/* Place Image */}
+          {place.image ? (
+            <View style={styles.imageContainer}>
+              <Image
+                source={place.image}
+                style={styles.placeImage}
+                resizeMode="cover"
+                accessibilityLabel={`${place.name} image`}
+              />
+            </View>
+          ) : (
+            <View style={styles.imageContainer}>
+              <Ionicons name="image" size={48} color={Colors.text.light} />
+              <Text style={styles.imagePlaceholder}>Place Image</Text>
+            </View>
+          )}
 
           {/* Details */}
           <View style={styles.details}>
@@ -127,6 +138,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Theme.spacing.lg,
+    overflow: 'hidden',
+  },
+  placeImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: Theme.borderRadius.md,
   },
   imagePlaceholder: {
     marginTop: Theme.spacing.sm,

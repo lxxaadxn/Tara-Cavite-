@@ -1,6 +1,6 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet, ActivityIndicator } from 'react-native';
-import { Colors, Theme } from '../constants/Theme';
+import { Colors, Theme } from '../constants/theme';
 
 interface ButtonProps {
   title: string;
@@ -8,6 +8,7 @@ interface ButtonProps {
   variant?: 'primary' | 'secondary';
   loading?: boolean;
   disabled?: boolean;
+  accessibilityLabel?: string;
 }
 
 export const Button: React.FC<ButtonProps> = ({
@@ -16,6 +17,7 @@ export const Button: React.FC<ButtonProps> = ({
   variant = 'primary',
   loading = false,
   disabled = false,
+  accessibilityLabel,
 }) => {
   return (
     <TouchableOpacity
@@ -26,6 +28,8 @@ export const Button: React.FC<ButtonProps> = ({
       ]}
       onPress={onPress}
       disabled={disabled || loading}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? title}
     >
       {loading ? (
         <ActivityIndicator color={Colors.white} />

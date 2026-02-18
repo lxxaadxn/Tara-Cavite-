@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Theme } from '../constants/Theme';
+import { Colors, Theme } from '../constants/theme';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 
@@ -15,6 +15,7 @@ interface PreferenceItem {
 }
 
 const PreferencesScreen: React.FC = () => {
+  const navigation = useNavigation();
   const [travelModes, setTravelModes] = useState<PreferenceItem[]>([
     { id: '1', title: 'Bus/Jeepney', checked: true },
     { id: '2', title: 'Tricycle', checked: false },
@@ -44,10 +45,15 @@ const PreferencesScreen: React.FC = () => {
     {
       id: '2',
       title: 'Arrival Alert',
-      subtitle: 'Notify me when I am 2 minutes away from my stop.',
+      subtitle: 'Notify me when I am 2 minutes away from my stop',
       checked: true,
     },
-    { id: '3', title: 'Rain Alert', checked: true },
+    {
+      id: '3',
+      title: 'Rain Alert',
+      subtitle: 'A notification if it starts raining in your destination area, suggesting covered terminals or jeepneys over tricycles.',
+      checked: true,
+    },
   ]);
 
   const toggleItem = (
@@ -67,31 +73,36 @@ const PreferencesScreen: React.FC = () => {
     items: PreferenceItem[],
     setItems: (items: PreferenceItem[]) => void
   ) => (
-    <Card style={styles.section}>
+    <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
-      {items.map((item) => (
-        <TouchableOpacity
-          key={item.id}
-          style={styles.preferenceItem}
-          onPress={() => toggleItem(items, setItems, item.id)}
-        >
-          <View style={styles.preferenceContent}>
-            <Text style={styles.preferenceTitle}>{item.title}</Text>
-            {item.subtitle && (
-              <Text style={styles.preferenceSubtitle}>{item.subtitle}</Text>
-            )}
-          </View>
-          {item.checked ? (
-            <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
-          ) : (
-            <Ionicons name="ellipse-outline" size={24} color={Colors.text.light} />
-          )}
-        </TouchableOpacity>
-      ))}
-    </Card>
+      <Card style={styles.sectionCard}>
+        {items.map((item, index) => (
+          <React.Fragment key={item.id}>
+            <TouchableOpacity
+              style={styles.preferenceItem}
+              onPress={() => toggleItem(items, setItems, item.id)}
+              accessibilityLabel={`${item.title}, ${item.checked ? 'enabled' : 'disabled'}`}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: item.checked }}
+            >
+              <View style={styles.preferenceContent}>
+                <Text style={styles.preferenceTitle}>{item.title}</Text>
+                {item.subtitle && (
+                  <Text style={styles.preferenceSubtitle}>{item.subtitle}</Text>
+                )}
+              </View>
+              {item.checked ? (
+                <Ionicons name="checkmark-circle" size={20} color={Colors.accent} />
+              ) : (
+                <Ionicons name="ellipse-outline" size={20} color={Colors.text.light} />
+              )}
+            </TouchableOpacity>
+            {index < items.length - 1 && <View style={styles.itemDivider} />}
+          </React.Fragment>
+        ))}
+      </Card>
+    </View>
   );
-
-  const navigation = useNavigation();
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -99,9 +110,10 @@ const PreferencesScreen: React.FC = () => {
         title="Preferences"
         showBack
         showNotification
+        darkBackground
         onNotificationPress={() => navigation.navigate('Notifications' as never)}
       />
-      <ScrollView style={styles.content}>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {renderSection('Travel modes', travelModes, setTravelModes)}
         {renderSection('Route Priorities', routePriorities, setRoutePriorities)}
         {renderSection('Fare', fare, setFare)}
@@ -120,22 +132,33 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   section: {
-    margin: Theme.spacing.md,
-    padding: Theme.spacing.lg,
+    marginHorizontal: Theme.spacing.md,
+    marginTop: Theme.spacing.lg,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: Colors.text.primary,
-    marginBottom: Theme.spacing.md,
+    fontSize: 16,
+    fontFamily: 'Poppins',
+    fontWeight: '600',
+    color: Colors.text.secondary,
+    marginBottom: Theme.spacing.sm,
+  },
+  sectionCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 18,
+    paddingVertical: Theme.spacing.md,
+    paddingHorizontal: Theme.spacing.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
   },
   preferenceItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: Theme.spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.background,
+    paddingVertical: Theme.spacing.sm,
+    minHeight: 51,
   },
   preferenceContent: {
     flex: 1,
@@ -143,13 +166,22 @@ const styles = StyleSheet.create({
   },
   preferenceTitle: {
     fontSize: 16,
+    fontFamily: 'Poppins',
+    fontWeight: '500',
     color: Colors.text.primary,
     marginBottom: Theme.spacing.xs,
   },
   preferenceSubtitle: {
-    fontSize: 12,
+    fontSize: 11,
+    fontFamily: 'Poppins',
+    fontWeight: '400',
     color: Colors.text.secondary,
     lineHeight: 16,
+  },
+  itemDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.text.light,
+    marginVertical: Theme.spacing.xs,
   },
 });
 
