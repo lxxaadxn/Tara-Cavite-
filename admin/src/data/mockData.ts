@@ -11,21 +11,21 @@ export const stats = {
 export const recentActivity = [
   { id: '1', text: 'New spot added - Corregidor Island Historical Site', time: '2 hours ago', status: 'approved' },
   { id: '2', text: 'Route updated - Manila to Tagaytay scenic route', time: '4 hours ago', status: 'approved' },
-  { id: '3', text: 'User review submitted - 5-star review for Puerto Princesa', time: '6 hours ago', status: 'pending' },
+  { id: '3', text: 'User review submitted - 5-star review for Aguinaldo Shrine', time: '6 hours ago', status: 'pending' },
 ];
 
 export const touristSpots = [
   { id: '1', name: 'Corregidor Island', category: 'Historical', city: 'Cavite', status: 'active', image: '🏛️' },
   { id: '2', name: 'Tagaytay Ridge', category: 'Mountain', city: 'Cavite', status: 'active', image: '⛰️' },
-  { id: '3', name: 'Puerto Princesa', category: 'Beach', city: 'Batangas', status: 'active', image: '🏖️' },
+  { id: '3', name: 'Aguinaldo Shrine', category: 'Historical', city: 'Cavite', status: 'active', image: '🏛️' },
   { id: '4', name: 'Cavite Heritage Trail', category: 'Cultural', city: 'Cavite', status: 'hidden', image: '🏛️' },
-  { id: '5', name: 'Mt. Batulao', category: 'Mountain', city: 'Batangas', status: 'active', image: '⛰️' },
+  { id: '5', name: 'Tagaytay Picnic Grove', category: 'Mountain', city: 'Cavite', status: 'active', image: '⛰️' },
 ];
 
 export const routes = [
   { id: '1', name: 'Manila to Tagaytay', from: 'Manila', to: 'Tagaytay', duration: '2 hours', transport: 'Car', status: 'active' },
   { id: '2', name: 'Cavite Heritage Trail', from: 'Imus', to: 'Kawit', duration: '3 hours', transport: 'Jeepney', status: 'active' },
-  { id: '3', name: 'Island Hopping', from: 'Puerto Princesa', to: 'El Nido', duration: '5 hours', transport: 'Boat', status: 'active' },
+  { id: '3', name: 'Kawit to Tagaytay', from: 'Aguinaldo Shrine', to: 'Tagaytay Picnic Grove', duration: '1.5 hours', transport: 'Car', status: 'active' },
 ];
 
 export const users = [
@@ -47,8 +47,8 @@ export const topDestinations = [
   { name: 'Corregidor', count: 1340 },
   { name: 'Tagaytay Ridge', count: 1120 },
   { name: 'People\'s Park', count: 980 },
-  { name: 'Puerto Princesa', count: 850 },
-  { name: 'Mt. Batulao', count: 720 },
+  { name: 'Aguinaldo Shrine', count: 850 },
+  { name: 'Tagaytay Picnic Grove', count: 720 },
 ];
 
 export const tourismTypes = [

@@ -25,6 +25,33 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
+## Running on your phone (Expo Go)
+
+- **Install Expo Go** on your phone ([Android](https://play.google.com/store/apps/details?id=host.exp.exponent) / [iOS](https://apps.apple.com/app/expo-go/id982107779)).
+- Run `npm start` (uses **tunnel** by default so it works across networks).
+- **Scan the QR code with the Expo Go app** (Expo Go’s built-in scanner), not with your normal camera or browser.
+
+### If scanning the QR code doesn’t connect
+
+1. **Tunnel is slow or fails**  
+   Use LAN instead (phone and PC must be on the **same Wi‑Fi**):
+   ```bash
+   npm run start:lan
+   ```
+   Then scan the new QR code with Expo Go.
+
+2. **Windows Firewall**  
+   If you use LAN and the phone still can’t connect, allow Node/Metro through Windows Firewall:
+   - Windows Security → Firewall & network protection → Allow an app through firewall.
+   - Find **Node.js** and allow it on **Private** (and **Public** if you need it).
+   - Or allow **inbound TCP** for ports **8081** and **19000–19002**.
+
+3. **Same Wi‑Fi**  
+   For LAN, the phone and the computer must be on the same Wi‑Fi. Avoid guest networks.
+
+4. **Scan with Expo Go**  
+   Open the **Expo Go** app → “Scan QR code” and point it at the QR in the terminal. Don’t use the device’s default camera app.
+
 ## Get a fresh project
 
 When you're ready, run:

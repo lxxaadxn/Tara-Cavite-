@@ -5,7 +5,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect, useState } from 'react';
-import { Image, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { Colors } from './constants/Colors';
@@ -105,6 +105,20 @@ const MainTabs = () => (
   </Tab.Navigator>
 );
 
+// Bundling page: our logo from assets/images/cavitour-logo.png
+const bundlingPageStyle = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logo: {
+    width: 220,
+    height: 60,
+  },
+});
+
 export default function App() {
   const [isOnboardingComplete, setIsOnboardingComplete] = useState<boolean | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -160,8 +174,10 @@ export default function App() {
   const checkOnboardingStatus = async () => {
     try {
       const value = await AsyncStorage.getItem('onboardingComplete');
+      // Only treat as complete when explicitly 'true'. Missing or any other value → show onboarding first.
       setIsOnboardingComplete(value === 'true');
-    } catch (error) {
+    } catch {
+      // On error, show onboarding so we always land on onboarding after bundling before sign in
       setIsOnboardingComplete(false);
     }
   };
@@ -187,19 +203,22 @@ export default function App() {
     }
   }, [isOnboardingComplete]);
 
+  // Bundling page: always use our logo from assets/images/cavitour-logo.png
   if (isOnboardingComplete === null) {
     return (
       <SafeAreaProvider>
-        <View style={{ flex: 1, backgroundColor: '#000000', justifyContent: 'center', alignItems: 'center' }}>
+        <View style={bundlingPageStyle.container}>
           <Image
             source={require('./assets/images/cavitour-logo.png')}
-            style={{ width: 200, height: 60, resizeMode: 'contain' }}
+            style={bundlingPageStyle.logo}
+            resizeMode="contain"
           />
         </View>
       </SafeAreaProvider>
     );
   }
 
+  // 2) Always Onboarding first after bundling, then Sign In/Sign Up, then Main (never Auth before Onboarding)
   return (
     <SafeAreaProvider>
       <NavigationContainer>

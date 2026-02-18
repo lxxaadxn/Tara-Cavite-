@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import styles from './TopNav.module.css';
 
 export function TopNav() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const profileRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -50,8 +52,8 @@ export function TopNav() {
           </button>
           {profileOpen && (
             <div className={styles.dropdown}>
-              <button onClick={() => setProfileOpen(false)}>Profile</button>
-              <button onClick={() => setProfileOpen(false)}>Settings</button>
+              <button onClick={() => { setProfileOpen(false); navigate('/profile'); }}>Profile</button>
+              <button onClick={() => { setProfileOpen(false); navigate('/settings'); }}>Settings</button>
               <button onClick={() => setProfileOpen(false)}>Logout</button>
             </div>
           )}
