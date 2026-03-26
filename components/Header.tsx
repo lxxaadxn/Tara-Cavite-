@@ -12,6 +12,8 @@ interface HeaderProps {
   showLogo?: boolean;
   onNotificationPress?: () => void;
   onMenuPress?: () => void;
+  showFilter?: boolean;
+  onFilterPress?: () => void;
   darkBackground?: boolean; // For dark teal background headers
 }
 
@@ -23,6 +25,8 @@ export const Header: React.FC<HeaderProps> = ({
   showLogo = false,
   onNotificationPress,
   onMenuPress,
+  showFilter = false,
+  onFilterPress,
   darkBackground = false,
 }) => {
   const navigation = useNavigation();
@@ -65,16 +69,41 @@ export const Header: React.FC<HeaderProps> = ({
         <Text style={[styles.title, { color: textColor }]}>{title}</Text>
       )}
       {showNotification ? (
-        <TouchableOpacity
-          onPress={onNotificationPress}
-          style={styles.iconButton}
-          accessibilityLabel="View notifications"
-          accessibilityRole="button"
-        >
-          <Ionicons name="notifications-outline" size={28} color={iconColor} />
-        </TouchableOpacity>
+        <View style={styles.rightGroup}>
+          {showFilter ? (
+            <TouchableOpacity
+              onPress={onFilterPress}
+              style={styles.iconButton}
+              accessibilityLabel="Open filters"
+              accessibilityRole="button"
+            >
+              <Ionicons name="filter" size={24} color={iconColor} />
+            </TouchableOpacity>
+          ) : null}
+          <TouchableOpacity
+            onPress={onNotificationPress}
+            style={styles.iconButton}
+            accessibilityLabel="View notifications"
+            accessibilityRole="button"
+          >
+            <Ionicons name="notifications-outline" size={28} color={iconColor} />
+          </TouchableOpacity>
+        </View>
       ) : (
-        <View style={styles.iconButton} />
+        <View style={styles.rightGroup}>
+          {showFilter ? (
+            <TouchableOpacity
+              onPress={onFilterPress}
+              style={styles.iconButton}
+              accessibilityLabel="Open filters"
+              accessibilityRole="button"
+            >
+              <Ionicons name="filter" size={24} color={iconColor} />
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.iconButton} />
+          )}
+        </View>
       )}
     </View>
   );
@@ -111,5 +140,10 @@ const styles = StyleSheet.create({
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  rightGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
 });

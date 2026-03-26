@@ -4,6 +4,10 @@ import { supabase } from './lib/supabase';
 import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { SignupPage } from './pages/SignupPage';
+import { PrototypeTitlePage } from './pages/PrototypeTitlePage';
+import { PrototypeStartupFeaturesPage } from './pages/PrototypeStartupFeaturesPage';
+import { PrototypeSignInPage } from './pages/PrototypeSignInPage';
+import { PrototypeSignUpPage } from './pages/PrototypeSignUpPage';
 import { SearchPage } from './pages/SearchPage';
 import { PlaceDetailPage } from './pages/PlaceDetailPage';
 
@@ -30,6 +34,10 @@ export default function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
+        <Route path="/prototype/title" element={<PrototypeTitlePage />} />
+        <Route path="/prototype/startup" element={<PrototypeStartupFeaturesPage />} />
+        <Route path="/prototype/sign-in" element={<PrototypeSignInPage />} />
+        <Route path="/prototype/sign-up" element={<PrototypeSignUpPage />} />
         <Route
           path="/search"
           element={

@@ -6,8 +6,6 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  Alert,
-  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -25,6 +23,7 @@ const SignInScreen: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const handleGoBackToOnboarding = async () => {
     await AsyncStorage.setItem('onboardingComplete', 'false');
@@ -32,14 +31,15 @@ const SignInScreen: React.FC = () => {
   };
 
   const handleSignIn = async () => {
+    setFormError(null);
     const trimmedEmail = email.trim();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!trimmedEmail || !password) {
-      Alert.alert('Missing fields', 'Please enter your email and password.');
+      setFormError('Please enter your email and password.');
       return;
     }
     if (!emailRegex.test(trimmedEmail)) {
-      Alert.alert('Invalid email', 'Please enter a valid email address.');
+      setFormError('Please enter a valid email address.');
       return;
     }
     setLoading(true);
@@ -52,7 +52,7 @@ const SignInScreen: React.FC = () => {
       // App.tsx polling will pick up the change and navigate to Main
     } catch (error: unknown) {
       const message = isNetworkErrorMsg(error) ? NETWORK_ERROR_USER_MESSAGE : (error instanceof Error ? error.message : String(error));
-      Alert.alert('Sign in failed', message);
+      setFormError(message);
     } finally {
       setLoading(false);
     }
@@ -64,64 +64,85 @@ const SignInScreen: React.FC = () => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.content}
       >
-        <View style={styles.cardWrapper}>
-          <Card style={styles.card}>
-            <View style={styles.logoContainer}>
-              <Image
-                source={require('../assets/images/cavitour-logo.png')}
-                style={styles.logo}
-                resizeMode="contain"
-              />
-            </View>
-            <View style={styles.titleGroup}>
-              <Text style={styles.title}>Sign in</Text>
-              <Text style={styles.subtitle}>
-                Welcome back! Sign in to resume your journey.
-              </Text>
-            </View>
-
-            <Input
-              label="Email"
-              placeholder="Enter Email"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-            />
-
-            <Input
-              label="Password"
-              placeholder="Enter Password"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
-
-            <TouchableOpacity style={styles.forgotPassword}>
-              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-            </TouchableOpacity>
-
-            <View style={styles.buttonContainer}>
-              <Button
-                title="SIGN IN"
-                onPress={handleSignIn}
-                loading={loading}
-                disabled={loading}
-                accessibilityLabel="Sign in to your CaviTour account"
-              />
-            </View>
-
-            <View style={styles.googleButton}>
-              <Ionicons name="logo-google" size={20} color={Colors.text.primary} />
-              <Text style={styles.googleButtonText}>Log in with Google</Text>
-            </View>
-
-            <View style={styles.signUpContainer}>
-              <Text style={styles.signUpText}>Don’t have an account? </Text>
-              <TouchableOpacity onPress={() => navigation.navigate('SignUp' as never)}>
-                <Text style={styles.signUpLink}>Sign up</Text>
+        <View style={styles.cardShellWrapper}>
+          <View style={styles.cardShell}>
+            <View style={[styles.topStrip, styles.topStripSignIn]}>
+              <TouchableOpacity
+                onPress={handleGoBackToOnboarding}
+                accessibilityLabel="Go back to onboarding"
+                accessibilityRole="button"
+                style={styles.backButton}
+              >
+                <Ionicons name="arrow-back" size={24} color={Colors.white} />
               </TouchableOpacity>
             </View>
-          </Card>
+
+            <Card style={styles.panel}>
+              <View style={styles.titleGroup}>
+                <Text style={styles.title}>Sign in</Text>
+                <Text style={styles.subtitle}>Welcome back! Sign in to resume your journey.</Text>
+              </View>
+
+              <Input
+                label="Email"
+                placeholder="Enter Email"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+              />
+
+              <Input
+                label="Password"
+                placeholder="Enter Password"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+              />
+
+              <TouchableOpacity
+                style={styles.forgotPassword}
+                accessibilityRole="button"
+                onPress={() => {}}
+              >
+                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+              </TouchableOpacity>
+
+              {formError ? (
+                <Text style={styles.errorText} accessibilityRole="alert">
+                  {formError}
+                </Text>
+              ) : null}
+
+              <View style={styles.buttonContainer}>
+                <Button
+                  title="SIGN IN"
+                  onPress={handleSignIn}
+                  loading={loading}
+                  disabled={loading}
+                  accessibilityLabel="Sign in to your CaviTour account"
+                  style={styles.signInButton}
+                  textStyle={styles.signInButtonText}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={styles.googleButton}
+                accessibilityRole="button"
+                accessibilityLabel="Log in with Google"
+                onPress={() => {}}
+              >
+                <Ionicons name="logo-google" size={20} color={Colors.text.primary} />
+                <Text style={styles.googleButtonText}>Log in with Google</Text>
+              </TouchableOpacity>
+
+              <View style={styles.signUpContainer}>
+                <Text style={styles.signUpText}>Don’t have an account? </Text>
+                <TouchableOpacity onPress={() => navigation.navigate('SignUp' as never)} accessibilityRole="button">
+                  <Text style={styles.signUpLink}>Sign up</Text>
+                </TouchableOpacity>
+              </View>
+            </Card>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -139,22 +160,40 @@ const styles = StyleSheet.create({
     paddingHorizontal: Theme.spacing.lg,
     paddingBottom: Theme.spacing.lg,
   },
-  cardWrapper: {
+  cardShellWrapper: {
     flex: 1,
     marginTop: 40,
     alignItems: 'center',
+    justifyContent: 'flex-start',
+    width: '100%',
   },
-  card: {
-    padding: Theme.spacing.xl,
+  cardShell: {
+    width: '100%',
+    maxWidth: 402,
     borderRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: Colors.white,
   },
-  logoContainer: {
-    alignItems: 'center',
-    marginBottom: Theme.spacing.lg,
+  topStrip: {
+    width: '100%',
+    height: 239,
+    paddingHorizontal: 21,
+    paddingTop: 38,
   },
-  logo: {
-    width: 140,
+  topStripSignIn: {
+    backgroundColor: Colors.accent,
+  },
+  backButton: {
+    width: 40,
     height: 40,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  panel: {
+    padding: Theme.spacing.xl,
+    borderRadius: 0,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   titleGroup: {
     alignItems: 'center',
@@ -175,14 +214,16 @@ const styles = StyleSheet.create({
   },
   forgotPassword: {
     alignSelf: 'flex-end',
-    marginBottom: Theme.spacing.lg,
+    marginBottom: Theme.spacing.md,
   },
   forgotPasswordText: {
     color: Colors.primary,
     fontSize: 14,
   },
   buttonContainer: {
+    marginTop: Theme.spacing.sm,
     marginBottom: Theme.spacing.md,
+    alignItems: 'center',
   },
   googleButton: {
     flexDirection: 'row',
@@ -212,6 +253,24 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: 14,
     fontWeight: '600',
+  },
+  errorText: {
+    fontSize: 13,
+    color: '#c62828',
+    fontWeight: '600',
+    marginBottom: Theme.spacing.sm,
+  },
+  signInButton: {
+    width: 264,
+    height: 48,
+    minHeight: 48,
+    borderRadius: 10,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+  },
+  signInButtonText: {
+    fontSize: 14,
+    letterSpacing: 0.15,
   },
 });
 

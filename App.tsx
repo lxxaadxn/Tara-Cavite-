@@ -4,7 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import * as SplashScreen from 'expo-splash-screen';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -19,6 +19,7 @@ import DirectionsScreen from './screens/DirectionsScreen';
 import HistoryScreen from './screens/HistoryScreen';
 import HomeScreen from './screens/HomeScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
+import MapScreen from './screens/MapScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
 import PlaceDetailScreen from './screens/PlaceDetailScreen';
 import PreferencesScreen from './screens/PreferencesScreen';
@@ -44,7 +45,7 @@ const AuthStack = () => (
 );
 
 // Home Stack
-const HomeStack = () => (
+const DashboardStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="HomeMain" component={HomeScreen} />
     <Stack.Screen name="Terminals" component={TerminalsScreen} />
@@ -52,13 +53,15 @@ const HomeStack = () => (
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
     <Stack.Screen name="Directions" component={DirectionsScreen} />
     <Stack.Screen name="Categories" component={CategoriesScreen} />
+    <Stack.Screen name="Notifications" component={NotificationsScreen} />
   </Stack.Navigator>
 );
 
-// Saved Stack (placeholder for now)
-const SavedStack = () => (
+// Itineraries Stack
+const ItinerariesStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="SavedMain" component={HomeScreen} />
+    <Stack.Screen name="History" component={HistoryScreen} />
+    <Stack.Screen name="Notifications" component={NotificationsScreen} />
   </Stack.Navigator>
 );
 
@@ -75,24 +78,43 @@ const ProfileStack = () => (
   </Stack.Navigator>
 );
 
+// Terminals Stack
+const TerminalsStack = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="TerminalsMain" component={TerminalsScreen} />
+    <Stack.Screen name="TerminalDetail" component={TerminalDetailScreen} />
+  </Stack.Navigator>
+);
+
+// Map Stack
+const MapStack = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="MapMain" component={MapScreen} />
+    <Stack.Screen name="Notifications" component={NotificationsScreen} />
+  </Stack.Navigator>
+);
+
 // Main Tabs Navigator
 const MainTabs = () => (
   <Tab.Navigator
     screenOptions={({ route }) => ({
       tabBarIcon: ({ focused, color, size }) => {
-        let iconName: keyof typeof Ionicons.glyphMap;
+        const iconName =
+          route.name === 'Dashboard'
+            ? focused
+              ? 'home'
+              : 'home-outline'
+            : route.name === 'Itineraries'
+              ? 'document-text-outline'
+              : route.name === 'Map'
+                ? 'map-outline'
+                : route.name === 'Terminals'
+                  ? 'car-outline'
+                  : focused
+                    ? 'person'
+                    : 'person-outline';
 
-        if (route.name === 'Home') {
-          iconName = focused ? 'home' : 'home-outline';
-        } else if (route.name === 'Saved') {
-          iconName = focused ? 'bookmark' : 'bookmark-outline';
-        } else if (route.name === 'Profile') {
-          iconName = focused ? 'person' : 'person-outline';
-        } else {
-          iconName = 'help-outline';
-        }
-
-        return <Ionicons name={iconName} size={size} color={color} />;
+        return <Ionicons name={iconName as any} size={size} color={color} />;
       },
       tabBarActiveTintColor: Colors.white,
       tabBarInactiveTintColor: 'rgba(255,255,255,0.6)',
@@ -103,8 +125,10 @@ const MainTabs = () => (
       },
     })}
   >
-    <Tab.Screen name="Home" component={HomeStack} />
-    <Tab.Screen name="Saved" component={SavedStack} />
+    <Tab.Screen name="Dashboard" component={DashboardStack} />
+    <Tab.Screen name="Itineraries" component={ItinerariesStack} />
+    <Tab.Screen name="Map" component={MapStack} />
+    <Tab.Screen name="Terminals" component={TerminalsStack} />
     <Tab.Screen name="Profile" component={ProfileStack} />
   </Tab.Navigator>
 );
@@ -126,6 +150,7 @@ const bundlingPageStyle = StyleSheet.create({
 export default function App() {
   const [isOnboardingComplete, setIsOnboardingComplete] = useState<boolean | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const didClearAuthRef = useRef(false);
 
   useEffect(() => {
     let interval: any;
@@ -159,9 +184,20 @@ export default function App() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const isSignedIn = !!session;
+        didClearAuthRef.current = false;
         await AsyncStorage.setItem('isAuthenticated', isSignedIn ? 'true' : 'false');
         setIsAuthenticated(isSignedIn);
       } catch {
+        // Stale/invalid refresh token in storage can cause noisy auth errors.
+        // Clear local auth state once so the app can recover cleanly.
+        if (!didClearAuthRef.current) {
+          didClearAuthRef.current = true;
+          try {
+            await supabase.auth.signOut();
+          } catch {
+            // Ignore; we only want to clear local auth state best-effort.
+          }
+        }
         setIsAuthenticated(false);
       }
     };
@@ -194,12 +230,21 @@ export default function App() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
+        didClearAuthRef.current = false;
         setIsAuthenticated(true);
         return;
       }
       const value = await AsyncStorage.getItem('isAuthenticated');
       setIsAuthenticated(value === 'true');
     } catch {
+      if (!didClearAuthRef.current) {
+        didClearAuthRef.current = true;
+        try {
+          await supabase.auth.signOut();
+        } catch {
+          // Best-effort cleanup only.
+        }
+      }
       setIsAuthenticated(false);
     }
   };

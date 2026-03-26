@@ -9,6 +9,8 @@ interface ButtonProps {
   loading?: boolean;
   disabled?: boolean;
   accessibilityLabel?: string;
+  style?: any;
+  textStyle?: any;
 }
 
 export const Button: React.FC<ButtonProps> = ({
@@ -18,6 +20,8 @@ export const Button: React.FC<ButtonProps> = ({
   loading = false,
   disabled = false,
   accessibilityLabel,
+  style,
+  textStyle,
 }) => {
   return (
     <TouchableOpacity
@@ -25,6 +29,7 @@ export const Button: React.FC<ButtonProps> = ({
         styles.button,
         variant === 'primary' ? styles.primaryButton : styles.secondaryButton,
         (disabled || loading) && styles.disabled,
+        style,
       ]}
       onPress={onPress}
       disabled={disabled || loading}
@@ -34,7 +39,7 @@ export const Button: React.FC<ButtonProps> = ({
       {loading ? (
         <ActivityIndicator color={Colors.white} />
       ) : (
-        <Text style={styles.buttonText}>{title}</Text>
+        <Text style={[styles.buttonText, textStyle]}>{title}</Text>
       )}
     </TouchableOpacity>
   );

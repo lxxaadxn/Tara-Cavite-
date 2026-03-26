@@ -32,7 +32,9 @@ const HomeScreen: React.FC = () => {
         title=""
         showLogo
         showNotification
+        showFilter
         onMenuPress={() => {}}
+        onFilterPress={() => navigation.navigate('Categories' as never)}
         onNotificationPress={() => navigation.navigate('Notifications' as never)}
       />
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>

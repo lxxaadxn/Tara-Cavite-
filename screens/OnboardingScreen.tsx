@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors, Theme } from '../constants/theme';
@@ -99,12 +99,8 @@ const OnboardingScreen: React.FC = () => {
             accessibilityLabel="Startup icon"
           />
         </View>
-        <View style={styles.startupLogoWrapper}>
-          <Image
-            source={require('../assets/images/cavitour-logo.png')}
-            style={styles.startupLogo}
-            resizeMode="contain"
-          />
+        <View style={styles.startupLogoWrapper} accessibilityRole="header" accessibilityLabel="CaviTour title">
+          <Text style={styles.startupTitleText}>CaviTour</Text>
         </View>
         <Text style={styles.startupCopyright}>© CaviTour 2026</Text>
       </SafeAreaView>
@@ -131,7 +127,9 @@ const OnboardingScreen: React.FC = () => {
             />
             <View style={styles.content}>
               <View style={styles.pictureGroup}>
-                <View style={styles.pictureCircle} />
+                <View style={styles.pictureCircle} accessibilityRole="image" accessibilityLabel="Feature avatar icon">
+                  <Ionicons name={startupIcon} size={72} color="rgba(255,255,255,0.95)" />
+                </View>
               </View>
 
               <View style={styles.textGroup}>
@@ -160,6 +158,7 @@ const OnboardingScreen: React.FC = () => {
                       ? 'Finish onboarding and get started'
                       : 'Go to next feature'
                   }
+                  style={styles.ctaButton}
                 />
               </View>
             </View>
@@ -192,9 +191,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  startupLogo: {
-    width: 200,
-    height: 80,
+  startupTitleText: {
+    fontSize: 40,
+    fontWeight: '800',
+    color: Colors.cta,
+    lineHeight: 48,
   },
   startupCopyright: {
     position: 'absolute',
@@ -229,6 +230,8 @@ const styles = StyleSheet.create({
     borderRadius: 179.5,
     overflow: 'hidden',
     backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pictureImage: {
     width: '100%',
@@ -271,6 +274,12 @@ const styles = StyleSheet.create({
   buttonContainer: {
     width: 318,
     marginTop: Theme.spacing.sm,
+  },
+  ctaButton: {
+    width: 318,
+    height: 48,
+    minHeight: 48,
+    borderRadius: 10,
   },
 });
 

@@ -21,7 +21,7 @@ export const Input: React.FC<InputProps> = ({
 }) => {
   return (
     <View style={styles.container}>
-      {label && <Text style={styles.label}>{label}</Text>}
+      {label ? <Text style={styles.label}>{label}</Text> : null}
       <TextInput
         style={styles.input}
         placeholder={placeholder}
@@ -30,6 +30,7 @@ export const Input: React.FC<InputProps> = ({
         onChangeText={onChangeText}
         secureTextEntry={secureTextEntry}
         keyboardType={keyboardType}
+        accessibilityLabel={label ?? placeholder}
       />
     </View>
   );
@@ -40,16 +41,16 @@ const styles = StyleSheet.create({
     marginBottom: Theme.spacing.md,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '800',
     color: Colors.primary,
-    marginBottom: Theme.spacing.xs,
+    marginBottom: Theme.spacing.sm,
   },
   input: {
     borderBottomWidth: 1,
     borderBottomColor: Colors.text.light,
     paddingVertical: Theme.spacing.sm,
-    fontSize: 16,
+    fontSize: 14,
     color: Colors.text.primary,
   },
 });
