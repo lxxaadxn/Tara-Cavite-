@@ -6,24 +6,29 @@ import {
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
+  TextInput,
+  ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons } from '@expo/vector-icons';
-import { Colors, Theme } from '../constants/theme';
-import { Input } from '../components/Input';
+import { FontAwesome, Ionicons } from '@expo/vector-icons';
+import { JamIcon } from '../components/JamIcon';
+import { Colors } from '../constants/theme';
 import { Button } from '../components/Button';
-import { Card } from '../components/Card';
 import { supabase } from '../lib/supabase';
 import { withAuthRetry, isNetworkErrorMsg, NETWORK_ERROR_USER_MESSAGE } from '../lib/authHelpers';
+
+const TURQUOISE = '#54C0CC';
+const MUTED = '#7A7878';
+const LINE = 'rgba(122, 120, 120, 0.45)';
 
 const MIN_PASSWORD_LENGTH = 6;
 const hasUppercase = (str: string) => /[A-Z]/.test(str);
 
 const SignUpScreen: React.FC = () => {
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation();
-  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -45,7 +50,7 @@ const SignUpScreen: React.FC = () => {
       setFormError('Please enter a valid email address.');
       return;
     }
-    const trimmedUsername = username.trim() || trimmedEmail.split('@')[0];
+    const trimmedUsername = trimmedEmail.split('@')[0];
     if (password.length < MIN_PASSWORD_LENGTH) {
       setFormError(
         'Password must be at least 6 characters and contain at least one uppercase letter.'
@@ -57,7 +62,7 @@ const SignUpScreen: React.FC = () => {
       return;
     }
     if (password !== confirmPassword) {
-      setConfirmPasswordError('Password do not match.');
+      setConfirmPasswordError('Passwords do not match.');
       return;
     }
     setLoading(true);
@@ -72,7 +77,6 @@ const SignUpScreen: React.FC = () => {
       if (error) throw error;
       if (data.session) {
         await AsyncStorage.setItem('isAuthenticated', 'true');
-        // App.tsx will navigate to Main
       } else {
         setFormError(
           'Check your email. We sent you a confirmation link. Open it to activate your account, then sign in.'
@@ -80,7 +84,11 @@ const SignUpScreen: React.FC = () => {
         navigation.goBack();
       }
     } catch (error: unknown) {
-      const message = isNetworkErrorMsg(error) ? NETWORK_ERROR_USER_MESSAGE : (error instanceof Error ? error.message : String(error));
+      const message = isNetworkErrorMsg(error)
+        ? NETWORK_ERROR_USER_MESSAGE
+        : error instanceof Error
+          ? error.message
+          : String(error);
       setFormError(message);
     } finally {
       setLoading(false);
@@ -88,66 +96,88 @@ const SignUpScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.root}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.content}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.flex}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
       >
-        <View style={styles.cardShellWrapper}>
-          <View style={styles.cardShell}>
-            <View style={[styles.topStrip, styles.topStripSignUp]}>
-              <TouchableOpacity
-                onPress={() => navigation.goBack()}
-                accessibilityLabel="Go back"
-                accessibilityRole="button"
-                style={styles.backButton}
-              >
-                <Ionicons name="arrow-back" size={24} color={Colors.white} />
-              </TouchableOpacity>
-            </View>
+        <View style={[styles.column, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+          <View style={[styles.hero, { marginTop: -insets.top, paddingTop: insets.top + 8 }]}>
+            <View style={styles.decoTurquoise} pointerEvents="none" />
+            <View style={styles.decoTealBlob} pointerEvents="none" />
+          </View>
 
-            <Card style={styles.panel}>
-              <View style={styles.titleGroup}>
-                <Text style={styles.title}>Sign up</Text>
-                <Text style={styles.subtitle}>Let’s start your journey!</Text>
+          <View style={styles.sheet}>
+            <ScrollView
+              style={styles.sheetScroll}
+              contentContainerStyle={styles.sheetScrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
+              <TouchableOpacity
+                style={styles.backRow}
+                accessibilityRole="button"
+                accessibilityLabel="Back to login"
+                onPress={() => navigation.goBack()}
+              >
+                <JamIcon ionicon="chevron-left" size={22} color={Colors.primary} />
+                <Text style={styles.backText}>Back to Login</Text>
+              </TouchableOpacity>
+
+              <View style={styles.head}>
+                <Text style={styles.title}>Sign Up</Text>
               </View>
 
-              <Input
-                label="Username"
-                placeholder="Choose a username"
-                value={username}
-                onChangeText={setUsername}
-              />
+              <View style={styles.fieldsBlock}>
+                <View style={styles.pill}>
+                  <Ionicons name="mail-outline" size={19} color={MUTED} style={styles.pillIcon} />
+                  <TextInput
+                    style={styles.pillInput}
+                    placeholder="Email"
+                    placeholderTextColor={MUTED}
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    accessibilityLabel="Email"
+                  />
+                </View>
 
-              <Input
-                label="Email"
-                placeholder="Enter Email"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-              />
+                <View style={[styles.pill, styles.pillSpaced]}>
+                  <Ionicons name="lock-closed-outline" size={19} color={MUTED} style={styles.pillIcon} />
+                  <TextInput
+                    style={styles.pillInput}
+                    placeholder="Password"
+                    placeholderTextColor={MUTED}
+                    value={password}
+                    onChangeText={(text) => {
+                      setPassword(text);
+                      setConfirmPasswordError('');
+                    }}
+                    secureTextEntry
+                    accessibilityLabel="Password"
+                  />
+                </View>
 
-              <Input
-                label="Password"
-                placeholder="Enter Password (min 6 chars, one uppercase)"
-                value={password}
-                onChangeText={(text) => {
-                  setPassword(text);
-                  setConfirmPasswordError('');
-                }}
-                secureTextEntry
-              />
-
-              <Input
-                label="Confirm Password"
-                placeholder="Enter Password"
-                value={confirmPassword}
-                onChangeText={(text) => {
-                  setConfirmPassword(text);
-                  setConfirmPasswordError('');
-                }}
-                secureTextEntry
-              />
+                <View style={[styles.pill, styles.pillSpaced]}>
+                  <Ionicons name="lock-closed-outline" size={19} color={MUTED} style={styles.pillIcon} />
+                  <TextInput
+                    style={styles.pillInput}
+                    placeholder="Confirm Password"
+                    placeholderTextColor={MUTED}
+                    value={confirmPassword}
+                    onChangeText={(text) => {
+                      setConfirmPassword(text);
+                      setConfirmPasswordError('');
+                    }}
+                    secureTextEntry
+                    accessibilityLabel="Confirm password"
+                  />
+                </View>
+              </View>
 
               {confirmPasswordError ? (
                 <Text style={styles.inlineErrorText} accessibilityRole="alert">
@@ -161,163 +191,226 @@ const SignUpScreen: React.FC = () => {
                 </Text>
               ) : null}
 
-              <View style={styles.buttonContainer}>
+              <View style={styles.primaryBtnWrap}>
                 <Button
-                  title="SIGN UP"
+                  title="Sign Up"
                   onPress={handleSignUp}
                   loading={loading}
                   disabled={loading}
                   accessibilityLabel="Create your CaviTour account"
-                  style={styles.signUpButton}
-                  textStyle={styles.signUpButtonText}
+                  style={styles.primaryBtn}
+                  textStyle={styles.primaryBtnText}
                 />
               </View>
 
-              <TouchableOpacity
-                style={styles.googleButton}
-                accessibilityRole="button"
-                accessibilityLabel="Sign up with Google"
-                onPress={() => {}}
-              >
-                <Ionicons name="logo-google" size={20} color={Colors.text.primary} />
-                <Text style={styles.googleButtonText}>Sign up with Google</Text>
-              </TouchableOpacity>
+              <View style={styles.bottomBlock}>
+                <View style={styles.dividerRow}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerLabel}>Or sign up with</Text>
+                  <View style={styles.dividerLine} />
+                </View>
 
-              <View style={styles.signInContainer}>
-                <Text style={styles.signInText}>Already have an account? </Text>
-                <TouchableOpacity onPress={() => navigation.goBack()} accessibilityRole="button">
-                  <Text style={styles.signInLink}>Sign in</Text>
-                </TouchableOpacity>
+                <View style={styles.socialRow}>
+                  <TouchableOpacity
+                    style={styles.socialBtn}
+                    accessibilityLabel="Sign up with Facebook"
+                    onPress={() => {}}
+                  >
+                    <FontAwesome name="facebook" size={22} color={Colors.primary} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.socialBtn}
+                    accessibilityLabel="Sign up with Google"
+                    onPress={() => {}}
+                  >
+                    <JamIcon ionicon="logo-google" size={22} color={Colors.primary} />
+                  </TouchableOpacity>
+                </View>
               </View>
-            </Card>
+            </ScrollView>
           </View>
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    backgroundColor: Colors.primary,
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'flex-start',
-    paddingHorizontal: Theme.spacing.lg,
-    paddingBottom: Theme.spacing.lg,
-  },
-  cardShellWrapper: {
-    flex: 1,
-    marginTop: 40,
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    width: '100%',
-  },
-  cardShell: {
-    width: '100%',
-    maxWidth: 402,
-    borderRadius: 24,
-    overflow: 'hidden',
     backgroundColor: Colors.white,
   },
-  topStrip: {
-    width: '100%',
-    height: 239,
-    paddingHorizontal: 21,
-    paddingTop: 38,
+  flex: {
+    flex: 1,
+    backgroundColor: Colors.white,
   },
-  topStripSignUp: {
-    backgroundColor: Colors.primary,
+  column: {
+    flex: 1,
+    backgroundColor: Colors.white,
+    overflow: 'visible',
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'flex-start',
+  hero: {
+    flex: 1,
+    backgroundColor: Colors.accent,
+    paddingHorizontal: 24,
     justifyContent: 'center',
+    overflow: 'hidden',
   },
-  panel: {
-    padding: Theme.spacing.xl,
-    borderRadius: 0,
-    shadowOpacity: 0,
-    elevation: 0,
+  decoTurquoise: {
+    position: 'absolute',
+    width: 160,
+    height: 110,
+    borderRadius: 56,
+    backgroundColor: TURQUOISE,
+    opacity: 0.95,
+    top: 4,
+    left: -48,
+    transform: [{ rotate: '-18deg' }],
   },
-  titleGroup: {
+  decoTealBlob: {
+    position: 'absolute',
+    width: 220,
+    height: 320,
+    borderRadius: 110,
+    backgroundColor: Colors.primary,
+    top: 24,
+    right: -72,
+  },
+  sheet: {
+    flex: 3,
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    marginTop: -20,
+    paddingHorizontal: 22,
+    paddingTop: 8,
+    minHeight: 0,
+  },
+  sheetScroll: {
+    flex: 1,
+  },
+  sheetScrollContent: {
+    paddingBottom: 16,
+  },
+  backRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Theme.spacing.lg,
+    gap: 4,
+    paddingTop: 10,
+    paddingBottom: 8,
+    alignSelf: 'flex-start',
+  },
+  backText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 15,
+    color: Colors.primary,
+  },
+  head: {
+    paddingTop: 8,
+    paddingBottom: 22,
   },
   title: {
-    fontSize: 25,
-    fontWeight: 'bold',
-    color: Colors.text.primary,
-  },
-  subtitle: {
-    marginTop: 4,
-    fontSize: 13,
-    color: Colors.text.secondary,
-    textAlign: 'center',
-    marginBottom: Theme.spacing.xl,
-    lineHeight: 28,
-  },
-  buttonContainer: {
-    marginTop: Theme.spacing.md,
-    marginBottom: Theme.spacing.lg,
-    alignItems: 'center',
-  },
-  signInContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  signInText: {
-    color: Colors.text.secondary,
-    fontSize: 14,
-  },
-  signInLink: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 24,
+    lineHeight: 30,
     color: Colors.primary,
-    fontSize: 14,
-    fontWeight: '600',
   },
-  errorText: {
-    color: '#c62828',
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: Theme.spacing.sm,
+  fieldsBlock: {
+    marginBottom: 4,
+  },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: LINE,
+    borderRadius: 999,
+    paddingVertical: 2,
+    paddingHorizontal: 14,
+    minHeight: 46,
+    backgroundColor: Colors.white,
+  },
+  pillSpaced: {
+    marginTop: 18,
+  },
+  pillIcon: {
+    marginRight: 10,
+  },
+  pillInput: {
+    flex: 1,
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 15,
+    color: Colors.text.primary,
+    paddingVertical: 10,
   },
   inlineErrorText: {
+    fontSize: 12,
     color: '#c62828',
-    fontSize: 13,
-    fontWeight: '600',
-    marginTop: -Theme.spacing.sm,
-    marginBottom: Theme.spacing.sm,
+    fontFamily: 'Poppins_400Regular',
+    marginTop: 8,
+    marginBottom: 4,
   },
-  googleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: Colors.text.light,
-    borderRadius: Theme.borderRadius.md,
-    marginBottom: Theme.spacing.lg,
+  errorText: {
+    fontSize: 12,
+    color: '#c62828',
+    fontFamily: 'Poppins_400Regular',
+    marginBottom: 8,
+    marginTop: 8,
   },
-  googleButtonText: {
-    marginLeft: Theme.spacing.sm,
-    fontSize: 16,
-    color: Colors.text.primary,
+  primaryBtnWrap: {
+    marginTop: 14,
+    marginBottom: 48,
   },
-  signUpButton: {
-    width: 264,
+  primaryBtn: {
+    width: '100%',
+    maxWidth: 400,
+    alignSelf: 'center',
     height: 48,
     minHeight: 48,
-    borderRadius: 10,
+    borderRadius: 999,
     paddingVertical: 0,
-    paddingHorizontal: 0,
+    backgroundColor: Colors.accent,
   },
-  signUpButtonText: {
-    fontSize: 14,
-    letterSpacing: 0.15,
+  primaryBtnText: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 16,
+    textTransform: 'none',
+    letterSpacing: 0.2,
+  },
+  bottomBlock: {
+    paddingTop: 0,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 0,
+    marginBottom: 12,
+    gap: 10,
+  },
+  dividerLine: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: LINE,
+  },
+  dividerLabel: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 13,
+    color: MUTED,
+  },
+  socialRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 16,
+    marginBottom: 4,
+  },
+  socialBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: LINE,
+    backgroundColor: Colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 

@@ -1,3 +1,23 @@
+const INVALID_STORED_SESSION_CODES = new Set([
+  'refresh_token_not_found',
+  'refresh_token_already_used',
+  'session_not_found',
+  'session_expired',
+]);
+
+/**
+ * True when local Supabase session data should be discarded (invalid/expired refresh, etc.).
+ * Not used for transient network failures ({@link AuthRetryableFetchError}).
+ */
+export function isStoredSessionInvalidError(error: unknown): boolean {
+  if (error == null || typeof error !== 'object') return false;
+  const e = error as { name?: string; code?: string; message?: string };
+  if (e.name === 'AuthRetryableFetchError') return false;
+  if (typeof e.code === 'string' && INVALID_STORED_SESSION_CODES.has(e.code)) return true;
+  const m = typeof e.message === 'string' ? e.message.toLowerCase() : '';
+  return /invalid refresh token|refresh token not found/.test(m);
+}
+
 const isNetworkError = (e: unknown): boolean => {
   const s = e instanceof Error ? e.message : String(e);
   return /network request failed|Network request failed|TypeError: Network request failed/i.test(s);

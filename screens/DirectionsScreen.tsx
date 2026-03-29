@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import { JamIcon } from '../components/JamIcon';
 import { Colors, Theme } from '../constants/theme';
 
 const MAP_FILTERS = [
@@ -33,18 +33,18 @@ const DirectionsScreen: React.FC = () => {
           style={styles.menuBtn}
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="menu" size={24} color={Colors.white} />
+          <JamIcon ionicon="menu" size={24} color={Colors.white} />
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.directionsIconBtn}
           onPress={() => {}}
         >
-          <Ionicons name="car" size={22} color={Colors.white} />
+          <JamIcon ionicon="car" size={22} color={Colors.white} />
         </TouchableOpacity>
       </View>
 
       <View style={styles.searchBar}>
-        <Ionicons name="search" size={20} color={Colors.text.secondary} />
+        <JamIcon ionicon="search" size={20} color={Colors.text.secondary} />
         <TextInput
           style={styles.searchInput}
           placeholder="Where are you going?"
@@ -52,7 +52,7 @@ const DirectionsScreen: React.FC = () => {
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
-        <Ionicons name="location" size={20} color={Colors.text.secondary} />
+        <JamIcon ionicon="location" size={20} color={Colors.text.secondary} />
       </View>
 
       <View style={styles.filtersRow}>
@@ -82,7 +82,7 @@ const DirectionsScreen: React.FC = () => {
       {/* Map area */}
       <View style={styles.mapContainer}>
         <View style={styles.mapPlaceholder}>
-          <Ionicons name="map" size={64} color={Colors.text.light} />
+          <JamIcon ionicon="map" size={64} color={Colors.text.light} />
           <Text style={styles.mapText}>Map with directions</Text>
           {place && (
             <Text style={styles.mapSubtext}>

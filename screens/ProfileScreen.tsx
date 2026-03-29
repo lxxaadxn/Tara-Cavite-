@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { User } from '@supabase/supabase-js';
@@ -7,21 +6,23 @@ import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card } from '../components/Card';
 import { Header } from '../components/Header';
+import { JamIcon } from '../components/JamIcon';
+import type { JamIconName } from '../lib/jamSvgMap';
 import { Colors, Theme } from '../constants/theme';
 import { supabase } from '../lib/supabase';
 
 interface MenuItem {
   id: string;
   title: string;
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: JamIconName;
   screen: string;
 }
 
 const menuItems: MenuItem[] = [
-  { id: '1', title: 'User Details', icon: 'person-outline', screen: 'UserDetails' },
-  { id: '2', title: 'History', icon: 'time-outline', screen: 'History' },
-  { id: '3', title: 'Saved list', icon: 'bookmark-outline', screen: 'SavedList' },
-  { id: '4', title: 'Preferences', icon: 'settings-outline', screen: 'Preferences' },
+  { id: '1', title: 'User Details', icon: 'user', screen: 'UserDetails' },
+  { id: '2', title: 'History', icon: 'clock', screen: 'History' },
+  { id: '3', title: 'Saved list', icon: 'bookmark', screen: 'SavedList' },
+  { id: '4', title: 'Preferences', icon: 'cog', screen: 'Preferences' },
 ];
 
 const ProfileScreen: React.FC = () => {
@@ -71,8 +72,7 @@ const ProfileScreen: React.FC = () => {
             try {
               await supabase.auth.signOut();
               await AsyncStorage.removeItem('isAuthenticated');
-              await AsyncStorage.setItem('onboardingComplete', 'false');
-              // App.tsx polling will show Onboarding, then Auth after GET STARTED
+              // App remounts unauthenticated flow → landing (Unauthed stack) then sign-in
             } catch (error) {
               console.error('Error during logout:', error);
               Alert.alert('Error', 'Failed to log out. Please try again.');
@@ -104,7 +104,7 @@ const ProfileScreen: React.FC = () => {
               />
             ) : (
               <View style={styles.avatarPlaceholder}>
-                <Ionicons name="person" size={60} color={Colors.primary} />
+                <JamIcon name="user" size={60} color={Colors.primary} />
               </View>
             )}
           </View>
@@ -123,9 +123,9 @@ const ProfileScreen: React.FC = () => {
           >
             <Card style={styles.menuItem}>
               <View style={styles.menuItemContent}>
-                <Ionicons name={item.icon} size={24} color={Colors.primary} />
+                <JamIcon name={item.icon} size={24} color={Colors.primary} />
                 <Text style={styles.menuItemText}>{item.title}</Text>
-                <Ionicons name="chevron-forward" size={24} color={Colors.text.light} />
+                <JamIcon ionicon="chevron-forward" size={24} color={Colors.text.light} />
               </View>
             </Card>
           </TouchableOpacity>
@@ -138,7 +138,7 @@ const ProfileScreen: React.FC = () => {
           accessibilityLabel="Log out"
           accessibilityRole="button"
         >
-          <Ionicons name="log-out-outline" size={24} color={Colors.primary} />
+          <JamIcon ionicon="log-out-outline" size={24} color={Colors.primary} />
           <Text style={styles.logoutText}>Log out</Text>
         </TouchableOpacity>
       </ScrollView>

@@ -11,6 +11,8 @@ export interface Place {
   latitude: number;
   longitude: number;
   image?: any; // For require() statements or URI strings
+  /** Shown on home cards (Figma) */
+  rating?: string;
 }
 
 export interface Route {
@@ -53,102 +55,123 @@ export interface Notification {
 export interface Terminal {
   id: string;
   name: string;
+  /** City or municipality for location filter */
+  municipality: string;
+  /** Subtitle under title, e.g. barangay, city, region */
+  addressLine?: string;
+  /** Long description for detail “Description” tab */
+  description?: string;
   category: 'dasma-bayan' | 'other';
   transportTypes: string[];
   status: 'OPEN' | 'CLOSED';
   operatingHours: string;
   averageFare: string;
   paymentType: string;
-  primaryRoutes: { label: string; fare: string }[];
+  /** Simple route list when the terminal has no gate groupings */
+  primaryRoutes: { label: string }[];
+  /** PITX-style: routes grouped by gate (accordion in UI) */
+  routesByGate?: { gateName: string; routes: { label: string }[] }[];
   reminders: string[];
   latitude: number;
   longitude: number;
 }
 
-// Trending Tourist Spots for home screen
+// Trending Tourist Spots for home screen (Figma dashboard export)
 export const trendingSpots: Place[] = [
   {
     id: '1',
     name: 'Tinatangi Cafe',
-    address: 'Dasmariñas City, Cavite',
+    address: 'Silang, Cavite',
     type: 'Cafe',
     hours: '8:00 AM - 10:00 PM',
     latitude: 14.3297,
     longitude: 120.9367,
-    image: require('../assets/images/Tinatangi_home.webp'),
+    image: require('../assets/images/picture-7.png'),
+    rating: '5.0',
   },
   {
     id: '2',
-    name: 'Perlas ng Silang',
-    address: 'Silang Cavite',
-    type: 'Tourist Spot',
-    hours: 'Open 24 hours',
-    latitude: 14.2311,
-    longitude: 120.9753,
-    image: require('../assets/images/Perlasngsilang_home.webp'),
-  },
-  {
-    id: '3',
-    name: "People's Park",
-    address: 'Tagaytay City, Cavite',
-    type: 'Park',
-    hours: 'Open 24 hours',
-    latitude: 14.1133,
-    longitude: 120.9383,
-    image: require('../assets/images/Peoplespark_home.webp'),
-  },
-  {
-    id: '4',
     name: 'Aguinaldo Shrine',
-    address: 'Kawit, Cavite',
+    address: '15, 52 Tirona Hwy, Kawit, 4104 Cavite',
     type: 'Historical Site',
     hours: '8:00 AM - 4:00 PM',
     latitude: 14.4444,
     longitude: 120.9056,
-    image: require('../assets/images/Aguinaldoshrine_home.webp'),
+    image: require('../assets/images/picture-15.png'),
+    rating: '4.9',
+  },
+  {
+    id: '3',
+    name: 'Taal Volcano View',
+    address: 'Tagaytay City',
+    type: 'Tourist Spot',
+    hours: 'Open 24 hours',
+    latitude: 14.1133,
+    longitude: 120.9383,
+    image: require('../assets/images/picture-23.png'),
+    rating: '4.8',
+  },
+  {
+    id: '4',
+    name: 'Immaculate Conception',
+    address: 'Don Placido Campos Avenue, Dasmariñas',
+    type: 'Church',
+    hours: 'Open for mass',
+    latitude: 14.3297,
+    longitude: 120.9367,
+    image: require('../assets/images/picture-31.png'),
+    rating: '5.0',
   },
 ];
 
 // Recent searches (empty initially, will be populated from user's search history)
 export const recentSearches: string[] = [];
 
-// Nearby places for home (SM Dasmariñas, Tagaytay Picnic Grove, Starbucks Silang, Robinsons Dasma)
+// Nearby places for home (Figma dashboard export)
 export const nearbyPlaces: Place[] = [
   {
     id: '1',
-    name: 'SM Dasmariñas',
-    address: 'Dasmariñas City, Cavite',
+    name: 'SM Dasmarinas',
+    address: "4114 Governor's Dr, Brgy, Dasmariñas City",
     type: 'Shopping Mall',
     hours: '10:00 AM - 9:00 PM',
     latitude: 14.3297,
     longitude: 120.9367,
+    image: require('../assets/images/picture-43.png'),
+    rating: '5.0',
   },
   {
     id: '2',
-    name: 'Tagaytay Picnic Grove',
-    address: 'Tagaytay City, Cavite',
-    type: 'Park',
-    hours: 'Open 24 hours',
-    latitude: 14.1133,
-    longitude: 120.9383,
+    name: 'Museo De La Salle',
+    address: 'De La Salle University - Dasma Brgy. Fatima 1, Dasmariñas City',
+    type: 'Museum',
+    hours: '9:00 AM - 4:00 PM',
+    latitude: 14.3297,
+    longitude: 120.9367,
+    image: require('../assets/images/picture-51.png'),
+    rating: '4.9',
   },
   {
     id: '3',
-    name: 'Starbucks Silang',
-    address: 'Silang, Cavite',
-    type: 'Cafe',
-    hours: '7:00 AM - 9:00 PM',
-    latitude: 14.2311,
-    longitude: 120.9753,
+    name: "Volet's Hotel & Resort",
+    address: 'Aguinaldo Hwy, Dasmariñas, Cavite',
+    type: 'Hotel',
+    hours: 'Open 24 hours',
+    latitude: 14.33,
+    longitude: 120.94,
+    image: require('../assets/images/picture-59.png'),
+    rating: '4.8',
   },
   {
     id: '4',
-    name: 'Robinsons Dasma',
-    address: 'Silang, Cavite',
-    type: 'Shopping Mall',
-    hours: '10:00 AM - 9:00 PM',
-    latitude: 14.3300,
-    longitude: 120.9370,
+    name: 'Brewny Coffee Master',
+    address: 'Immaculate Conception Academy Sports Complex',
+    type: 'Cafe',
+    hours: '7:00 AM - 9:00 PM',
+    latitude: 14.3297,
+    longitude: 120.9367,
+    image: require('../assets/images/picture-67.png'),
+    rating: '5.0',
   },
 ];
 
@@ -310,7 +333,7 @@ export const mockNotifications: Notification[] = [
     id: '2',
     type: 'arrival',
     title: 'Almost There!',
-    message: 'You are 500m away from your stop (Robinson\'s Place Imus). Get ready to alight!',
+    message: 'You are 500m away from your stop. Get ready to alight!',
     date: '2026-02-13',
     time: '9:15 AM',
   },
@@ -321,6 +344,29 @@ export const mockNotifications: Notification[] = [
     message: 'Jeepney route via Langkaan is currently detouring due to road repairs.',
     date: '2026-02-12',
     time: '2:00 PM',
+  },
+];
+
+/** Saved / featured itineraries (Itineraries tab — Figma) */
+export interface ItineraryCard {
+  id: string;
+  title: string;
+  subtitle: string;
+  image: any;
+}
+
+export const mockItineraries: ItineraryCard[] = [
+  {
+    id: '1',
+    title: 'Highlands Getaway',
+    subtitle: 'Silang - Tagaytay',
+    image: require('../assets/images/itinerary-green-hills.png'),
+  },
+  {
+    id: '2',
+    title: 'Highlands & Hidden Gems',
+    subtitle: 'Alfonso – Magallanes – Maragondon',
+    image: require('../assets/images/itinerary-cycling-vista.png'),
   },
 ];
 
@@ -337,6 +383,7 @@ export const mockTerminals: Terminal[] = [
   {
     id: '1',
     name: 'Robinsons Pala-pala terminal',
+    municipality: 'Dasmariñas',
     category: 'dasma-bayan',
     transportTypes: ['Jeepney', 'Bus', 'Tricycle'],
     status: 'OPEN',
@@ -344,8 +391,8 @@ export const mockTerminals: Terminal[] = [
     averageFare: 'PHP 15 - 100',
     paymentType: 'Cash',
     primaryRoutes: [
-      { label: 'To Tagaytay (Bus/Jeep)', fare: '₱50 approx.' },
-      { label: 'To Dasma Bayan (Bus/Jeep)', fare: '₱11-20' },
+      { label: 'To Tagaytay (Bus/Jeep)' },
+      { label: 'To Dasma Bayan (Bus/Jeep)' },
     ],
     reminders: [
       'Expect long lines from 5:00 PM to 8:00 PM',
@@ -357,6 +404,7 @@ export const mockTerminals: Terminal[] = [
   {
     id: '2',
     name: 'SM Pala-pala terminal',
+    municipality: 'Dasmariñas',
     category: 'dasma-bayan',
     transportTypes: ['Jeepney', 'Bus', 'Tricycle'],
     status: 'OPEN',
@@ -364,8 +412,8 @@ export const mockTerminals: Terminal[] = [
     averageFare: 'PHP 15 - 100',
     paymentType: 'Cash',
     primaryRoutes: [
-      { label: 'To Tagaytay (Bus/Jeep)', fare: '₱50 approx.' },
-      { label: 'To Dasma Bayan (Bus/Jeep)', fare: '₱11-20' },
+      { label: 'To Tagaytay (Bus/Jeep)' },
+      { label: 'To Dasma Bayan (Bus/Jeep)' },
     ],
     reminders: [
       'Expect long lines from 5:00 PM to 8:00 PM',
@@ -377,6 +425,7 @@ export const mockTerminals: Terminal[] = [
   {
     id: '3',
     name: 'SM Dasmariñas Pala-pala Terminal',
+    municipality: 'Dasmariñas',
     category: 'dasma-bayan',
     transportTypes: ['Jeepney', 'Bus', 'Tricycle'],
     status: 'OPEN',
@@ -384,8 +433,8 @@ export const mockTerminals: Terminal[] = [
     averageFare: 'PHP 15 - 100',
     paymentType: 'Cash',
     primaryRoutes: [
-      { label: 'To Tagaytay (Bus/Jeep)', fare: '₱50 approx.' },
-      { label: 'To Dasma Bayan (Bus/Jeep)', fare: '₱11-20' },
+      { label: 'To Tagaytay (Bus/Jeep)' },
+      { label: 'To Dasma Bayan (Bus/Jeep)' },
     ],
     reminders: [
       'Expect long lines from 5:00 PM to 8:00 PM',
@@ -397,13 +446,14 @@ export const mockTerminals: Terminal[] = [
   {
     id: '4',
     name: 'General Trias terminal',
+    municipality: 'General Trias',
     category: 'other',
     transportTypes: ['Jeepney', 'Tricycle'],
     status: 'OPEN',
     operatingHours: '5AM - 10PM',
     averageFare: 'PHP 12 - 50',
     paymentType: 'Cash',
-    primaryRoutes: [{ label: 'To Baclaran', fare: '₱35 approx.' }],
+    primaryRoutes: [{ label: 'To Baclaran' }],
     reminders: [],
     latitude: 14.4167,
     longitude: 120.8833,
@@ -411,13 +461,14 @@ export const mockTerminals: Terminal[] = [
   {
     id: '5',
     name: 'Imus terminal',
+    municipality: 'Imus',
     category: 'other',
     transportTypes: ['Jeepney', 'Bus', 'Tricycle'],
     status: 'OPEN',
     operatingHours: '5AM - 12MN',
     averageFare: 'PHP 15 - 80',
     paymentType: 'Cash',
-    primaryRoutes: [{ label: 'To Manila', fare: '₱45-80' }],
+    primaryRoutes: [{ label: 'To Manila' }],
     reminders: [],
     latitude: 14.4297,
     longitude: 120.9367,
@@ -425,6 +476,7 @@ export const mockTerminals: Terminal[] = [
   {
     id: '6',
     name: 'All Homes terminal',
+    municipality: 'Dasmariñas',
     category: 'other',
     transportTypes: ['Jeepney'],
     status: 'OPEN',
@@ -435,5 +487,107 @@ export const mockTerminals: Terminal[] = [
     reminders: [],
     latitude: 14.3500,
     longitude: 120.9200,
+  },
+  {
+    id: '7',
+    name: 'PITX',
+    municipality: 'Parañaque',
+    addressLine: 'Tambo, Parañaque, Metro Manila',
+    description:
+      'The Parañaque Integrated Terminal Exchange (PITX) is a major land transport hub serving provincial buses, modern jeepneys, and city routes in Metro Manila. Passengers can transfer between regional services and local feeders, with amenities such as waiting areas, ticketing, and retail. Peak hours typically see higher passenger volume; plan arrivals with extra time for security and boarding.',
+    category: 'other',
+    transportTypes: ['Bus', 'Modern Jeepney', 'Jeepney', 'Van'],
+    status: 'OPEN',
+    operatingHours: '4AM - 12MN',
+    averageFare: 'PHP 15 - 120',
+    paymentType: 'Cash / Beep',
+    primaryRoutes: [],
+    routesByGate: [
+      {
+        gateName: 'Gate A — Provincial buses',
+        routes: [
+          { label: 'Cavite (Dasmariñas, Imus, Bacoor corridors)' },
+          { label: 'Batangas / Lemery' },
+          { label: 'Bicol express connections' },
+        ],
+      },
+      {
+        gateName: 'Gate B — City & metro feeders',
+        routes: [
+          { label: 'EDSA Carousel and city bus links' },
+          { label: 'Parañaque & Pasay local loops' },
+        ],
+      },
+      {
+        gateName: 'Gate C — Jeepney & UV',
+        routes: [
+          { label: 'Modern jeepney bays' },
+          { label: 'UV express pick-up zones' },
+        ],
+      },
+    ],
+    reminders: [],
+    latitude: 14.5092,
+    longitude: 120.9819,
+  },
+  {
+    id: '8',
+    name: 'SM Molino Terminal',
+    municipality: 'Bacoor',
+    category: 'other',
+    transportTypes: ['Jeepney', 'Bus', 'Van', 'Modern Jeepney'],
+    status: 'OPEN',
+    operatingHours: '5AM - 10PM',
+    averageFare: 'PHP 12 - 60',
+    paymentType: 'Cash',
+    primaryRoutes: [{ label: 'To Dasma / Manila' }],
+    reminders: [],
+    latitude: 14.3704,
+    longitude: 120.9831,
+  },
+  {
+    id: '9',
+    name: 'Waltermart Dasma terminal',
+    municipality: 'Dasmariñas',
+    category: 'dasma-bayan',
+    transportTypes: ['Jeepney', 'Tricycle'],
+    status: 'OPEN',
+    operatingHours: '6AM - 9PM',
+    averageFare: 'PHP 12 - 40',
+    paymentType: 'Cash',
+    primaryRoutes: [{ label: 'To Bayan' }],
+    reminders: [],
+    latitude: 14.3189,
+    longitude: 120.9394,
+  },
+  {
+    id: '10',
+    name: 'Trece Martires terminal',
+    municipality: 'Trece Martires',
+    category: 'other',
+    transportTypes: ['Jeepney', 'Bus', 'Tricycle'],
+    status: 'OPEN',
+    operatingHours: '5AM - 8PM',
+    averageFare: 'PHP 10 - 50',
+    paymentType: 'Cash',
+    primaryRoutes: [],
+    reminders: [],
+    latitude: 14.2833,
+    longitude: 120.8667,
+  },
+  {
+    id: '11',
+    name: 'Bacoor City Strike terminal',
+    municipality: 'Bacoor',
+    category: 'other',
+    transportTypes: ['Jeepney', 'Bus'],
+    status: 'OPEN',
+    operatingHours: '5AM - 10PM',
+    averageFare: 'PHP 12 - 45',
+    paymentType: 'Cash',
+    primaryRoutes: [],
+    reminders: [],
+    latitude: 14.4594,
+    longitude: 120.9597,
   },
 ];

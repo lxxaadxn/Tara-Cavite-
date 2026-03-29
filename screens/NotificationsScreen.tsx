@@ -1,22 +1,27 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { Colors, Theme } from '../constants/theme';
-import { Header } from '../components/Header';
-import { Card } from '../components/Card';
+import React from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import { JamIcon } from '../components/JamIcon';
+import type { JamIconName } from '../lib/jamSvgMap';
 import { mockNotifications, Notification } from '../data/mockData';
+
+const HEADER_GREEN = '#7EA00E';
+const DATE_TEAL = '#1F4F59';
+const MUTED = '#7A7878';
+const ALERT_RED = '#E76365';
+const H_PAD = 16;
 
 interface GroupedNotification {
   group: string;
   notifications: Notification[];
-  timeLabel?: string;
+  timeLabel: string;
 }
 
 const NotificationsScreen: React.FC = () => {
-  const [showFilter, setShowFilter] = useState(false);
+  const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
 
-  // Group notifications by date
   const groupedNotifications: GroupedNotification[] = [
     {
       group: 'Today',
@@ -28,243 +33,172 @@ const NotificationsScreen: React.FC = () => {
       notifications: mockNotifications.filter((n) => n.date === '2026-02-12'),
       timeLabel: '13hrs',
     },
-  ].filter((group) => group.notifications.length > 0);
+  ].filter((g) => g.notifications.length > 0);
 
-  const getNotificationIcon = (type: string) => {
+  const getNotificationIcon = (type: string): { name: JamIconName; color: string } => {
     switch (type) {
       case 'traffic':
-        return { name: 'alert-circle', color: '#F44336' };
+        return { name: 'alert', color: ALERT_RED };
       case 'arrival':
-        return { name: 'location', color: Colors.accent };
+        return { name: 'map-marker', color: HEADER_GREEN };
       case 'route-change':
-        return { name: 'swap-horizontal', color: Colors.primary };
+        return { name: 'compass', color: DATE_TEAL };
       default:
-        return { name: 'notifications', color: Colors.primary };
+        return { name: 'bell', color: DATE_TEAL };
     }
   };
 
-  const renderNotification = ({ item }: { item: Notification }) => {
-    const icon = getNotificationIcon(item.type);
-    return (
-      <TouchableOpacity
-        activeOpacity={0.7}
-        accessibilityLabel={`${item.title}, ${item.message}`}
-        accessibilityRole="button"
-      >
-        <Card style={styles.notificationCard}>
-          <View style={styles.notificationContent}>
-            <View style={[styles.iconContainer, { backgroundColor: icon.color + '20' }]}>
-              <Ionicons name={icon.name as any} size={30} color={icon.color} />
-            </View>
-            <View style={styles.notificationText}>
-              <Text style={styles.notificationTitle}>{item.title}</Text>
-              <Text style={styles.notificationMessage}>{item.message}</Text>
-            </View>
-          </View>
-        </Card>
-      </TouchableOpacity>
-    );
-  };
-
-  const renderGroup = ({ item }: { item: GroupedNotification }) => (
-    <View style={styles.group}>
-      <View style={styles.groupHeader}>
-        <Text style={styles.groupTitle}>{item.group}</Text>
-        {item.timeLabel && <Text style={styles.groupTime}>{item.timeLabel}</Text>}
-      </View>
-      {item.notifications.map((notification) => (
-        <View key={notification.id}>{renderNotification({ item: notification })}</View>
-      ))}
-    </View>
-  );
-
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <Header
-        title="Notifications"
-        showBack
-        darkBackground
-      />
-      <View style={styles.content}>
-        <View style={styles.filterContainer}>
+    <SafeAreaView style={styles.safe} edges={['bottom']}>
+      <StatusBar barStyle="light-content" backgroundColor={HEADER_GREEN} />
+      <View style={[styles.greenHeader, { paddingTop: insets.top + 10, paddingBottom: 14 }]}>
+        <View style={styles.headerRow}>
           <TouchableOpacity
-            style={styles.filterButton}
-            onPress={() => setShowFilter(!showFilter)}
-            accessibilityLabel="Filter notifications"
+            onPress={() => navigation.goBack()}
+            style={styles.headerSide}
+            accessibilityLabel="Go back"
             accessibilityRole="button"
-            accessibilityExpanded={showFilter}
           >
-            <Ionicons name="filter" size={16} color={Colors.text.primary} />
-            <Text style={styles.filterText}>Filter</Text>
-            <Ionicons
-              name={showFilter ? 'chevron-up' : 'chevron-down'}
-              size={11}
-              color={Colors.text.primary}
-            />
+            <JamIcon name="chevron-left" size={26} color="#FFFFFF" />
           </TouchableOpacity>
+          <Text style={styles.headerTitle} pointerEvents="none">
+            Notifications
+          </Text>
+          <View style={styles.headerSide} />
         </View>
-
-        {showFilter && (
-          <View style={styles.filterDropdown}>
-            <TouchableOpacity
-              style={styles.filterOption}
-              onPress={() => setShowFilter(false)}
-              accessibilityLabel="Filter by today"
-              accessibilityRole="button"
-            >
-              <Text style={styles.filterOptionText}>Today</Text>
-            </TouchableOpacity>
-            <View style={styles.filterDivider} />
-            <TouchableOpacity
-              style={styles.filterOption}
-              onPress={() => setShowFilter(false)}
-              accessibilityLabel="Filter by yesterday"
-              accessibilityRole="button"
-            >
-              <Text style={styles.filterOptionText}>Yesterday</Text>
-            </TouchableOpacity>
-            <View style={styles.filterDivider} />
-            <TouchableOpacity
-              style={styles.filterOption}
-              onPress={() => setShowFilter(false)}
-              accessibilityLabel="Filter by last month"
-              accessibilityRole="button"
-            >
-              <Text style={styles.filterOptionText}>Last month</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        <FlatList
-          data={groupedNotifications}
-          renderItem={renderGroup}
-          keyExtractor={(item) => item.group}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-        />
       </View>
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {groupedNotifications.map((item) => (
+          <View key={item.group} style={styles.group}>
+            <View style={styles.groupHeader}>
+              <Text style={styles.groupTitle}>{item.group}</Text>
+              <Text style={styles.groupTime}>{item.timeLabel}</Text>
+            </View>
+            {item.notifications.map((n) => {
+              const icon = getNotificationIcon(n.type);
+              return (
+                <TouchableOpacity
+                  key={n.id}
+                  activeOpacity={0.85}
+                  style={styles.card}
+                  accessibilityLabel={`${n.title}, ${n.message}`}
+                  accessibilityRole="button"
+                >
+                  <View style={styles.iconSlot}>
+                    <JamIcon name={icon.name} size={20} color={icon.color} />
+                  </View>
+                  <View style={styles.textBlock}>
+                    <Text style={styles.cardTitle}>{n.title}</Text>
+                    <Text style={styles.cardBody}>{n.message}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ))}
+      </ScrollView>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  safe: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#FFFFFF',
   },
-  content: {
-    flex: 1,
+  greenHeader: {
+    backgroundColor: HEADER_GREEN,
+    paddingHorizontal: H_PAD,
   },
-  filterContainer: {
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.sm,
-    alignItems: 'flex-end',
-  },
-  filterButton: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 2,
-    paddingHorizontal: 7,
+    justifyContent: 'space-between',
   },
-  filterText: {
-    marginLeft: 7,
-    marginRight: 7,
-    fontSize: 15,
-    fontFamily: 'Poppins',
-    fontWeight: '500',
-    color: Colors.text.primary,
+  headerSide: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  filterDropdown: {
-    backgroundColor: Colors.white,
-    marginHorizontal: Theme.spacing.md,
-    marginBottom: Theme.spacing.sm,
-    borderRadius: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  filterOption: {
-    paddingVertical: Theme.spacing.sm,
-    paddingHorizontal: Theme.spacing.md,
-  },
-  filterOptionText: {
-    fontSize: 12,
-    fontFamily: 'Poppins',
-    fontWeight: '500',
-    color: Colors.text.primary,
+  headerTitle: {
+    flex: 1,
     textAlign: 'center',
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 18,
+    lineHeight: 22,
+    color: '#FFFFFF',
   },
-  filterDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.text.light,
-    marginHorizontal: Theme.spacing.sm,
+  scroll: {
+    flex: 1,
   },
-  listContent: {
-    paddingHorizontal: Theme.spacing.md,
-    paddingBottom: Theme.spacing.xl,
+  scrollContent: {
+    paddingHorizontal: H_PAD,
+    paddingTop: 12,
+    paddingBottom: 28,
   },
   group: {
-    marginBottom: Theme.spacing.lg,
+    marginBottom: 16,
   },
   groupHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Theme.spacing.sm,
+    marginBottom: 8,
   },
   groupTitle: {
-    fontSize: 20,
-    fontFamily: 'Poppins',
-    fontWeight: '500',
-    color: Colors.primary,
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 17,
+    lineHeight: 22,
+    color: DATE_TEAL,
   },
   groupTime: {
-    fontSize: 11,
-    fontFamily: 'Poppins',
-    fontWeight: '600',
-    color: Colors.text.secondary,
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 10,
+    lineHeight: 14,
+    color: MUTED,
   },
-  notificationCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 9,
-    padding: Theme.spacing.md,
-    marginBottom: Theme.spacing.sm,
-    shadowColor: '#000',
+  card: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    marginBottom: 8,
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.45,
     shadowRadius: 2,
     elevation: 2,
   },
-  notificationContent: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  iconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  iconSlot: {
+    width: 28,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Theme.spacing.md,
+    paddingTop: 1,
+    marginRight: 8,
   },
-  notificationText: {
+  textBlock: {
     flex: 1,
+    minWidth: 0,
   },
-  notificationTitle: {
-    fontSize: 16,
-    fontFamily: 'Poppins',
-    fontWeight: '500',
-    color: Colors.text.primary,
-    marginBottom: Theme.spacing.xs,
+  cardTitle: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#000000',
+    marginBottom: 2,
   },
-  notificationMessage: {
-    fontSize: 11,
-    fontFamily: 'Poppins',
-    fontWeight: '500',
-    color: Colors.text.secondary,
-    lineHeight: 16,
+  cardBody: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 10,
+    lineHeight: 14,
+    color: MUTED,
   },
 });
 

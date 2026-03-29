@@ -5,180 +5,181 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Pressable,
   TextInput,
   Image,
+  Dimensions,
+  Modal,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
-import { Colors, Theme } from '../constants/theme';
+import { JamIcon } from '../components/JamIcon';
+import { DashboardFiltersPanel } from '../components/DashboardFiltersPanel';
 import { Header } from '../components/Header';
-import { trendingSpots, nearbyPlaces, recentSearches } from '../data/mockData';
+import { trendingSpots, nearbyPlaces } from '../data/mockData';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+/** Max sheet height (shorter sheet); content scrolls inside when tall. */
+const FILTER_SHEET_MAX_HEIGHT = Math.round(SCREEN_HEIGHT * 0.5);
+const H_PAD = 16;
+const CARD_GAP = 40;
+const CARD_WIDTH = Math.min(320, Math.round(SCREEN_WIDTH * 0.74));
+const IMAGE_HEIGHT = Math.round(CARD_WIDTH * 0.58);
+
+/** Figma dashboard export tokens */
+const FIGMA = {
+  textTitle: '#241D13',
+  textSubtitle: '#425466',
+  textMuted: '#868686',
+  star: '#FFC012',
+  searchGreen: '#7EA00E',
+  white: '#FFFFFF',
+  bg: '#FFFFFF',
+};
+/** Match Itineraries tab search row (filter icon on white circle). */
+const TEAL = '#1F4F59';
+const SEARCH_PLACEHOLDER = '#B3AAAA';
 
 const HomeScreen: React.FC = () => {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
+  const filterSheetPadBottom = Math.max(insets.bottom, 10);
+  const filterScrollMaxHeight = FILTER_SHEET_MAX_HEIGHT - filterSheetPadBottom;
   const [searchQuery, setSearchQuery] = useState('');
+  const [filtersVisible, setFiltersVisible] = useState(false);
 
   const handleSearch = () => {
     if (searchQuery.trim()) {
-      // Navigate to search results or save to recent searches
       navigation.navigate('PlaceDetail' as never, { query: searchQuery.trim() } as never);
     }
   };
+
+  const renderPlaceCard = (place: (typeof trendingSpots)[0]) => (
+    <TouchableOpacity
+      key={place.id}
+      style={styles.card}
+      onPress={() => navigation.navigate('PlaceDetail' as never, { place } as never)}
+      accessibilityLabel={`${place.name}, ${place.address}`}
+      accessibilityRole="button"
+      activeOpacity={0.9}
+    >
+      {place.image ? (
+        <Image
+          source={place.image}
+          style={styles.cardImage}
+          resizeMode="cover"
+          accessibilityLabel={`${place.name} image`}
+        />
+      ) : (
+        <View style={[styles.cardImage, styles.imagePlaceholder]}>
+          <JamIcon ionicon="image-outline" size={40} color={FIGMA.textMuted} />
+        </View>
+      )}
+      <View style={styles.cardTitleRow}>
+        <Text style={styles.placeTitle} numberOfLines={2}>
+          {place.name}
+        </Text>
+        <View style={styles.ratingWrap}>
+          <JamIcon ionicon="star" size={14} color={FIGMA.star} />
+          <Text style={styles.ratingText}>{place.rating ?? '5.0'}</Text>
+        </View>
+      </View>
+      <Text style={styles.placeSubtitle} numberOfLines={2}>
+        {place.address}
+      </Text>
+    </TouchableOpacity>
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <Header
         title=""
-        showLogo
+        homeBranding
         showNotification
-        showFilter
-        onMenuPress={() => {}}
-        onFilterPress={() => navigation.navigate('Categories' as never)}
+        showFilter={false}
         onNotificationPress={() => navigation.navigate('Notifications' as never)}
       />
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Search bar - dark teal */}
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={24} color={Colors.white} />
+      <View style={styles.searchFilterRow}>
+        <View style={styles.searchPill}>
+          <JamIcon name="search" size={18} color={FIGMA.searchGreen} />
           <TextInput
             style={styles.searchInput}
             placeholder="Where are you going?"
-            placeholderTextColor={Colors.white}
+            placeholderTextColor={SEARCH_PLACEHOLDER}
             value={searchQuery}
             onChangeText={setSearchQuery}
             onSubmitEditing={handleSearch}
             accessibilityLabel="Search for destinations"
-            accessibilityRole="searchbox"
           />
-          <TouchableOpacity onPress={handleSearch} accessibilityLabel="Search" accessibilityRole="button">
-            <Ionicons name="location" size={24} color={Colors.white} />
-          </TouchableOpacity>
+        </View>
+        <TouchableOpacity
+          style={styles.filterCircle}
+          onPress={() => setFiltersVisible((v) => !v)}
+          accessibilityLabel={filtersVisible ? 'Hide filters' : 'Show filters'}
+          accessibilityRole="button"
+        >
+          <JamIcon name="filter" size={20} color={TEAL} />
+        </TouchableOpacity>
+      </View>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Trending Tourist Spots</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.hScrollContent}
+          >
+            {trendingSpots.map((spot) => renderPlaceCard(spot))}
+          </ScrollView>
         </View>
 
-        {/* Main content - dark teal background */}
-        <View style={styles.mainSection}>
-          {/* Terminals & Categories buttons */}
-          <View style={styles.cardsRow}>
-            <TouchableOpacity
-              style={styles.quickCard}
-              onPress={() => navigation.navigate('Terminals' as never)}
-              activeOpacity={0.8}
-              accessibilityLabel="View terminals"
-              accessibilityRole="button"
-            >
-              <Ionicons name="business" size={45} color={Colors.primary} />
-              <Text style={styles.quickCardText}>Terminals</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.quickCard}
-              onPress={() => navigation.navigate('Categories' as never)}
-              activeOpacity={0.8}
-              accessibilityLabel="View categories"
-              accessibilityRole="button"
-            >
-              <Ionicons name="list" size={35} color={Colors.primary} />
-              <Text style={styles.quickCardText}>Categories</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Trending Tourist Spots card */}
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Trending Tourist Spots</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.horizontalScroll}
-            >
-              {trendingSpots.map((spot) => (
-                <TouchableOpacity
-                  key={spot.id}
-                  style={styles.trendingItem}
-                  onPress={() =>
-                    navigation.navigate('PlaceDetail' as never, { place: spot } as never)
-                  }
-                  accessibilityLabel={`${spot.name}, ${spot.address}`}
-                  accessibilityRole="button"
-                >
-                  {spot.image ? (
-                    <Image
-                      source={spot.image}
-                      style={styles.trendingImage}
-                      resizeMode="cover"
-                      accessibilityLabel={`${spot.name} image`}
-                    />
-                  ) : (
-                    <View style={styles.trendingImagePlaceholder}>
-                      <Ionicons name="image-outline" size={40} color={Colors.text.light} />
-                    </View>
-                  )}
-                  <Text style={styles.trendingName} numberOfLines={1}>
-                    {spot.name}
-                  </Text>
-                  <Text style={styles.trendingAddress} numberOfLines={1}>
-                    {spot.address}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-
-          {/* Recent Searches card */}
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Recent Searches</Text>
-            {recentSearches.length === 0 ? (
-              <Text style={styles.emptyText}>Recent searches will appear here</Text>
-            ) : (
-              <View>
-                {recentSearches.map((search, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={styles.recentSearchItem}
-                    onPress={() => setSearchQuery(search)}
-                    accessibilityLabel={`Search for ${search}`}
-                    accessibilityRole="button"
-                  >
-                    <Ionicons name="time-outline" size={16} color={Colors.text.secondary} />
-                    <Text style={styles.recentSearchText}>{search}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </View>
-
-          {/* Nearby Places card */}
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Nearby Places</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.horizontalScroll}
-            >
-              {nearbyPlaces.map((place) => (
-                <TouchableOpacity
-                  key={place.id}
-                  style={styles.nearbyItem}
-                  onPress={() =>
-                    navigation.navigate('PlaceDetail' as never, { place } as never)
-                  }
-                  accessibilityLabel={`${place.name}, ${place.address}`}
-                  accessibilityRole="button"
-                >
-                  <View style={styles.nearbyIconCircle}>
-                    <Ionicons name="location" size={20} color={Colors.accent} />
-                  </View>
-                  <Text style={styles.nearbyName} numberOfLines={1}>
-                    {place.name}
-                  </Text>
-                  <Text style={styles.nearbyAddress} numberOfLines={1}>
-                    {place.address}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Nearby Places</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.hScrollContent}
+          >
+            {nearbyPlaces.map((place) => renderPlaceCard(place))}
+          </ScrollView>
         </View>
       </ScrollView>
+
+      <Modal
+        visible={filtersVisible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setFiltersVisible(false)}
+      >
+        <View style={styles.filterModalRoot} accessibilityViewIsModal>
+          <Pressable
+            style={styles.filterModalDismiss}
+            onPress={() => setFiltersVisible(false)}
+            accessibilityLabel="Dismiss filters"
+            accessibilityRole="button"
+          />
+          <View
+            style={[
+              styles.filterSheet,
+              {
+                maxHeight: FILTER_SHEET_MAX_HEIGHT,
+                paddingBottom: filterSheetPadBottom,
+              },
+            ]}
+          >
+            <DashboardFiltersPanel
+              embedded
+              sheet
+              sheetScrollMaxHeight={filterScrollMaxHeight}
+            />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -186,174 +187,140 @@ const HomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.white,
+    backgroundColor: FIGMA.bg,
   },
   scroll: {
     flex: 1,
   },
-  searchContainer: {
+  scrollContent: {
+    paddingBottom: 110,
+    paddingTop: 4,
+  },
+  searchFilterRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.primary,
-    borderRadius: 21,
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: 11,
-    marginHorizontal: Theme.spacing.md,
-    marginTop: Theme.spacing.sm,
-    marginBottom: Theme.spacing.md,
-    shadowColor: '#000',
+    paddingHorizontal: H_PAD,
+    paddingTop: 14,
+    paddingBottom: 12,
+    gap: 10,
+  },
+  searchPill: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 17,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 29,
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowOpacity: 0.5,
+    shadowRadius: 2,
+    elevation: 3,
   },
   searchInput: {
     flex: 1,
-    marginLeft: Theme.spacing.sm,
+    minWidth: 0,
+    paddingVertical: 0,
     fontSize: 13,
-    fontFamily: 'Poppins',
-    color: Colors.white,
+    fontFamily: 'Poppins_400Regular',
+    color: '#000000',
   },
-  mainSection: {
-    flex: 1,
-    backgroundColor: Colors.primary,
-    borderTopLeftRadius: 44,
-    borderTopRightRadius: 44,
-    paddingHorizontal: Theme.spacing.md,
-    paddingTop: Theme.spacing.lg,
-    paddingBottom: Theme.spacing.xl + 80,
-  },
-  cardsRow: {
-    flexDirection: 'row',
-    gap: Theme.spacing.md,
-    marginBottom: Theme.spacing.lg,
-  },
-  quickCard: {
-    flex: 1,
-    backgroundColor: Colors.white,
-    borderRadius: 27,
-    paddingVertical: Theme.spacing.lg,
+  filterCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 63,
-    shadowColor: '#000',
+    flexShrink: 0,
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.5,
+    shadowRadius: 2,
     elevation: 3,
   },
-  quickCardText: {
-    fontSize: 16,
-    fontFamily: 'Poppins',
-    fontWeight: '600',
-    color: Colors.primary,
-    marginTop: Theme.spacing.xs,
+  section: {
+    marginBottom: 8,
   },
-  sectionCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: Theme.spacing.md,
-    marginBottom: Theme.spacing.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  /** Single flat tint (no elevation) so edges match the center — full window via Modal */
+  filterModalRoot: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.22)',
+    flexDirection: 'column',
+    justifyContent: 'flex-end',
+  },
+  filterModalDismiss: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  filterSheet: {
+    width: '100%',
+    backgroundColor: FIGMA.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: 'hidden',
   },
   sectionTitle: {
+    fontFamily: 'Poppins_700Bold',
     fontSize: 16,
-    fontFamily: 'Poppins',
-    fontWeight: '700',
-    color: Colors.primary,
-    marginBottom: Theme.spacing.md,
+    lineHeight: 24,
+    color: FIGMA.textTitle,
+    paddingHorizontal: H_PAD,
+    marginBottom: 14,
   },
-  horizontalScroll: {
-    paddingRight: Theme.spacing.sm,
+  hScrollContent: {
+    paddingLeft: H_PAD,
+    paddingRight: H_PAD,
+    flexDirection: 'row',
   },
-  trendingItem: {
-    width: 100,
-    marginRight: Theme.spacing.md,
-    alignItems: 'center',
+  card: {
+    width: CARD_WIDTH,
+    marginRight: CARD_GAP,
   },
-  trendingImage: {
-    width: 100,
-    height: 84,
-    borderRadius: 16,
-    marginBottom: Theme.spacing.xs,
+  cardImage: {
+    width: '100%',
+    height: IMAGE_HEIGHT,
+    borderRadius: 21,
+    backgroundColor: '#E8E8E8',
+    marginBottom: 10,
   },
-  trendingImagePlaceholder: {
-    width: 100,
-    height: 84,
-    borderRadius: 16,
-    backgroundColor: Colors.background,
+  imagePlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Theme.spacing.xs,
   },
-  trendingName: {
-    fontSize: 12,
-    fontFamily: 'Poppins',
-    fontWeight: '600',
-    color: Colors.primary,
-    textAlign: 'center',
-    marginTop: Theme.spacing.xs,
+  cardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 4,
   },
-  trendingAddress: {
-    fontSize: 9,
-    fontFamily: 'Poppins',
-    fontWeight: '500',
-    color: Colors.text.secondary,
-    textAlign: 'center',
-    marginTop: 2,
+  placeTitle: {
+    flex: 1,
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 16,
+    lineHeight: 24,
+    color: FIGMA.textTitle,
   },
-  emptyText: {
-    fontSize: 9,
-    fontFamily: 'Poppins',
-    fontWeight: '500',
-    color: Colors.text.secondary,
-    textAlign: 'center',
-    paddingVertical: Theme.spacing.md,
-  },
-  recentSearchItem: {
+  ratingWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Theme.spacing.sm,
+    gap: 2,
+    paddingTop: 2,
   },
-  recentSearchText: {
-    fontSize: 14,
-    fontFamily: 'Poppins',
-    color: Colors.text.primary,
-    marginLeft: Theme.spacing.sm,
+  ratingText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    lineHeight: 24,
+    color: FIGMA.textMuted,
   },
-  nearbyItem: {
-    width: 107,
-    marginRight: Theme.spacing.md,
-    alignItems: 'center',
-  },
-  nearbyIconCircle: {
-    width: 43,
-    height: 43,
-    borderRadius: 21.5,
-    backgroundColor: '#E9E9E9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Theme.spacing.xs,
-  },
-  nearbyName: {
-    fontSize: 12,
-    fontFamily: 'Poppins',
-    fontWeight: '600',
-    color: Colors.primary,
-    textAlign: 'center',
-    marginTop: Theme.spacing.xs,
-  },
-  nearbyAddress: {
-    fontSize: 9,
-    fontFamily: 'Poppins',
-    fontWeight: '500',
-    color: Colors.text.secondary,
-    textAlign: 'center',
-    marginTop: 2,
+  placeSubtitle: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    lineHeight: 20,
+    color: FIGMA.textSubtitle,
   },
 });
 

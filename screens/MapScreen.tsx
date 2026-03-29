@@ -1,135 +1,143 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { Colors, Theme } from '../constants/theme';
-import { Header } from '../components/Header';
+import { JamIcon } from '../components/JamIcon';
 import { useNavigation } from '@react-navigation/native';
 
-type Marker = {
-  id: string;
-  label: string;
-  xPct: number;
-  yPct: number;
-};
-
-const MOCK_MARKERS: Marker[] = [
-  { id: 'm1', label: 'Tinatangi Cafe', xPct: 35, yPct: 30 },
-  { id: 'm2', label: "Perlas ng Silang", xPct: 62, yPct: 46 },
-  { id: 'm3', label: "People's Park", xPct: 22, yPct: 62 },
-  { id: 'm4', label: 'Aguinaldo Shrine', xPct: 73, yPct: 68 },
-];
+const H_PAD = 16;
+const OVERLAY_TOP = 10;
+const GREEN = '#7EA00E';
+const TEAL = '#1F4F59';
+const MUTED = '#7A7878';
+const MAP_BG = '#E8E8E8';
 
 export default function MapScreen() {
   const navigation = useNavigation();
   const [query, setQuery] = useState('');
 
-  const markers = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return MOCK_MARKERS;
-    return MOCK_MARKERS.filter((m) => m.label.toLowerCase().includes(q));
-  }, [query]);
-
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <Header
-        title=""
-        showLogo
-        showNotification
-        onMenuPress={() => {}}
-        onNotificationPress={() => navigation.navigate('Notifications' as never)}
-      />
+    <View style={styles.root}>
+      <SafeAreaView style={styles.safeTop} edges={['top']}>
+        <View style={styles.mapFrame} accessibilityLabel="Map">
+          <View style={styles.mapLayer} />
 
-      <View style={styles.content}>
-        <View style={styles.searchBar} accessibilityRole="search">
-          <Ionicons name="search" size={20} color={Colors.white} />
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search destinations"
-            placeholderTextColor={Colors.text.light}
-            style={styles.searchInput}
-            accessibilityLabel="Search destinations"
-          />
-        </View>
-
-        <View style={styles.mapFrame} accessibilityRole="image" accessibilityLabel="Map preview">
-          <View style={styles.mapPlaceholder}>
-            <Text style={styles.mapHint}>Map (prototype)</Text>
-          </View>
-
-          {markers.map((m) => (
-            <TouchableOpacity
-              key={m.id}
-              style={[
-                styles.marker,
-                {
-                  left: `${m.xPct}%`,
-                  top: `${m.yPct}%`,
-                },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel={`Map marker: ${m.label}`}
-              onPress={() => {}}
+          <View
+            style={[styles.frameOverlay, { paddingTop: OVERLAY_TOP, paddingHorizontal: H_PAD }]}
+            pointerEvents="box-none"
+          >
+            <View
+              style={styles.wordmarkRow}
+              accessible
+              accessibilityRole="header"
+              accessibilityLabel="CaviTour"
+              pointerEvents="none"
             >
-              <Ionicons name="location" size={24} color={Colors.accent} />
-            </TouchableOpacity>
-          ))}
+              <Text style={styles.wordmarkC}>C</Text>
+              <Text style={styles.wordmarkAvi}>avi</Text>
+              <Text style={styles.wordmarkTour}>Tour</Text>
+            </View>
+
+            <View style={styles.searchWrap} accessibilityRole="search" pointerEvents="auto">
+              <View style={styles.searchPill}>
+                <JamIcon name="search" size={17} color={MUTED} />
+                <TextInput
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Where are you going?"
+                  placeholderTextColor={MUTED}
+                  style={styles.searchInput}
+                  accessibilityLabel="Search map destinations"
+                  returnKeyType="search"
+                  onSubmitEditing={() => {
+                    if (query.trim()) {
+                      navigation.navigate('PlaceDetail' as never, { query: query.trim() } as never);
+                    }
+                  }}
+                />
+              </View>
+            </View>
+          </View>
         </View>
-      </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    backgroundColor: Colors.white,
+    backgroundColor: MAP_BG,
   },
-  content: {
+  safeTop: {
     flex: 1,
-    paddingHorizontal: Theme.spacing.md,
-    paddingTop: Theme.spacing.sm,
-  },
-  searchBar: {
-    height: 45,
-    borderRadius: 21,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    flexDirection: 'row',
-    paddingHorizontal: Theme.spacing.md,
-    marginBottom: Theme.spacing.md,
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: Theme.spacing.sm,
-    color: Colors.white,
-    fontSize: 14,
-    fontFamily: 'Poppins',
+    backgroundColor: MAP_BG,
   },
   mapFrame: {
     flex: 1,
+    width: '100%',
+    backgroundColor: MAP_BG,
   },
-  mapPlaceholder: {
-    flex: 1,
-    borderRadius: Theme.borderRadius.lg,
-    backgroundColor: Colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: Colors.text.light + '33',
+  mapLayer: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: MAP_BG,
   },
-  mapHint: {
-    color: Colors.text.secondary,
-    fontFamily: 'Poppins',
-    fontWeight: '600',
-  },
-  mapFrameInner: {},
-  marker: {
+  frameOverlay: {
     position: 'absolute',
-    transform: [{ translateX: -12 }, { translateY: -24 }],
-    alignItems: 'center',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1,
+  },
+  wordmarkRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
     justifyContent: 'center',
+    marginBottom: 10,
+  },
+  wordmarkC: {
+    fontFamily: 'Pacifico_400Regular',
+    fontSize: 34,
+    lineHeight: 40,
+    color: GREEN,
+  },
+  wordmarkAvi: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 34,
+    lineHeight: 40,
+    color: GREEN,
+  },
+  wordmarkTour: {
+    fontFamily: 'Pacifico_400Regular',
+    fontSize: 34,
+    lineHeight: 40,
+    color: TEAL,
+  },
+  searchWrap: {
+    borderRadius: 18,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 2,
+    elevation: 3,
+    alignSelf: 'stretch',
+  },
+  searchPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(122, 120, 120, 0.35)',
+  },
+  searchInput: {
+    flex: 1,
+    minWidth: 0,
+    paddingVertical: 0,
+    fontSize: 14,
+    fontFamily: 'Poppins_400Regular',
+    color: '#000000',
   },
 });
-

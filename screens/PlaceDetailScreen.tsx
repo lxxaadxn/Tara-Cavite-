@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import { JamIcon } from '../components/JamIcon';
 import { Colors, Theme } from '../constants/theme';
 import { Header } from '../components/Header';
 import { Button } from '../components/Button';
@@ -35,19 +35,19 @@ const PlaceDetailScreen: React.FC = () => {
           {/* Action Buttons */}
           <View style={styles.actions}>
             <View style={styles.actionItem}>
-              <Ionicons name="navigate" size={24} color={Colors.primary} />
+              <JamIcon ionicon="navigate" size={24} color={Colors.primary} />
               <Text style={styles.actionText}>Directions</Text>
             </View>
             <View style={styles.actionItem}>
-              <Ionicons name="bookmark-outline" size={24} color={Colors.primary} />
+              <JamIcon ionicon="bookmark-outline" size={24} color={Colors.primary} />
               <Text style={styles.actionText}>Save</Text>
             </View>
             <View style={styles.actionItem}>
-              <Ionicons name="location-outline" size={24} color={Colors.primary} />
+              <JamIcon ionicon="location-outline" size={24} color={Colors.primary} />
               <Text style={styles.actionText}>Nearby</Text>
             </View>
             <View style={styles.actionItem}>
-              <Ionicons name="share-outline" size={24} color={Colors.primary} />
+              <JamIcon ionicon="share-outline" size={24} color={Colors.primary} />
               <Text style={styles.actionText}>Share</Text>
             </View>
           </View>
@@ -64,7 +64,7 @@ const PlaceDetailScreen: React.FC = () => {
             </View>
           ) : (
             <View style={styles.imageContainer}>
-              <Ionicons name="image" size={48} color={Colors.text.light} />
+              <JamIcon ionicon="image" size={48} color={Colors.text.light} />
               <Text style={styles.imagePlaceholder}>Place Image</Text>
             </View>
           )}
@@ -72,15 +72,15 @@ const PlaceDetailScreen: React.FC = () => {
           {/* Details */}
           <View style={styles.details}>
             <View style={styles.detailRow}>
-              <Ionicons name="location" size={20} color={Colors.primary} />
+              <JamIcon ionicon="location" size={20} color={Colors.primary} />
               <Text style={styles.detailText}>{place.address}</Text>
             </View>
             <View style={styles.detailRow}>
-              <Ionicons name="business" size={20} color={Colors.primary} />
+              <JamIcon ionicon="business" size={20} color={Colors.primary} />
               <Text style={styles.detailText}>{place.type}</Text>
             </View>
             <View style={styles.detailRow}>
-              <Ionicons name="time" size={20} color={Colors.primary} />
+              <JamIcon ionicon="time" size={20} color={Colors.primary} />
               <Text style={styles.detailText}>{place.hours}</Text>
             </View>
           </View>

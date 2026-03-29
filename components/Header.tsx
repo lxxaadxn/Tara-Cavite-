@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Colors, Theme } from '../constants/theme';
+import { JamIcon } from './JamIcon';
 
 interface HeaderProps {
   title: string;
@@ -10,6 +10,8 @@ interface HeaderProps {
   onBackPress?: () => void;
   showNotification?: boolean;
   showLogo?: boolean;
+  /** Home wordmark: “C” + “Tour” Pacifico, “avi” Poppins; bell + filter in gray circle */
+  homeBranding?: boolean;
   onNotificationPress?: () => void;
   onMenuPress?: () => void;
   showFilter?: boolean;
@@ -23,6 +25,7 @@ export const Header: React.FC<HeaderProps> = ({
   onBackPress,
   showNotification = false,
   showLogo = false,
+  homeBranding = false,
   onNotificationPress,
   onMenuPress,
   showFilter = false,
@@ -35,6 +38,47 @@ export const Header: React.FC<HeaderProps> = ({
   const textColor = darkBackground ? Colors.white : Colors.primary;
   const iconColor = darkBackground ? Colors.white : Colors.primary;
 
+  if (homeBranding) {
+    return (
+      <View style={[styles.container, styles.lightHeader, styles.homeHeader]}>
+        <View style={styles.homeHeaderRow}>
+          <View
+            style={styles.wordmarkRow}
+            accessible
+            accessibilityRole="header"
+            accessibilityLabel="CaviTour"
+          >
+            <Text style={styles.wordmarkC}>C</Text>
+            <Text style={styles.wordmarkAvi}>avi</Text>
+            <Text style={styles.wordmarkTour}>Tour</Text>
+          </View>
+          <View style={styles.homeRightColumn}>
+            {showNotification ? (
+              <TouchableOpacity
+                onPress={onNotificationPress}
+                style={styles.iconButton}
+                accessibilityLabel="View notifications"
+                accessibilityRole="button"
+              >
+                <JamIcon ionicon="notifications-outline" size={28} color={Colors.primary} />
+              </TouchableOpacity>
+            ) : null}
+            {showFilter ? (
+              <TouchableOpacity
+                onPress={onFilterPress}
+                style={styles.filterCircle}
+                accessibilityLabel="Open filters"
+                accessibilityRole="button"
+              >
+                <JamIcon ionicon="options-outline" size={22} color={Colors.primary} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, headerStyle]}>
       {showBack ? (
@@ -44,7 +88,11 @@ export const Header: React.FC<HeaderProps> = ({
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
-          <Ionicons name="arrow-back" size={24} color={iconColor} />
+          <JamIcon
+            ionicon="arrow-back"
+            size={26}
+            color={darkBackground ? '#FFFFFF' : iconColor}
+          />
         </TouchableOpacity>
       ) : showLogo && onMenuPress ? (
         <TouchableOpacity
@@ -53,7 +101,7 @@ export const Header: React.FC<HeaderProps> = ({
           accessibilityLabel="Open menu"
           accessibilityRole="button"
         >
-          <Ionicons name="menu" size={29} color={iconColor} />
+          <JamIcon ionicon="menu" size={29} color={iconColor} />
         </TouchableOpacity>
       ) : (
         <View style={styles.iconButton} />
@@ -77,7 +125,7 @@ export const Header: React.FC<HeaderProps> = ({
               accessibilityLabel="Open filters"
               accessibilityRole="button"
             >
-              <Ionicons name="filter" size={24} color={iconColor} />
+              <JamIcon ionicon="filter" size={24} color={iconColor} />
             </TouchableOpacity>
           ) : null}
           <TouchableOpacity
@@ -86,7 +134,7 @@ export const Header: React.FC<HeaderProps> = ({
             accessibilityLabel="View notifications"
             accessibilityRole="button"
           >
-            <Ionicons name="notifications-outline" size={28} color={iconColor} />
+            <JamIcon ionicon="notifications-outline" size={28} color={iconColor} />
           </TouchableOpacity>
         </View>
       ) : (
@@ -98,7 +146,7 @@ export const Header: React.FC<HeaderProps> = ({
               accessibilityLabel="Open filters"
               accessibilityRole="button"
             >
-              <Ionicons name="filter" size={24} color={iconColor} />
+              <JamIcon ionicon="filter" size={24} color={iconColor} />
             </TouchableOpacity>
           ) : (
             <View style={styles.iconButton} />
@@ -145,5 +193,50 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  homeHeader: {
+    paddingTop: 18,
+    paddingBottom: 8,
+  },
+  homeHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    width: '100%',
+  },
+  wordmarkRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    flexShrink: 1,
+  },
+  wordmarkC: {
+    fontFamily: 'Pacifico_400Regular',
+    fontSize: 30,
+    color: Colors.accent,
+    lineHeight: 36,
+  },
+  wordmarkAvi: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 30,
+    color: Colors.accent,
+    lineHeight: 36,
+  },
+  wordmarkTour: {
+    fontFamily: 'Pacifico_400Regular',
+    fontSize: 30,
+    color: Colors.primary,
+    lineHeight: 36,
+  },
+  homeRightColumn: {
+    alignItems: 'flex-end',
+    gap: 10,
+  },
+  filterCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#D9D9D9',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

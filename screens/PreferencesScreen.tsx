@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import { JamIcon } from '../components/JamIcon';
 import { Colors, Theme } from '../constants/theme';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
@@ -92,9 +92,9 @@ const PreferencesScreen: React.FC = () => {
                 )}
               </View>
               {item.checked ? (
-                <Ionicons name="checkmark-circle" size={20} color={Colors.accent} />
+                <JamIcon ionicon="checkmark-circle" size={20} color={Colors.accent} />
               ) : (
-                <Ionicons name="ellipse-outline" size={20} color={Colors.text.light} />
+                <JamIcon ionicon="ellipse-outline" size={20} color={Colors.text.light} />
               )}
             </TouchableOpacity>
             {index < items.length - 1 && <View style={styles.itemDivider} />}

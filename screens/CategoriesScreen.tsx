@@ -9,28 +9,29 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
 import { Colors, Theme } from '../constants/theme';
+import { JamIcon } from '../components/JamIcon';
+import type { JamIconName } from '../lib/jamSvgMap';
 import { Header } from '../components/Header';
 
 interface Category {
   id: string;
   name: string;
-  icon: string;
+  icon: JamIconName;
   count: number;
 }
 
 const categories: Category[] = [
-  { id: '1', name: 'Historical Sites', icon: 'library', count: 12 },
+  { id: '1', name: 'Historical Sites', icon: 'book', count: 12 },
   { id: '2', name: 'Parks & Nature', icon: 'leaf', count: 8 },
-  { id: '3', name: 'Museums', icon: 'library-outline', count: 5 },
-  { id: '4', name: 'Beaches', icon: 'water', count: 6 },
-  { id: '5', name: 'Restaurants', icon: 'restaurant', count: 15 },
-  { id: '6', name: 'Shopping', icon: 'bag', count: 10 },
-  { id: '7', name: 'Cafes', icon: 'cafe', count: 9 },
-  { id: '8', name: 'Churches', icon: 'business', count: 7 },
-  { id: '9', name: 'Entertainment', icon: 'musical-notes', count: 4 },
-  { id: '10', name: 'Hotels', icon: 'bed', count: 11 },
+  { id: '3', name: 'Museums', icon: 'building', count: 5 },
+  { id: '4', name: 'Beaches', icon: 'water-drop', count: 6 },
+  { id: '5', name: 'Restaurants', icon: 'fork', count: 15 },
+  { id: '6', name: 'Shopping', icon: 'shopping-bag', count: 10 },
+  { id: '7', name: 'Cafes', icon: 'coffee', count: 9 },
+  { id: '8', name: 'Churches', icon: 'building', count: 7 },
+  { id: '9', name: 'Entertainment', icon: 'music', count: 4 },
+  { id: '10', name: 'Hotels', icon: 'world', count: 11 },
 ];
 
 const CategoriesScreen: React.FC = () => {
@@ -50,7 +51,7 @@ const CategoriesScreen: React.FC = () => {
       accessibilityRole="button"
     >
       <View style={styles.categoryIconContainer}>
-        <Ionicons name={item.icon as any} size={32} color={Colors.primary} />
+        <JamIcon name={item.icon} size={32} color={Colors.primary} />
       </View>
       <Text style={styles.categoryName}>{item.name}</Text>
       <Text style={styles.categoryCount}>{item.count} places</Text>

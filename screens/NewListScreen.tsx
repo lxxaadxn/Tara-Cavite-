@@ -11,8 +11,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
 import { Colors, Theme } from '../constants/theme';
+import { JamIcon } from '../components/JamIcon';
+import type { JamIconName } from '../lib/jamSvgMap';
+import { legacyIoniconToJam } from '../lib/legacyIoniconToJam';
 import { Header } from '../components/Header';
 import { supabase } from '../lib/supabase';
 
@@ -36,16 +38,16 @@ const NewListScreen: React.FC = () => {
   const [listName, setListName] = useState('');
   const [description, setDescription] = useState('');
   const [listType, setListType] = useState<'private' | 'shared'>('private');
-  const [selectedIcon, setSelectedIcon] = useState('happy-outline');
+  const [selectedIcon, setSelectedIcon] = useState<string>('smiley');
   const [saving, setSaving] = useState(false);
 
-  const iconOptions = [
-    'happy-outline',
-    'heart-outline',
-    'star-outline',
-    'bookmark-outline',
-    'flag-outline',
-    'location-outline',
+  const iconOptions: JamIconName[] = [
+    'smiley',
+    'heart',
+    'star',
+    'bookmark',
+    'flag',
+    'map-marker',
   ];
 
   useEffect(() => {
@@ -53,7 +55,7 @@ const NewListScreen: React.FC = () => {
       setListName(params.listData.name);
       setDescription(params.listData.description || '');
       setListType(params.listData.type);
-      setSelectedIcon(params.listData.icon_name);
+      setSelectedIcon(legacyIoniconToJam(params.listData.icon_name));
     }
   }, [isEditing, params.listData]);
 
@@ -151,20 +153,21 @@ const NewListScreen: React.FC = () => {
         {/* Icon Selection */}
         <View style={styles.iconSection}>
           <View style={styles.iconCircle}>
-            <Ionicons name={selectedIcon as any} size={32} color={Colors.white} />
+            <JamIcon ionicon={selectedIcon} size={32} color={Colors.white} />
           </View>
           <TouchableOpacity
             style={styles.addIconButton}
             onPress={() => {
               // Cycle through icons
-              const currentIndex = iconOptions.indexOf(selectedIcon);
-              const nextIndex = (currentIndex + 1) % iconOptions.length;
+              const normalized = legacyIoniconToJam(selectedIcon);
+              const currentIndex = iconOptions.indexOf(normalized);
+              const nextIndex = ((currentIndex >= 0 ? currentIndex : 0) + 1) % iconOptions.length;
               setSelectedIcon(iconOptions[nextIndex]);
             }}
             accessibilityLabel="Change icon"
             accessibilityRole="button"
           >
-            <Ionicons name="add-circle" size={24} color={Colors.accent} />
+            <JamIcon ionicon="add-circle" size={24} color={Colors.accent} />
           </TouchableOpacity>
           <Text style={styles.iconLabel}>Choose icon</Text>
         </View>
@@ -178,7 +181,6 @@ const NewListScreen: React.FC = () => {
             value={listName}
             onChangeText={setListName}
             accessibilityLabel="List name input"
-            accessibilityRole="textbox"
             maxLength={100}
           />
         </View>
@@ -194,7 +196,6 @@ const NewListScreen: React.FC = () => {
             multiline
             numberOfLines={3}
             accessibilityLabel="List description input"
-            accessibilityRole="textbox"
             maxLength={500}
           />
         </View>
@@ -218,7 +219,7 @@ const NewListScreen: React.FC = () => {
               <Text style={styles.typeDescription}>Only you can view and edit</Text>
             </View>
             {listType === 'private' && (
-              <Ionicons name="checkmark" size={20} color={Colors.accent} />
+              <JamIcon ionicon="checkmark" size={20} color={Colors.accent} />
             )}
           </TouchableOpacity>
 
@@ -240,7 +241,7 @@ const NewListScreen: React.FC = () => {
               </Text>
             </View>
             {listType === 'shared' && (
-              <Ionicons name="checkmark" size={20} color={Colors.accent} />
+              <JamIcon ionicon="checkmark" size={20} color={Colors.accent} />
             )}
           </TouchableOpacity>
         </View>
@@ -258,7 +259,7 @@ const NewListScreen: React.FC = () => {
           {saving ? (
             <ActivityIndicator size="small" color={Colors.white} />
           ) : (
-            <Ionicons name="checkmark-circle" size={24} color={Colors.white} />
+            <JamIcon ionicon="checkmark-circle" size={24} color={Colors.white} />
           )}
           <Text style={styles.saveButtonText}>
             {saving ? 'Saving...' : isEditing ? 'Update' : 'Save'}

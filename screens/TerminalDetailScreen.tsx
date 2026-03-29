@@ -1,119 +1,263 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
+  Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
-import { Colors, Theme } from '../constants/theme';
+import { JamIcon } from '../components/JamIcon';
+import { Colors } from '../constants/theme';
 import { Terminal } from '../data/mockData';
+import { terminalAddressLine } from '../lib/terminalHelpers';
+
+const TITLE_DARK = '#241D13';
+const MUTED = '#868686';
+const TAB_INACTIVE = '#7A7878';
+
+type DetailTab = 'description' | 'routes';
+
+/** Narrative copy only: about the terminal + operating hours woven in (no payment / fares). */
+function descriptionFor(t: Terminal): string {
+  const hoursBit = `The facility is open ${t.operatingHours}; hours may differ on holidays or during special events.`;
+  if (t.description) {
+    return `${t.description.trim()}\n\n${hoursBit}`;
+  }
+  const open = t.status === 'OPEN' ? 'open' : 'closed';
+  return [
+    `${t.name} is a ${open} transport hub serving ${t.transportTypes.join(', ')} and connecting passengers across the region.`,
+    hoursBit,
+  ].join('\n\n');
+}
+
+const cardShadow = Platform.select({
+  ios: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+  },
+  android: { elevation: 2 },
+  default: {},
+});
 
 const TerminalDetailScreen: React.FC = () => {
   const route = useRoute();
   const navigation = useNavigation();
-  const terminal = (route.params as any)?.terminal as Terminal;
-  const [destinationQuery, setDestinationQuery] = useState('');
+  const insets = useSafeAreaInsets();
+  const terminal = (route.params as { terminal?: Terminal })?.terminal;
+  const [tab, setTab] = useState<DetailTab>('description');
+  const [saved, setSaved] = useState(false);
+  const [openGates, setOpenGates] = useState<Record<string, boolean>>({});
+
+  const addressLine = useMemo(
+    () => (terminal ? terminalAddressLine(terminal) : ''),
+    [terminal]
+  );
+  const description = useMemo(
+    () => (terminal ? descriptionFor(terminal) : ''),
+    [terminal]
+  );
+
+  useEffect(() => {
+    const gates = terminal?.routesByGate;
+    if (gates?.length) {
+      setOpenGates({ [gates[0].gateName]: true });
+    } else {
+      setOpenGates({});
+    }
+  }, [terminal?.id]);
+
+  const toggleGate = (gateName: string) => {
+    setOpenGates((prev) => ({ ...prev, [gateName]: !prev[gateName] }));
+  };
 
   if (!terminal) {
     return (
-      <SafeAreaView style={styles.container}>
-        <Text>Terminal not found</Text>
-      </SafeAreaView>
+      <View style={[styles.root, { paddingTop: insets.top + 12 }]}>
+        <Text style={styles.missingText}>Terminal not found</Text>
+      </View>
     );
   }
 
+  const hasGates = terminal.routesByGate && terminal.routesByGate.length > 0;
+  const hasFlatRoutes = terminal.primaryRoutes.length > 0;
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Gradient header with close */}
-      <View style={styles.headerGradient}>
-        <TouchableOpacity
-          style={styles.closeBtn}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="close" size={24} color={Colors.white} />
-        </TouchableOpacity>
+    <View style={styles.root}>
+      <View style={[styles.headerBar, { paddingTop: insets.top + 10 }]}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            style={styles.headerIconBtn}
+            onPress={() => navigation.goBack()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <JamIcon ionicon="chevron-left" size={26} color={Colors.white} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            {terminal.name}
+          </Text>
+          <View style={styles.headerIconBtn} />
+        </View>
       </View>
 
       <ScrollView
-        style={styles.body}
-        contentContainerStyle={styles.bodyContent}
-        showsVerticalScrollIndicator={false}
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, 20) + 32 },
+        ]}
+        showsVerticalScrollIndicator
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        nestedScrollEnabled
+        bounces
       >
-        <Text style={styles.terminalName}>{terminal.name}</Text>
-        <Text style={styles.transportTypes}>
-          {terminal.transportTypes.join(', ')}
-        </Text>
-        <View style={styles.statusBadge}>
-          <Text style={styles.statusText}>{terminal.status}</Text>
+        <View style={styles.hero}>
+          <JamIcon ionicon="bus" size={56} color={Colors.primary} />
         </View>
 
-        <View style={styles.searchBox}>
-          <Ionicons name="search" size={20} color={Colors.text.light} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Type your destination"
-            placeholderTextColor={Colors.text.light}
-            value={destinationQuery}
-            onChangeText={setDestinationQuery}
-          />
+        <View style={styles.titleRow}>
+          <View style={styles.titleTextCol}>
+            <Text style={styles.title}>{terminal.name}</Text>
+            <Text style={styles.subtitle}>{addressLine}</Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.saveBtn, saved && styles.saveBtnActive]}
+            onPress={() => setSaved((s) => !s)}
+            accessibilityRole="button"
+            accessibilityLabel={saved ? 'Remove bookmark' : 'Save terminal'}
+          >
+            <JamIcon
+              ionicon={saved ? 'bookmark' : 'bookmark-outline'}
+              size={22}
+              color={Colors.accent}
+            />
+          </TouchableOpacity>
         </View>
 
-        <Text style={styles.sectionTitle}>Quick Information</Text>
-        <View style={styles.infoGrid}>
-          <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Operating Hours</Text>
-            <Text style={styles.infoValue}>{terminal.operatingHours}</Text>
-          </View>
-          <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Average Fare</Text>
-            <Text style={styles.infoValue}>{terminal.averageFare}</Text>
-          </View>
-          <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Payment Type</Text>
-            <Text style={styles.infoValue}>{terminal.paymentType}</Text>
-          </View>
-        </View>
+        <View style={styles.tabDividerTop} />
 
-        <Text style={styles.sectionTitle}>Primary Routes</Text>
-        <View style={styles.routesList}>
-          {terminal.primaryRoutes.map((route, i) => (
-            <Text key={i} style={styles.routeItem}>
-              • {route.label}: {route.fare}
+        <View style={styles.tabBarRow}>
+          <TouchableOpacity
+            style={styles.tabHit}
+            onPress={() => setTab('description')}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === 'description' }}
+          >
+            <Text
+              style={[
+                styles.tabLabelText,
+                tab === 'description' ? styles.tabTextActive : styles.tabTextInactive,
+              ]}
+            >
+              Description
             </Text>
-          ))}
+            <View
+              style={[
+                styles.tabLine,
+                tab === 'description' ? styles.tabLineActive : styles.tabLineInactive,
+              ]}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabHit, styles.tabHitSpaced]}
+            onPress={() => setTab('routes')}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === 'routes' }}
+          >
+            <Text
+              style={[
+                styles.tabLabelText,
+                tab === 'routes' ? styles.tabTextActive : styles.tabTextInactive,
+              ]}
+            >
+              Routes
+            </Text>
+            <View
+              style={[
+                styles.tabLine,
+                tab === 'routes' ? styles.tabLineActive : styles.tabLineInactive,
+              ]}
+            />
+          </TouchableOpacity>
         </View>
 
-        {terminal.reminders.length > 0 && (
-          <>
-            <Text style={styles.sectionTitle}>Reminder</Text>
-            <View style={styles.remindersList}>
-              {terminal.reminders.map((rem, i) => (
-                <Text key={i} style={styles.reminderItem}>
-                  • {rem}
-                </Text>
-              ))}
-            </View>
-          </>
+        {tab === 'description' ? (
+          <View style={styles.descriptionPanel}>
+            <Text style={styles.bodyText}>{description}</Text>
+          </View>
+        ) : (
+          <View style={styles.routesBlock}>
+            {!hasGates && !hasFlatRoutes ? (
+              <Text style={styles.routesEmpty}>No routes listed yet.</Text>
+            ) : hasGates && terminal.routesByGate ? (
+              terminal.routesByGate.map((gate) => {
+                const open = !!openGates[gate.gateName];
+                return (
+                  <View key={gate.gateName} style={styles.accordionCard}>
+                    <TouchableOpacity
+                      style={styles.accordionHeader}
+                      onPress={() => toggleGate(gate.gateName)}
+                      accessibilityRole="button"
+                      accessibilityState={{ expanded: open }}
+                    >
+                      <Text style={styles.accordionTitle} numberOfLines={2}>
+                        {gate.gateName}
+                      </Text>
+                      <JamIcon
+                        ionicon={open ? 'chevron-up' : 'chevron-down'}
+                        size={22}
+                        color={Colors.primary}
+                      />
+                    </TouchableOpacity>
+                    {open ? (
+                      <View style={styles.accordionBody}>
+                        {gate.routes.map((r, idx) => (
+                          <View
+                            key={`${gate.gateName}-${idx}`}
+                            style={styles.routeLineRow}
+                          >
+                            <View style={styles.routeBullet} />
+                            <Text style={styles.routeLineText}>{r.label}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
+                  </View>
+                );
+              })
+            ) : (
+              <View style={styles.flatRoutesCard}>
+                {terminal.primaryRoutes.map((r, i) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.flatRouteRow,
+                      i < terminal.primaryRoutes.length - 1 && styles.flatRouteRowBorder,
+                    ]}
+                  >
+                    <View style={styles.routeAccentBar} />
+                    <Text style={styles.flatRouteText}>{r.label}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
         )}
 
-        <View style={styles.mapPreview}>
-          <Ionicons name="map" size={48} color={Colors.text.light} />
-          <Text style={styles.mapPreviewText}>Map preview</Text>
-        </View>
-
         <TouchableOpacity
-          style={styles.getDirectionBtn}
+          style={styles.directionsBtn}
           onPress={() =>
             navigation.navigate('Directions' as never, {
               place: {
                 id: terminal.id,
                 name: terminal.name,
-                address: terminal.name,
+                address: addressLine,
                 type: 'Terminal',
                 hours: terminal.operatingHours,
                 latitude: terminal.latitude,
@@ -123,146 +267,259 @@ const TerminalDetailScreen: React.FC = () => {
           }
           activeOpacity={0.85}
         >
-          <Text style={styles.getDirectionText}>Get Direction</Text>
+          <Text style={styles.directionsBtnText}>Get directions</Text>
         </TouchableOpacity>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
     backgroundColor: Colors.white,
   },
-  headerGradient: {
-    paddingTop: 50,
-    paddingHorizontal: Theme.spacing.md,
-    paddingBottom: Theme.spacing.md,
-    backgroundColor: Colors.gradient.start,
+  headerBar: {
+    backgroundColor: Colors.accent,
+    paddingBottom: 14,
+    paddingHorizontal: 8,
   },
-  closeBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  body: {
-    flex: 1,
-    backgroundColor: Colors.white,
-  },
-  bodyContent: {
-    padding: Theme.spacing.lg,
-    paddingBottom: Theme.spacing.xl + 24,
-  },
-  terminalName: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: Colors.text.primary,
-    marginBottom: Theme.spacing.xs,
-  },
-  transportTypes: {
-    fontSize: 14,
-    color: Colors.text.primary,
-    marginBottom: Theme.spacing.sm,
-  },
-  statusBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.xs,
-    borderRadius: Theme.borderRadius.sm,
-    marginBottom: Theme.spacing.lg,
-  },
-  statusText: {
-    color: Colors.white,
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  searchBox: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.background,
-    borderRadius: Theme.borderRadius.md,
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.sm + 4,
-    marginBottom: Theme.spacing.lg,
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: Theme.spacing.sm,
-    fontSize: 16,
-    color: Colors.text.primary,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: Colors.text.primary,
-    marginBottom: Theme.spacing.sm,
-  },
-  infoGrid: {
-    marginBottom: Theme.spacing.lg,
-  },
-  infoItem: {
-    flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: Colors.background,
-    paddingVertical: Theme.spacing.sm,
-    paddingHorizontal: Theme.spacing.md,
-    marginBottom: Theme.spacing.xs,
-    borderRadius: Theme.borderRadius.sm,
   },
-  infoLabel: {
-    fontSize: 14,
-    color: Colors.text.secondary,
-  },
-  infoValue: {
-    fontSize: 14,
-    color: Colors.text.primary,
-    fontWeight: '500',
-  },
-  routesList: {
-    marginBottom: Theme.spacing.lg,
-  },
-  routeItem: {
-    fontSize: 14,
-    color: Colors.text.primary,
-    marginBottom: Theme.spacing.xs,
-  },
-  remindersList: {
-    marginBottom: Theme.spacing.lg,
-  },
-  reminderItem: {
-    fontSize: 14,
-    color: Colors.text.primary,
-    marginBottom: Theme.spacing.xs,
-    lineHeight: 20,
-  },
-  mapPreview: {
-    height: 160,
-    backgroundColor: Colors.background,
-    borderRadius: Theme.borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Theme.spacing.lg,
-  },
-  mapPreviewText: {
-    marginTop: Theme.spacing.sm,
-    fontSize: 14,
-    color: Colors.text.light,
-  },
-  getDirectionBtn: {
-    backgroundColor: Colors.directionButton.start,
-    paddingVertical: Theme.spacing.md + 4,
-    borderRadius: Theme.borderRadius.md,
+  headerIconBtn: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  getDirectionText: {
+  headerTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 20,
+    lineHeight: 24,
     color: Colors.white,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
+  hero: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    maxHeight: 220,
+    borderRadius: 20,
+    backgroundColor: '#D9D9D9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  titleTextCol: {
+    flex: 1,
+    marginRight: 12,
+  },
+  title: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 20,
+    lineHeight: 26,
+    color: TITLE_DARK,
+    marginBottom: 6,
+  },
+  subtitle: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    lineHeight: 20,
+    color: MUTED,
+  },
+  saveBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginTop: 2,
+    backgroundColor: 'rgba(126, 160, 14, 0.36)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveBtnActive: {
+    backgroundColor: 'rgba(126, 160, 14, 0.55)',
+  },
+  tabDividerTop: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(134,134,134,0.35)',
+    marginBottom: 0,
+  },
+  tabBarRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    paddingBottom: 4,
+    marginBottom: 18,
+  },
+  tabHit: {
+    paddingTop: 10,
+    minWidth: 100,
+  },
+  tabHitSpaced: {
+    marginLeft: 28,
+  },
+  tabLabelText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+    lineHeight: 22,
+    textAlign: 'left',
+  },
+  tabTextActive: {
+    color: Colors.accent,
+  },
+  tabTextInactive: {
+    color: TAB_INACTIVE,
+  },
+  tabLine: {
+    height: 2,
+    marginTop: 8,
+    borderRadius: 1,
+    width: '100%',
+  },
+  tabLineActive: {
+    backgroundColor: Colors.accent,
+  },
+  tabLineInactive: {
+    backgroundColor: 'transparent',
+  },
+  descriptionPanel: {
+    backgroundColor: '#F6F7F6',
+    borderRadius: 14,
+    padding: 18,
+    marginBottom: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+  },
+  bodyText: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 15,
+    lineHeight: 24,
+    color: TITLE_DARK,
+  },
+  routesBlock: {
+    marginBottom: 22,
+  },
+  routesEmpty: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 15,
+    color: MUTED,
+    textAlign: 'center',
+    paddingVertical: 24,
+  },
+  accordionCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.08)',
+    overflow: 'hidden',
+    ...cardShadow,
+  },
+  accordionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: '#FAFAFA',
+  },
+  accordionTitle: {
+    flex: 1,
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 15,
+    color: Colors.primary,
+    marginRight: 12,
+  },
+  accordionBody: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 14,
+    backgroundColor: Colors.white,
+  },
+  routeLineRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 10,
+  },
+  routeBullet: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.accent,
+    marginTop: 8,
+    marginRight: 12,
+  },
+  routeLineText: {
+    flex: 1,
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 15,
+    lineHeight: 22,
+    color: TITLE_DARK,
+  },
+  flatRoutesCard: {
+    backgroundColor: '#F6F7F6',
+    borderRadius: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+  },
+  flatRouteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+  },
+  flatRouteRowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.08)',
+  },
+  routeAccentBar: {
+    width: 3,
+    height: 36,
+    borderRadius: 2,
+    backgroundColor: Colors.accent,
+    marginRight: 14,
+  },
+  flatRouteText: {
+    flex: 1,
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 15,
+    lineHeight: 22,
+    color: TITLE_DARK,
+  },
+  directionsBtn: {
+    backgroundColor: Colors.accent,
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  directionsBtnText: {
+    fontFamily: 'Poppins_700Bold',
     fontSize: 16,
-    fontWeight: 'bold',
+    color: Colors.white,
+  },
+  missingText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 16,
+    color: Colors.text.secondary,
+    textAlign: 'center',
+    padding: 24,
   },
 });
 

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import { JamIcon } from '../components/JamIcon';
 import { Colors, Theme } from '../constants/theme';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
@@ -55,14 +55,14 @@ const HistoryScreen: React.FC = () => {
     >
       <View style={styles.routeCard}>
         <View style={styles.routeContent}>
-          <Ionicons name="time-outline" size={24} color={Colors.primary} />
+          <JamIcon ionicon="time-outline" size={24} color={Colors.primary} />
           <View style={styles.routeInfo}>
             <Text style={styles.routeName}>{item.name}</Text>
             <Text style={styles.routeMeta}>
               Departed {item.departureTime} | {item.duration}
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={17} color={Colors.text.light} />
+          <JamIcon ionicon="chevron-forward" size={17} color={Colors.text.light} />
         </View>
       </View>
     </TouchableOpacity>
@@ -98,10 +98,10 @@ const HistoryScreen: React.FC = () => {
             accessibilityRole="button"
             accessibilityExpanded={showFilter}
           >
-            <Ionicons name="filter" size={16} color={Colors.text.primary} />
+            <JamIcon ionicon="filter" size={16} color={Colors.text.primary} />
             <Text style={styles.filterText}>Filter</Text>
-            <Ionicons
-              name={showFilter ? 'chevron-up' : 'chevron-down'}
+            <JamIcon
+              ionicon={showFilter ? 'chevron-up' : 'chevron-down'}
               size={11}
               color={Colors.text.primary}
             />

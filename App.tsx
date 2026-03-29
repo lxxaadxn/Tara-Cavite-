@@ -1,14 +1,27 @@
-import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { NavigationContainer } from '@react-navigation/native';
+import { getFocusedRouteNameFromRoute, NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
+import {
+  useFonts,
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_700Bold,
+} from '@expo-google-fonts/inter';
+import { Pacifico_400Regular } from '@expo-google-fonts/pacifico';
+import {
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_700Bold,
+} from '@expo-google-fonts/poppins';
 import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect, useRef, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { JamIcon } from './components/JamIcon';
 import { Colors } from './constants/Colors';
+import { isStoredSessionInvalidError } from './lib/authHelpers';
 import { supabase } from './lib/supabase';
 
 // Keep native splash (CaviTour logo) visible until app is ready
@@ -18,6 +31,7 @@ SplashScreen.preventAutoHideAsync();
 import DirectionsScreen from './screens/DirectionsScreen';
 import HistoryScreen from './screens/HistoryScreen';
 import HomeScreen from './screens/HomeScreen';
+import ItinerariesScreen from './screens/ItinerariesScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
 import MapScreen from './screens/MapScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
@@ -31,6 +45,7 @@ import TerminalDetailScreen from './screens/TerminalDetailScreen';
 import TerminalsScreen from './screens/TerminalsScreen';
 import UserDetailsScreen from './screens/UserDetailsScreen';
 import NewListScreen from './screens/NewListScreen';
+import CreateItineraryScreen from './screens/CreateItineraryScreen';
 import CategoriesScreen from './screens/CategoriesScreen';
 
 const Stack = createStackNavigator();
@@ -38,9 +53,22 @@ const Tab = createBottomTabNavigator();
 
 // Auth Stack
 const AuthStack = () => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
+  <Stack.Navigator
+    screenOptions={{
+      headerShown: false,
+      cardStyle: { flex: 1, backgroundColor: Colors.white },
+    }}
+  >
     <Stack.Screen name="SignIn" component={SignInScreen} />
     <Stack.Screen name="SignUp" component={SignUpScreen} />
+  </Stack.Navigator>
+);
+
+/** Landing first on every cold start while logged out; then replace → Auth stack (no persisted skip). */
+const UnauthedStack = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Landing">
+    <Stack.Screen name="Landing" component={OnboardingScreen} />
+    <Stack.Screen name="Auth" component={AuthStack} />
   </Stack.Navigator>
 );
 
@@ -60,8 +88,12 @@ const DashboardStack = () => (
 // Itineraries Stack
 const ItinerariesStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="ItinerariesMain" component={ItinerariesScreen} />
     <Stack.Screen name="History" component={HistoryScreen} />
     <Stack.Screen name="Notifications" component={NotificationsScreen} />
+    <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
+    <Stack.Screen name="NewList" component={NewListScreen} />
+    <Stack.Screen name="CreateItinerary" component={CreateItineraryScreen} />
   </Stack.Navigator>
 );
 
@@ -94,50 +126,111 @@ const MapStack = () => (
   </Stack.Navigator>
 );
 
-// Main Tabs Navigator
-const MainTabs = () => (
-  <Tab.Navigator
-    screenOptions={({ route }) => ({
-      tabBarIcon: ({ focused, color, size }) => {
-        const iconName =
-          route.name === 'Dashboard'
-            ? focused
-              ? 'home'
-              : 'home-outline'
-            : route.name === 'Itineraries'
-              ? 'document-text-outline'
-              : route.name === 'Map'
-                ? 'map-outline'
-                : route.name === 'Terminals'
-                  ? 'car-outline'
-                  : focused
-                    ? 'person'
+// Main Tabs Navigator (Figma: white pill bar, green active / teal inactive icons)
+function MainTabs() {
+  const insets = useSafeAreaInsets();
+  const bottomPad = Math.max(insets.bottom, 10);
+  const mainTabBarStyle = {
+    position: 'absolute' as const,
+    left: 16,
+    right: 16,
+    bottom: bottomPad,
+    height: 56 + Math.min(insets.bottom, 8),
+    paddingTop: 8,
+    paddingBottom: Math.min(insets.bottom, 12) || 8,
+    borderRadius: 30,
+    backgroundColor: Colors.white,
+    borderTopWidth: 0,
+    borderWidth: 1,
+    borderColor: 'rgba(122, 120, 120, 0.5)',
+    elevation: 0,
+    shadowOpacity: 0,
+  };
+
+  const tabBarForStack =
+    (initialRouteName: string) =>
+    ({ route }: { route: { state?: { routes: { name: string }[]; index: number } } }) => {
+      const focused = getFocusedRouteNameFromRoute(route) ?? initialRouteName;
+      return {
+        tabBarStyle: focused === 'Notifications' ? { display: 'none' } : mainTabBarStyle,
+      };
+    };
+
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        tabBarIcon: ({ color, size }) => {
+          const ionicon =
+            route.name === 'Dashboard'
+              ? 'home-outline'
+              : route.name === 'Itineraries'
+                ? 'document-text-outline'
+                : route.name === 'Map'
+                  ? 'map-outline'
+                  : route.name === 'Terminals'
+                    ? 'car-outline'
                     : 'person-outline';
+          return <JamIcon ionicon={ionicon} size={size} color={color} />;
+        },
+        tabBarActiveTintColor: Colors.accent,
+        tabBarInactiveTintColor: Colors.primary,
+        headerShown: false,
+        tabBarShowLabel: false,
+        tabBarStyle: mainTabBarStyle,
+        tabBarItemStyle: {
+          height: 40,
+        },
+      })}
+    >
+      <Tab.Screen
+        name="Dashboard"
+        component={DashboardStack}
+        options={({ route }) => {
+          const focused = getFocusedRouteNameFromRoute(route) ?? 'HomeMain';
+          const hideTab =
+            focused === 'Notifications' || focused === 'TerminalDetail';
+          return {
+            tabBarStyle: hideTab ? { display: 'none' } : mainTabBarStyle,
+          };
+        }}
+      />
+      <Tab.Screen
+        name="Itineraries"
+        component={ItinerariesStack}
+        options={({ route }) => {
+          const focused = getFocusedRouteNameFromRoute(route) ?? 'ItinerariesMain';
+          const hideTab =
+            focused === 'Notifications' ||
+            focused === 'PlaceDetail' ||
+            focused === 'NewList' ||
+            focused === 'CreateItinerary';
+          return {
+            tabBarStyle: hideTab ? { display: 'none' } : mainTabBarStyle,
+          };
+        }}
+      />
+      <Tab.Screen name="Map" component={MapStack} options={tabBarForStack('MapMain')} />
+      <Tab.Screen
+        name="Terminals"
+        component={TerminalsStack}
+        options={({ route }) => {
+          const focused = getFocusedRouteNameFromRoute(route) ?? 'TerminalsMain';
+          const hideTab = focused === 'TerminalDetail';
+          return {
+            tabBarStyle: hideTab ? { display: 'none' } : mainTabBarStyle,
+          };
+        }}
+      />
+      <Tab.Screen name="Profile" component={ProfileStack} options={tabBarForStack('ProfileMain')} />
+    </Tab.Navigator>
+  );
+}
 
-        return <Ionicons name={iconName as any} size={size} color={color} />;
-      },
-      tabBarActiveTintColor: Colors.white,
-      tabBarInactiveTintColor: 'rgba(255,255,255,0.6)',
-      headerShown: false,
-      tabBarStyle: {
-        backgroundColor: Colors.primary,
-        borderTopWidth: 0,
-      },
-    })}
-  >
-    <Tab.Screen name="Dashboard" component={DashboardStack} />
-    <Tab.Screen name="Itineraries" component={ItinerariesStack} />
-    <Tab.Screen name="Map" component={MapStack} />
-    <Tab.Screen name="Terminals" component={TerminalsStack} />
-    <Tab.Screen name="Profile" component={ProfileStack} />
-  </Tab.Navigator>
-);
-
-// Bundling page: our logo from assets/images/cavitour-logo.png
+// Pre-navigation load: match landing (white + logo) until fonts and storage are ready
 const bundlingPageStyle = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: Colors.white,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -148,23 +241,26 @@ const bundlingPageStyle = StyleSheet.create({
 });
 
 export default function App() {
-  const [isOnboardingComplete, setIsOnboardingComplete] = useState<boolean | null>(null);
+  const [fontsLoaded] = useFonts({
+    Poppins_400Regular,
+    Poppins_500Medium,
+    Poppins_700Bold,
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_700Bold,
+    Pacifico_400Regular,
+  });
+  const [authHydrated, setAuthHydrated] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const didClearAuthRef = useRef(false);
 
   useEffect(() => {
-    let interval: any;
+    let interval: ReturnType<typeof setInterval>;
 
     const init = async () => {
-      // For development / QR-code launches, always start from onboarding.
-      // This clears any previous onboarding flag on each fresh app start,
-      // but handleGetStarted() can still mark it true for this session.
-      await AsyncStorage.removeItem('onboardingComplete');
-      await checkOnboardingStatus();
       await checkAuthStatus();
-      // Keep polling so SignIn/SignUp and logout are picked up
+      setAuthHydrated(true);
       interval = setInterval(() => {
-        checkOnboardingStatus();
         checkAuthStatus();
       }, 500);
     };
@@ -182,14 +278,24 @@ export default function App() {
   useEffect(() => {
     const updateAuthFromSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const isSignedIn = !!session;
-        didClearAuthRef.current = false;
-        await AsyncStorage.setItem('isAuthenticated', isSignedIn ? 'true' : 'false');
-        setIsAuthenticated(isSignedIn);
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (session) {
+          didClearAuthRef.current = false;
+          await AsyncStorage.setItem('isAuthenticated', 'true');
+          setIsAuthenticated(true);
+          return;
+        }
+        if (error && isStoredSessionInvalidError(error) && !didClearAuthRef.current) {
+          didClearAuthRef.current = true;
+          try {
+            await supabase.auth.signOut();
+          } catch {
+            // Best-effort; SDK may have already cleared storage.
+          }
+        }
+        await AsyncStorage.setItem('isAuthenticated', 'false');
+        setIsAuthenticated(false);
       } catch {
-        // Stale/invalid refresh token in storage can cause noisy auth errors.
-        // Clear local auth state once so the app can recover cleanly.
         if (!didClearAuthRef.current) {
           didClearAuthRef.current = true;
           try {
@@ -215,27 +321,35 @@ export default function App() {
     };
   }, []);
 
-  const checkOnboardingStatus = async () => {
-    try {
-      const value = await AsyncStorage.getItem('onboardingComplete');
-      // Only treat as complete when explicitly 'true'. Missing or any other value → show onboarding first.
-      setIsOnboardingComplete(value === 'true');
-    } catch {
-      // On error, show onboarding so we always land on onboarding after bundling before sign in
-      setIsOnboardingComplete(false);
-    }
-  };
-
   const checkAuthStatus = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session }, error } = await supabase.auth.getSession();
       if (session) {
         didClearAuthRef.current = false;
         setIsAuthenticated(true);
         return;
       }
-      const value = await AsyncStorage.getItem('isAuthenticated');
-      setIsAuthenticated(value === 'true');
+      if (error && isStoredSessionInvalidError(error)) {
+        if (!didClearAuthRef.current) {
+          didClearAuthRef.current = true;
+          try {
+            await supabase.auth.signOut();
+          } catch {
+            // Best-effort cleanup only.
+          }
+        }
+        await AsyncStorage.setItem('isAuthenticated', 'false');
+        setIsAuthenticated(false);
+        return;
+      }
+      if (error) {
+        // Transient refresh failure: keep optimistic flag until the next poll succeeds.
+        const value = await AsyncStorage.getItem('isAuthenticated');
+        setIsAuthenticated(value === 'true');
+        return;
+      }
+      await AsyncStorage.setItem('isAuthenticated', 'false');
+      setIsAuthenticated(false);
     } catch {
       if (!didClearAuthRef.current) {
         didClearAuthRef.current = true;
@@ -249,15 +363,19 @@ export default function App() {
     }
   };
 
-  // Hide native splash once we know initial state (show our in-app loading or main UI)
+  // Hide native splash once fonts + first auth read are ready
   useEffect(() => {
-    if (isOnboardingComplete !== null) {
+    if (fontsLoaded && authHydrated) {
       SplashScreen.hideAsync();
     }
-  }, [isOnboardingComplete]);
+  }, [fontsLoaded, authHydrated]);
+
+  if (!fontsLoaded) {
+    return null;
+  }
 
   // Bundling page: always use our logo from assets/images/cavitour-logo.png
-  if (isOnboardingComplete === null) {
+  if (!authHydrated) {
     return (
       <SafeAreaProvider>
         <View style={bundlingPageStyle.container}>
@@ -271,15 +389,13 @@ export default function App() {
     );
   }
 
-  // 2) Always Onboarding first after bundling, then Sign In/Sign Up, then Main (never Auth before Onboarding)
+  // Logged out: Unauthed stack always starts on Landing, then Sign In. Logged in: main tabs.
   return (
     <SafeAreaProvider>
       <NavigationContainer>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
-          {!isOnboardingComplete ? (
-            <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-          ) : !isAuthenticated ? (
-            <Stack.Screen name="Auth" component={AuthStack} />
+          {!isAuthenticated ? (
+            <Stack.Screen name="Unauthed" component={UnauthedStack} />
           ) : (
             <Stack.Screen name="Main" component={MainTabs} />
           )}

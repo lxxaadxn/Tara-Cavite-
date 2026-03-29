@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
-import { Ionicons } from '@expo/vector-icons';
+import { JamIcon } from '../components/JamIcon';
 import { Colors, Theme } from '../constants/theme';
 import { Header } from '../components/Header';
 import { Button } from '../components/Button';
@@ -369,14 +369,14 @@ const UserDetailsScreen: React.FC = () => {
               />
             ) : (
               <View style={styles.avatarPlaceholder}>
-                <Ionicons name="person" size={60} color={Colors.primary} />
+                <JamIcon ionicon="person" size={60} color={Colors.primary} />
               </View>
             )}
             <View style={styles.editAvatarButton}>
               {saving ? (
                 <ActivityIndicator size="small" color={Colors.white} />
               ) : (
-                <Ionicons name="create-outline" size={18} color={Colors.white} />
+                <JamIcon ionicon="create-outline" size={18} color={Colors.white} />
               )}
             </View>
           </TouchableOpacity>
@@ -397,7 +397,6 @@ const UserDetailsScreen: React.FC = () => {
               editable={editingUsername}
               autoFocus={editingUsername}
               accessibilityLabel="Username input"
-              accessibilityRole="textbox"
             />
             {editingUsername ? (
               <View style={styles.editActions}>
@@ -411,7 +410,7 @@ const UserDetailsScreen: React.FC = () => {
                   accessibilityLabel="Cancel editing username"
                   accessibilityRole="button"
                 >
-                  <Ionicons name="close-circle" size={24} color={Colors.text.secondary} />
+                  <JamIcon ionicon="close-circle" size={24} color={Colors.text.secondary} />
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.saveButton}
@@ -423,7 +422,7 @@ const UserDetailsScreen: React.FC = () => {
                   {saving ? (
                     <ActivityIndicator size="small" color={Colors.primary} />
                   ) : (
-                    <Ionicons name="checkmark-circle" size={24} color={Colors.accent} />
+                    <JamIcon ionicon="checkmark-circle" size={24} color={Colors.accent} />
                   )}
                 </TouchableOpacity>
               </View>
@@ -438,7 +437,7 @@ const UserDetailsScreen: React.FC = () => {
                 accessibilityLabel="Edit username"
                 accessibilityRole="button"
               >
-                <Ionicons name="create-outline" size={24} color={Colors.primary} />
+                <JamIcon ionicon="create-outline" size={24} color={Colors.primary} />
               </TouchableOpacity>
             )}
           </View>
@@ -459,7 +458,6 @@ const UserDetailsScreen: React.FC = () => {
               editable={editingEmail}
               autoFocus={editingEmail}
               accessibilityLabel="Email input"
-              accessibilityRole="textbox"
             />
             {editingEmail ? (
               <View style={styles.editActions}>
@@ -473,7 +471,7 @@ const UserDetailsScreen: React.FC = () => {
                   accessibilityLabel="Cancel editing email"
                   accessibilityRole="button"
                 >
-                  <Ionicons name="close-circle" size={24} color={Colors.text.secondary} />
+                  <JamIcon ionicon="close-circle" size={24} color={Colors.text.secondary} />
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.saveButton}
@@ -485,7 +483,7 @@ const UserDetailsScreen: React.FC = () => {
                   {saving ? (
                     <ActivityIndicator size="small" color={Colors.primary} />
                   ) : (
-                    <Ionicons name="checkmark-circle" size={24} color={Colors.accent} />
+                    <JamIcon ionicon="checkmark-circle" size={24} color={Colors.accent} />
                   )}
                 </TouchableOpacity>
               </View>
@@ -500,7 +498,7 @@ const UserDetailsScreen: React.FC = () => {
                 accessibilityLabel="Edit email"
                 accessibilityRole="button"
               >
-                <Ionicons name="create-outline" size={24} color={Colors.primary} />
+                <JamIcon ionicon="create-outline" size={24} color={Colors.primary} />
               </TouchableOpacity>
             )}
           </View>
@@ -510,7 +508,7 @@ const UserDetailsScreen: React.FC = () => {
         <View style={styles.fieldContainer}>
           <Text style={styles.addressLabel}>Address</Text>
           <View style={styles.addressRow}>
-            <Ionicons name="location" size={24} color={Colors.primary} />
+            <JamIcon ionicon="location" size={24} color={Colors.primary} />
             <View style={styles.addressInputRow}>
               {editingCity ? (
                 <TextInput
@@ -521,7 +519,6 @@ const UserDetailsScreen: React.FC = () => {
                   placeholderTextColor={Colors.text.light}
                   autoFocus={editingCity}
                   accessibilityLabel="City input"
-                  accessibilityRole="textbox"
                 />
               ) : (
                 <Text style={styles.addressText}>{city}</Text>
@@ -538,7 +535,7 @@ const UserDetailsScreen: React.FC = () => {
                     accessibilityLabel="Cancel editing city"
                     accessibilityRole="button"
                   >
-                    <Ionicons name="close-circle" size={24} color={Colors.text.secondary} />
+                    <JamIcon ionicon="close-circle" size={24} color={Colors.text.secondary} />
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.saveButton}
@@ -550,7 +547,7 @@ const UserDetailsScreen: React.FC = () => {
                     {saving ? (
                       <ActivityIndicator size="small" color={Colors.primary} />
                     ) : (
-                      <Ionicons name="checkmark-circle" size={24} color={Colors.accent} />
+                      <JamIcon ionicon="checkmark-circle" size={24} color={Colors.accent} />
                     )}
                   </TouchableOpacity>
                 </View>
@@ -565,13 +562,13 @@ const UserDetailsScreen: React.FC = () => {
                   accessibilityLabel="Edit city"
                   accessibilityRole="button"
                 >
-                  <Ionicons name="create-outline" size={24} color={Colors.primary} />
+                  <JamIcon ionicon="create-outline" size={24} color={Colors.primary} />
                 </TouchableOpacity>
               )}
             </View>
           </View>
           <View style={styles.addressRow}>
-            <Ionicons name="home-outline" size={24} color={Colors.primary} />
+            <JamIcon ionicon="home-outline" size={24} color={Colors.primary} />
             <View style={styles.addressInputRow}>
               {editingStreet ? (
                 <TextInput
@@ -582,7 +579,6 @@ const UserDetailsScreen: React.FC = () => {
                   placeholderTextColor={Colors.text.light}
                   autoFocus={editingStreet}
                   accessibilityLabel="Street address input"
-                  accessibilityRole="textbox"
                 />
               ) : (
                 <Text style={styles.addressText}>{street}</Text>
@@ -599,7 +595,7 @@ const UserDetailsScreen: React.FC = () => {
                     accessibilityLabel="Cancel editing street"
                     accessibilityRole="button"
                   >
-                    <Ionicons name="close-circle" size={24} color={Colors.text.secondary} />
+                    <JamIcon ionicon="close-circle" size={24} color={Colors.text.secondary} />
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.saveButton}
@@ -611,7 +607,7 @@ const UserDetailsScreen: React.FC = () => {
                     {saving ? (
                       <ActivityIndicator size="small" color={Colors.primary} />
                     ) : (
-                      <Ionicons name="checkmark-circle" size={24} color={Colors.accent} />
+                      <JamIcon ionicon="checkmark-circle" size={24} color={Colors.accent} />
                     )}
                   </TouchableOpacity>
                 </View>
@@ -626,7 +622,7 @@ const UserDetailsScreen: React.FC = () => {
                   accessibilityLabel="Edit street"
                   accessibilityRole="button"
                 >
-                  <Ionicons name="create-outline" size={24} color={Colors.primary} />
+                  <JamIcon ionicon="create-outline" size={24} color={Colors.primary} />
                 </TouchableOpacity>
               )}
             </View>

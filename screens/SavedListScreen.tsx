@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import { JamIcon } from '../components/JamIcon';
 import { Colors, Theme } from '../constants/theme';
 import { Header } from '../components/Header';
 import { Button } from '../components/Button';
@@ -105,13 +105,21 @@ const SavedListScreen: React.FC = () => {
 
   const getIconColor = (iconName: string): string => {
     const colorMap: { [key: string]: string } = {
-      'bookmark': '#9C27B0',
-      'star': '#FFC107',
-      'heart': '#F44336',
-      'business': '#2196F3',
-      'flag': '#1B4D4D',
-      'happy': Colors.accent,
-      'location': Colors.primary,
+      bookmark: '#9C27B0',
+      'bookmark-outline': '#9C27B0',
+      star: '#FFC107',
+      'star-outline': '#FFC107',
+      heart: '#F44336',
+      'heart-outline': '#F44336',
+      business: '#2196F3',
+      flag: '#1B4D4D',
+      'flag-outline': '#1B4D4D',
+      happy: Colors.accent,
+      'happy-outline': Colors.accent,
+      smiley: Colors.accent,
+      location: Colors.primary,
+      'location-outline': Colors.primary,
+      'map-marker': Colors.primary,
     };
     return colorMap[iconName] || Colors.primary;
   };
@@ -127,10 +135,10 @@ const SavedListScreen: React.FC = () => {
     >
       <View style={styles.listItem}>
         <View style={styles.listItemContent}>
-          <Ionicons 
-            name={item.icon_name as any} 
-            size={25} 
-            color={getIconColor(item.icon_name)} 
+          <JamIcon
+            ionicon={item.icon_name}
+            size={25}
+            color={getIconColor(item.icon_name)}
           />
           <View style={styles.listItemInfo}>
             <Text style={styles.listItemTitle}>{item.name}</Text>
@@ -149,7 +157,7 @@ const SavedListScreen: React.FC = () => {
                   accessibilityLabel={`Edit ${item.name}`}
                   accessibilityRole="button"
                 >
-                  <Ionicons name="create-outline" size={20} color={Colors.primary} />
+                  <JamIcon ionicon="create-outline" size={20} color={Colors.primary} />
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.actionButton}
@@ -157,7 +165,7 @@ const SavedListScreen: React.FC = () => {
                   accessibilityLabel={`Delete ${item.name}`}
                   accessibilityRole="button"
                 >
-                  <Ionicons name="trash-outline" size={20} color="#F44336" />
+                  <JamIcon ionicon="trash-outline" size={20} color="#F44336" />
                 </TouchableOpacity>
               </>
             )}
@@ -204,7 +212,7 @@ const SavedListScreen: React.FC = () => {
         </View>
         {lists.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Ionicons name="list-outline" size={64} color={Colors.text.light} />
+            <JamIcon ionicon="list-outline" size={64} color={Colors.text.light} />
             <Text style={styles.emptyText}>No saved lists yet</Text>
             <Text style={styles.emptySubtext}>Create your first list to get started!</Text>
           </View>
