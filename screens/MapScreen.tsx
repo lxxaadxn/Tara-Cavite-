@@ -8,6 +8,7 @@ import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import type { Place } from '../data/mockData';
 import { mockTerminals } from '../data/mockData';
+import { rowToPlace, type PlaceRow } from '../lib/placesFromSupabase';
 
 const H_PAD = 16;
 const OVERLAY_TOP = 10;
@@ -15,46 +16,6 @@ const GREEN = '#7EA00E';
 const TEAL = '#1F4F59';
 const MUTED = '#7A7878';
 const MAP_BG = '#E8E8E8';
-
-type PlaceRow = {
-  id: string;
-  name: string;
-  address: string;
-  type: string | null;
-  hours: string | null;
-  latitude: string | number | null;
-  longitude: string | number | null;
-  image_url: string | null;
-  description: string | null;
-  ntdp_category: string | null;
-};
-
-function parseCoord(v: string | number | null | undefined): number | null {
-  if (v == null) return null;
-  const n = typeof v === 'number' ? v : parseFloat(String(v));
-  return Number.isFinite(n) ? n : null;
-}
-
-function rowToPlace(row: PlaceRow): Place | null {
-  const lat = parseCoord(row.latitude);
-  const lng = parseCoord(row.longitude);
-  if (lat == null || lng == null) return null;
-  const p: Place = {
-    id: row.id,
-    name: row.name,
-    address: row.address,
-    type: row.type ?? 'Place',
-    hours: row.hours ?? '',
-    latitude: lat,
-    longitude: lng,
-  };
-  if (row.image_url) {
-    p.image = { uri: row.image_url };
-  }
-  if (row.description) p.description = row.description;
-  if (row.ntdp_category) p.ntdp_category = row.ntdp_category;
-  return p;
-}
 
 export default function MapScreen() {
   const navigation = useNavigation();

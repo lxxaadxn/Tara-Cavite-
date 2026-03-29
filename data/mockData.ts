@@ -15,7 +15,7 @@ export interface Place {
   rating?: string;
   /** From Supabase / LGU STA inventory */
   description?: string;
-  ntdp_category?: string;
+  ntdp_category?: string
 }
 
 export interface Route {
