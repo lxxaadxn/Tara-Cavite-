@@ -64,13 +64,22 @@ const AuthStack = () => (
   </Stack.Navigator>
 );
 
-/** Landing first on every cold start while logged out; then replace → Auth stack (no persisted skip). */
-const UnauthedStack = () => (
-  <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Landing">
-    <Stack.Screen name="Landing" component={OnboardingScreen} />
-    <Stack.Screen name="Auth" component={AuthStack} />
-  </Stack.Navigator>
-);
+/**
+ * Post-bundle startup (landing) → then sign-in. `stackKey` remounts this navigator so we never
+ * resume straight on Auth after sign-out or a stale navigation state.
+ */
+function UnauthedFlow({ stackKey }: { stackKey: number }) {
+  return (
+    <Stack.Navigator
+      key={stackKey}
+      screenOptions={{ headerShown: false }}
+      initialRouteName="Landing"
+    >
+      <Stack.Screen name="Landing" component={OnboardingScreen} />
+      <Stack.Screen name="Auth" component={AuthStack} />
+    </Stack.Navigator>
+  );
+}
 
 // Home Stack
 const DashboardStack = () => (
@@ -92,6 +101,7 @@ const ItinerariesStack = () => (
     <Stack.Screen name="History" component={HistoryScreen} />
     <Stack.Screen name="Notifications" component={NotificationsScreen} />
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
+    <Stack.Screen name="Directions" component={DirectionsScreen} />
     <Stack.Screen name="NewList" component={NewListScreen} />
     <Stack.Screen name="CreateItinerary" component={CreateItineraryScreen} />
   </Stack.Navigator>
@@ -115,6 +125,7 @@ const TerminalsStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="TerminalsMain" component={TerminalsScreen} />
     <Stack.Screen name="TerminalDetail" component={TerminalDetailScreen} />
+    <Stack.Screen name="Directions" component={DirectionsScreen} />
   </Stack.Navigator>
 );
 
@@ -122,6 +133,8 @@ const TerminalsStack = () => (
 const MapStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="MapMain" component={MapScreen} />
+    <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
+    <Stack.Screen name="Directions" component={DirectionsScreen} />
     <Stack.Screen name="Notifications" component={NotificationsScreen} />
   </Stack.Navigator>
 );
@@ -202,6 +215,7 @@ function MainTabs() {
           const hideTab =
             focused === 'Notifications' ||
             focused === 'PlaceDetail' ||
+            focused === 'Directions' ||
             focused === 'NewList' ||
             focused === 'CreateItinerary';
           return {
@@ -209,13 +223,26 @@ function MainTabs() {
           };
         }}
       />
-      <Tab.Screen name="Map" component={MapStack} options={tabBarForStack('MapMain')} />
+      <Tab.Screen
+        name="Map"
+        component={MapStack}
+        options={({ route }) => {
+          const focused = getFocusedRouteNameFromRoute(route) ?? 'MapMain';
+          const hideTab =
+            focused === 'Notifications' ||
+            focused === 'PlaceDetail' ||
+            focused === 'Directions';
+          return {
+            tabBarStyle: hideTab ? { display: 'none' } : mainTabBarStyle,
+          };
+        }}
+      />
       <Tab.Screen
         name="Terminals"
         component={TerminalsStack}
         options={({ route }) => {
           const focused = getFocusedRouteNameFromRoute(route) ?? 'TerminalsMain';
-          const hideTab = focused === 'TerminalDetail';
+          const hideTab = focused === 'TerminalDetail' || focused === 'Directions';
           return {
             tabBarStyle: hideTab ? { display: 'none' } : mainTabBarStyle,
           };
@@ -252,6 +279,7 @@ export default function App() {
   });
   const [authHydrated, setAuthHydrated] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [unauthedStackKey, setUnauthedStackKey] = useState(0);
   const didClearAuthRef = useRef(false);
 
   useEffect(() => {
@@ -310,10 +338,13 @@ export default function App() {
 
     updateAuthFromSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       const isSignedIn = !!session;
       await AsyncStorage.setItem('isAuthenticated', isSignedIn ? 'true' : 'false');
       setIsAuthenticated(isSignedIn);
+      if (event === 'SIGNED_OUT') {
+        setUnauthedStackKey((k) => k + 1);
+      }
     });
 
     return () => {
@@ -395,7 +426,9 @@ export default function App() {
       <NavigationContainer>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           {!isAuthenticated ? (
-            <Stack.Screen name="Unauthed" component={UnauthedStack} />
+            <Stack.Screen name="Unauthed" options={{ headerShown: false }}>
+              {() => <UnauthedFlow stackKey={unauthedStackKey} />}
+            </Stack.Screen>
           ) : (
             <Stack.Screen name="Main" component={MainTabs} />
           )}

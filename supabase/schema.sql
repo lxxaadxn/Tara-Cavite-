@@ -39,9 +39,13 @@ CREATE TABLE IF NOT EXISTS public.places (
   longitude DECIMAL(11, 8),
   image_url TEXT,
   description TEXT,
+  ntdp_category TEXT,
+  source_slug TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS places_source_slug_uidx ON public.places (source_slug);
 
 -- Saved List Items (many-to-many relationship between lists and places)
 CREATE TABLE IF NOT EXISTS public.saved_list_items (
