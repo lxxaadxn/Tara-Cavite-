@@ -8,6 +8,7 @@ import { Header } from '../components/Header';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Place } from '../data/mockData';
+import { parsePlaceCoords } from '../lib/placeCoords';
 
 const PlaceDetailScreen: React.FC = () => {
   const route = useRoute();
@@ -79,6 +80,12 @@ const PlaceDetailScreen: React.FC = () => {
               <JamIcon ionicon="business" size={20} color={Colors.primary} />
               <Text style={styles.detailText}>{place.type}</Text>
             </View>
+            {place.ntdp_category ? (
+              <View style={styles.detailRow}>
+                <JamIcon ionicon="flag-outline" size={20} color={Colors.primary} />
+                <Text style={styles.detailText}>NTDP: {place.ntdp_category}</Text>
+              </View>
+            ) : null}
             <View style={styles.detailRow}>
               <JamIcon ionicon="time" size={20} color={Colors.primary} />
               <Text style={styles.detailText}>{place.hours}</Text>
@@ -88,9 +95,13 @@ const PlaceDetailScreen: React.FC = () => {
           <View style={styles.buttonContainer}>
             <Button
               title="GET DIRECTIONS"
-              onPress={() =>
-                navigation.navigate('Directions' as never, { place } as never)
-              }
+              onPress={() => {
+                const c = parsePlaceCoords(place);
+                const placeForNav: Place = c
+                  ? { ...place, latitude: c.lat, longitude: c.lng }
+                  : place;
+                navigation.navigate('Directions' as never, { place: placeForNav } as never);
+              }}
             />
           </View>
         </Card>

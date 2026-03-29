@@ -13,6 +13,9 @@ export interface Place {
   image?: any; // For require() statements or URI strings
   /** Shown on home cards (Figma) */
   rating?: string;
+  /** From Supabase / LGU STA inventory */
+  description?: string;
+  ntdp_category?: string;
 }
 
 export interface Route {
