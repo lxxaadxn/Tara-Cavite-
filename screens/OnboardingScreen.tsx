@@ -1,22 +1,26 @@
-import React, { useEffect } from 'react';
+import React, { useContext, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/theme';
+import { LaunchAuthContext } from '../contexts/LaunchAuthContext';
 
 /** Slightly longer than before so the landing is easier to read */
 const LANDING_MS = 3200;
 
 /**
- * Brief CaviTour landing — wordmark matches dashboard Header; then navigates to sign-in.
- * Shown on every app launch while logged out (no AsyncStorage flag — see App Unauthed stack).
+ * Brief CaviTour landing — wordmark matches dashboard Header; then Main (signed in) or sign-in flow.
+ * Shown on every cold start for everyone (see App root stack initialRouteName).
  */
 const OnboardingScreen: React.FC = () => {
   const navigation = useNavigation();
+  const { isAuthenticated } = useContext(LaunchAuthContext);
+  const authedRef = useRef(isAuthenticated);
+  authedRef.current = isAuthenticated;
 
   useEffect(() => {
     const t = setTimeout(() => {
-      navigation.replace('Auth' as never);
+      navigation.replace(authedRef.current ? 'Main' : 'Unauthed');
     }, LANDING_MS);
     return () => clearTimeout(t);
   }, [navigation]);

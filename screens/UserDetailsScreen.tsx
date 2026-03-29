@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,38 +9,81 @@ import {
   Alert,
   Image,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
+import { BirthdayPickerModal } from '../components/BirthdayPickerModal';
 import { JamIcon } from '../components/JamIcon';
 import { Colors, Theme } from '../constants/theme';
-import { Header } from '../components/Header';
-import { Button } from '../components/Button';
-import { Card } from '../components/Card';
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 
+const HEADER_GREEN = Colors.accent;
+const TEAL = '#1F4F59';
+const DISPLAY_NAME_GREEN = '#213502';
+const INPUT_BORDER = 'rgba(122, 120, 120, 0.45)';
+const ROW_TEXT = '#241D13';
+const PLACEHOLDER_MUTED = '#AFA7A7';
+
+const DEFAULT_BIRTHDAY = new Date(2005, 1, 20);
+
+function parseBirthdayToDate(display: string): Date {
+  const parsed = Date.parse(display);
+  if (!Number.isNaN(parsed)) return new Date(parsed);
+  return DEFAULT_BIRTHDAY;
+}
+
+function formatBirthdayDisplay(d: Date): string {
+  return d.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
 const UserDetailsScreen: React.FC = () => {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
+  /** Tab bar is hidden on this screen — pad scroll with safe area only */
+  const scrollBottomPad = Math.max(insets.bottom, 12) + 32;
   const [user, setUser] = useState<User | null>(null);
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
-  const [city, setCity] = useState('Dasmarñas, Cavite');
+  const [city, setCity] = useState('Dasmariñas, Cavite');
   const [street, setStreet] = useState('Washington Place');
+  const [birthday, setBirthday] = useState('February 20, 2005');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [editingUsername, setEditingUsername] = useState(false);
   const [editingEmail, setEditingEmail] = useState(false);
   const [editingCity, setEditingCity] = useState(false);
   const [editingStreet, setEditingStreet] = useState(false);
-  
-  // Store original values for cancel functionality
+  const [birthdayModalVisible, setBirthdayModalVisible] = useState(false);
+  const [keyboardPad, setKeyboardPad] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
+
   const [originalUsername, setOriginalUsername] = useState('');
   const [originalEmail, setOriginalEmail] = useState('');
   const [originalCity, setOriginalCity] = useState('');
   const [originalStreet, setOriginalStreet] = useState('');
+
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const onShow = Keyboard.addListener(showEvt, (e) => {
+      setKeyboardPad(Math.max(0, e.endCoordinates.height - 24));
+    });
+    const onHide = Keyboard.addListener(hideEvt, () => setKeyboardPad(0));
+    return () => {
+      onShow.remove();
+      onHide.remove();
+    };
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -50,22 +93,29 @@ const UserDetailsScreen: React.FC = () => {
         // Load from user_profiles table first, fallback to user_metadata
         const { data: profile } = await supabase
           .from('user_profiles')
-          .select('username, city, street, avatar_url')
+          .select('username, city, street, avatar_url, birthday')
           .eq('id', u.id)
           .single();
-        
-        const usernameValue = profile?.username || (u.user_metadata?.username as string) || u.email?.split('@')[0] || '';
-        const cityValue = profile?.city || (u.user_metadata?.city as string) || 'Dasmarñas, Cavite';
-        const streetValue = profile?.street || (u.user_metadata?.street as string) || 'Washington Place';
+
+        const usernameValue =
+          profile?.username || (u.user_metadata?.username as string) || u.email?.split('@')[0] || '';
+        const cityValue =
+          profile?.city || (u.user_metadata?.city as string) || 'Dasmariñas, Cavite';
+        const streetValue =
+          profile?.street || (u.user_metadata?.street as string) || 'Washington Place';
+        const birthdayValue =
+          (profile as { birthday?: string } | null)?.birthday ||
+          (u.user_metadata?.birthday as string) ||
+          'February 20, 2005';
         const avatarValue = profile?.avatar_url || (u.user_metadata?.avatar_url as string | null);
-        
+
         setUsername(usernameValue);
         setEmail(u.email || '');
         setAvatarUrl(avatarValue);
         setCity(cityValue);
         setStreet(streetValue);
-        
-        // Store original values
+        setBirthday(birthdayValue);
+
         setOriginalUsername(usernameValue);
         setOriginalEmail(u.email || '');
         setOriginalCity(cityValue);
@@ -201,6 +251,41 @@ const UserDetailsScreen: React.FC = () => {
     }
   };
 
+  const handleSaveBirthday = async (valueOverride?: string) => {
+    if (!user) return;
+    setSaving(true);
+    try {
+      const trimmed = (valueOverride ?? birthday).trim();
+      const { error: profileError } = await supabase.from('user_profiles').upsert(
+        {
+          id: user.id,
+          birthday: trimmed,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'id' }
+      );
+
+      if (profileError) {
+        const { error: authError } = await supabase.auth.updateUser({
+          data: { ...user.user_metadata, birthday: trimmed },
+        });
+        if (authError) throw authError;
+      } else {
+        await supabase.auth.updateUser({
+          data: { ...user.user_metadata, birthday: trimmed },
+        });
+      }
+
+      setBirthday(trimmed);
+      const { data: { user: updatedUser } } = await supabase.auth.getUser();
+      if (updatedUser) setUser(updatedUser);
+    } catch (e) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to save.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -208,7 +293,7 @@ const UserDetailsScreen: React.FC = () => {
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: [ImagePicker.MediaType.Images],
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
@@ -220,7 +305,7 @@ const UserDetailsScreen: React.FC = () => {
     try {
       // Read file as base64 using expo-file-system (most reliable for React Native)
       const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
+        encoding: 'base64',
       });
       
       if (!base64 || base64.length === 0) {
@@ -336,17 +421,60 @@ const UserDetailsScreen: React.FC = () => {
   // Use current username state if available, otherwise fallback
   const displayName = username || user?.user_metadata?.username || user?.email?.split('@')[0] || 'Username';
 
+  const scrollFormTowardBottom = useCallback(() => {
+    requestAnimationFrame(() => {
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+    });
+  }, []);
+
+  const openBirthdayPicker = useCallback(() => {
+    setBirthdayModalVisible(true);
+  }, []);
+
+  const onBirthdayPicked = (d: Date) => {
+    setBirthdayModalVisible(false);
+    const formatted = formatBirthdayDisplay(d);
+    setBirthday(formatted);
+    void handleSaveBirthday(formatted);
+  };
+
+  const keyboardAvoidOffset = insets.top + 54;
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <Header
-        title="User Details"
-        showBack
-        showNotification
-        darkBackground
-        onNotificationPress={() => navigation.navigate('Notifications' as never)}
-      />
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Profile Avatar */}
+    <View style={styles.container}>
+      <View style={[styles.greenHeader, { paddingTop: insets.top + 10 }]}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            style={styles.headerIconBtn}
+            onPress={() => navigation.goBack()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <JamIcon ionicon="chevron-left" size={26} color={Colors.white} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle} pointerEvents="none">
+            User Details
+          </Text>
+          <View style={styles.headerIconBtn} />
+        </View>
+      </View>
+      <KeyboardAvoidingView
+        style={styles.flex1}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? keyboardAvoidOffset : 0}
+      >
+        <ScrollView
+          ref={scrollRef}
+          style={styles.content}
+          contentContainerStyle={{
+            paddingBottom: scrollBottomPad + keyboardPad,
+            flexGrow: 1,
+          }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+        >
         <View style={styles.avatarSection}>
           <TouchableOpacity
             style={styles.avatarContainer}
@@ -356,20 +484,14 @@ const UserDetailsScreen: React.FC = () => {
             accessibilityRole="button"
           >
             {avatarUrl ? (
-              <Image 
-                source={{ uri: avatarUrl }} 
+              <Image
+                source={{ uri: avatarUrl }}
                 style={styles.avatar}
-                onError={(error) => {
-                  console.error('Image load error:', error);
-                  setAvatarUrl(null);
-                }}
-                onLoad={() => {
-                  console.log('Image loaded successfully:', avatarUrl);
-                }}
+                onError={() => setAvatarUrl(null)}
               />
             ) : (
               <View style={styles.avatarPlaceholder}>
-                <JamIcon ionicon="person" size={60} color={Colors.primary} />
+                <JamIcon ionicon="person" size={60} color={TEAL} />
               </View>
             )}
             <View style={styles.editAvatarButton}>
@@ -384,75 +506,71 @@ const UserDetailsScreen: React.FC = () => {
           <Text style={styles.emailDisplay}>{user?.email ?? 'username@gmail.com'}</Text>
         </View>
 
-        {/* Username Field */}
-        <View style={styles.fieldContainer}>
-          <Text style={styles.fieldLabel}>Username</Text>
-          <View style={[styles.inputRow, editingUsername && styles.inputRowEditing]}>
+        <View style={styles.formBlock}>
+          <Text style={[styles.formLabel, styles.formLabelFirst]}>Username</Text>
+          <View style={[styles.inputPill, editingUsername && styles.inputPillFocused]}>
             <TextInput
-              style={[styles.input, !editingUsername && styles.inputReadOnly]}
+              style={styles.inputPillText}
               value={username}
               onChangeText={setUsername}
-              placeholder="Enter username"
-              placeholderTextColor={Colors.text.light}
+              placeholder="Username"
+              placeholderTextColor={PLACEHOLDER_MUTED}
               editable={editingUsername}
               autoFocus={editingUsername}
               accessibilityLabel="Username input"
             />
             {editingUsername ? (
-              <View style={styles.editActions}>
+              <View style={styles.pillActions}>
                 <TouchableOpacity
-                  style={styles.cancelButton}
                   onPress={() => {
                     setUsername(originalUsername);
                     setEditingUsername(false);
                   }}
                   disabled={saving}
-                  accessibilityLabel="Cancel editing username"
+                  hitSlop={8}
+                  accessibilityLabel="Cancel username"
                   accessibilityRole="button"
                 >
-                  <JamIcon ionicon="close-circle" size={24} color={Colors.text.secondary} />
+                  <JamIcon ionicon="close-circle" size={22} color={Colors.text.secondary} />
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={styles.saveButton}
                   onPress={handleSaveUsername}
                   disabled={saving}
+                  hitSlop={8}
                   accessibilityLabel="Save username"
                   accessibilityRole="button"
                 >
                   {saving ? (
-                    <ActivityIndicator size="small" color={Colors.primary} />
+                    <ActivityIndicator size="small" color={TEAL} />
                   ) : (
-                    <JamIcon ionicon="checkmark-circle" size={24} color={Colors.accent} />
+                    <JamIcon ionicon="checkmark-circle" size={22} color={Colors.accent} />
                   )}
                 </TouchableOpacity>
               </View>
             ) : (
               <TouchableOpacity
-                style={styles.editButton}
                 onPress={() => {
                   setOriginalUsername(username);
                   setEditingUsername(true);
                 }}
                 disabled={saving}
+                style={styles.pencilInPill}
                 accessibilityLabel="Edit username"
                 accessibilityRole="button"
               >
-                <JamIcon ionicon="create-outline" size={24} color={Colors.primary} />
+                <JamIcon ionicon="create-outline" size={22} color={TEAL} />
               </TouchableOpacity>
             )}
           </View>
-        </View>
 
-        {/* Email Field */}
-        <View style={styles.fieldContainer}>
-          <Text style={styles.fieldLabel}>Email</Text>
-          <View style={[styles.inputRow, editingEmail && styles.inputRowEditing]}>
+          <Text style={styles.formLabel}>Email</Text>
+          <View style={[styles.inputPill, editingEmail && styles.inputPillFocused]}>
             <TextInput
-              style={[styles.input, !editingEmail && styles.inputReadOnly]}
+              style={styles.inputPillText}
               value={email}
               onChangeText={setEmail}
-              placeholder="Enter email"
-              placeholderTextColor={Colors.text.light}
+              placeholder="Email"
+              placeholderTextColor={PLACEHOLDER_MUTED}
               keyboardType="email-address"
               autoCapitalize="none"
               editable={editingEmail}
@@ -460,324 +578,390 @@ const UserDetailsScreen: React.FC = () => {
               accessibilityLabel="Email input"
             />
             {editingEmail ? (
-              <View style={styles.editActions}>
+              <View style={styles.pillActions}>
                 <TouchableOpacity
-                  style={styles.cancelButton}
                   onPress={() => {
                     setEmail(originalEmail);
                     setEditingEmail(false);
                   }}
                   disabled={saving}
-                  accessibilityLabel="Cancel editing email"
+                  hitSlop={8}
+                  accessibilityLabel="Cancel email"
                   accessibilityRole="button"
                 >
-                  <JamIcon ionicon="close-circle" size={24} color={Colors.text.secondary} />
+                  <JamIcon ionicon="close-circle" size={22} color={Colors.text.secondary} />
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={styles.saveButton}
                   onPress={handleSaveEmail}
                   disabled={saving}
+                  hitSlop={8}
                   accessibilityLabel="Save email"
                   accessibilityRole="button"
                 >
                   {saving ? (
-                    <ActivityIndicator size="small" color={Colors.primary} />
+                    <ActivityIndicator size="small" color={TEAL} />
                   ) : (
-                    <JamIcon ionicon="checkmark-circle" size={24} color={Colors.accent} />
+                    <JamIcon ionicon="checkmark-circle" size={22} color={Colors.accent} />
                   )}
                 </TouchableOpacity>
               </View>
             ) : (
               <TouchableOpacity
-                style={styles.editButton}
                 onPress={() => {
                   setOriginalEmail(email);
                   setEditingEmail(true);
                 }}
                 disabled={saving}
+                style={styles.pencilInPill}
                 accessibilityLabel="Edit email"
                 accessibilityRole="button"
               >
-                <JamIcon ionicon="create-outline" size={24} color={Colors.primary} />
+                <JamIcon ionicon="create-outline" size={22} color={TEAL} />
               </TouchableOpacity>
             )}
           </View>
-        </View>
 
-        {/* Address Section */}
-        <View style={styles.fieldContainer}>
-          <Text style={styles.addressLabel}>Address</Text>
-          <View style={styles.addressRow}>
-            <JamIcon ionicon="location" size={24} color={Colors.primary} />
-            <View style={styles.addressInputRow}>
+          <Text style={styles.sectionTitle}>Address</Text>
+          <View style={styles.infoRow}>
+            <JamIcon ionicon="location-outline" size={22} color={TEAL} />
+            <View style={styles.infoRowMid}>
               {editingCity ? (
                 <TextInput
-                  style={styles.addressInput}
+                  style={styles.infoRowInput}
                   value={city}
                   onChangeText={setCity}
-                  placeholder="City"
-                  placeholderTextColor={Colors.text.light}
+                  placeholder="City, province"
+                  placeholderTextColor={PLACEHOLDER_MUTED}
                   autoFocus={editingCity}
+                  onFocus={scrollFormTowardBottom}
                   accessibilityLabel="City input"
                 />
               ) : (
-                <Text style={styles.addressText}>{city}</Text>
-              )}
-              {editingCity ? (
-                <View style={styles.editActions}>
-                  <TouchableOpacity
-                    style={styles.cancelButton}
-                    onPress={() => {
-                      setCity(originalCity);
-                      setEditingCity(false);
-                    }}
-                    disabled={saving}
-                    accessibilityLabel="Cancel editing city"
-                    accessibilityRole="button"
-                  >
-                    <JamIcon ionicon="close-circle" size={24} color={Colors.text.secondary} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.saveButton}
-                    onPress={handleSaveAddress}
-                    disabled={saving}
-                    accessibilityLabel="Save city"
-                    accessibilityRole="button"
-                  >
-                    {saving ? (
-                      <ActivityIndicator size="small" color={Colors.primary} />
-                    ) : (
-                      <JamIcon ionicon="checkmark-circle" size={24} color={Colors.accent} />
-                    )}
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <TouchableOpacity
-                  style={styles.editButton}
-                  onPress={() => {
-                    setOriginalCity(city);
-                    setEditingCity(true);
-                  }}
-                  disabled={saving}
-                  accessibilityLabel="Edit city"
-                  accessibilityRole="button"
-                >
-                  <JamIcon ionicon="create-outline" size={24} color={Colors.primary} />
-                </TouchableOpacity>
+                <Text style={styles.infoRowText}>{city}</Text>
               )}
             </View>
+            {editingCity ? (
+              <View style={styles.pillActions}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setCity(originalCity);
+                    setEditingCity(false);
+                  }}
+                  disabled={saving}
+                  hitSlop={8}
+                  accessibilityLabel="Cancel city"
+                  accessibilityRole="button"
+                >
+                  <JamIcon ionicon="close-circle" size={22} color={Colors.text.secondary} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleSaveAddress}
+                  disabled={saving}
+                  hitSlop={8}
+                  accessibilityLabel="Save city"
+                  accessibilityRole="button"
+                >
+                  {saving ? (
+                    <ActivityIndicator size="small" color={TEAL} />
+                  ) : (
+                    <JamIcon ionicon="checkmark-circle" size={22} color={Colors.accent} />
+                  )}
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                onPress={() => {
+                  setOriginalCity(city);
+                  setEditingCity(true);
+                }}
+                disabled={saving}
+                style={styles.rowPencil}
+                accessibilityLabel="Edit city"
+                accessibilityRole="button"
+              >
+                <JamIcon ionicon="create-outline" size={22} color={TEAL} />
+              </TouchableOpacity>
+            )}
           </View>
-          <View style={styles.addressRow}>
-            <JamIcon ionicon="home-outline" size={24} color={Colors.primary} />
-            <View style={styles.addressInputRow}>
+
+          <View style={[styles.infoRow, styles.infoRowLast]}>
+            <JamIcon ionicon="home-outline" size={22} color={TEAL} />
+            <View style={styles.infoRowMid}>
               {editingStreet ? (
                 <TextInput
-                  style={styles.addressInput}
+                  style={styles.infoRowInput}
                   value={street}
                   onChangeText={setStreet}
-                  placeholder="Street address"
-                  placeholderTextColor={Colors.text.light}
+                  placeholder="Street / subdivision"
+                  placeholderTextColor={PLACEHOLDER_MUTED}
                   autoFocus={editingStreet}
-                  accessibilityLabel="Street address input"
+                  onFocus={scrollFormTowardBottom}
+                  accessibilityLabel="Street input"
                 />
               ) : (
-                <Text style={styles.addressText}>{street}</Text>
-              )}
-              {editingStreet ? (
-                <View style={styles.editActions}>
-                  <TouchableOpacity
-                    style={styles.cancelButton}
-                    onPress={() => {
-                      setStreet(originalStreet);
-                      setEditingStreet(false);
-                    }}
-                    disabled={saving}
-                    accessibilityLabel="Cancel editing street"
-                    accessibilityRole="button"
-                  >
-                    <JamIcon ionicon="close-circle" size={24} color={Colors.text.secondary} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.saveButton}
-                    onPress={handleSaveAddress}
-                    disabled={saving}
-                    accessibilityLabel="Save street"
-                    accessibilityRole="button"
-                  >
-                    {saving ? (
-                      <ActivityIndicator size="small" color={Colors.primary} />
-                    ) : (
-                      <JamIcon ionicon="checkmark-circle" size={24} color={Colors.accent} />
-                    )}
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <TouchableOpacity
-                  style={styles.editButton}
-                  onPress={() => {
-                    setOriginalStreet(street);
-                    setEditingStreet(true);
-                  }}
-                  disabled={saving}
-                  accessibilityLabel="Edit street"
-                  accessibilityRole="button"
-                >
-                  <JamIcon ionicon="create-outline" size={24} color={Colors.primary} />
-                </TouchableOpacity>
+                <Text style={styles.infoRowText}>{street}</Text>
               )}
             </View>
+            {editingStreet ? (
+              <View style={styles.pillActions}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setStreet(originalStreet);
+                    setEditingStreet(false);
+                  }}
+                  disabled={saving}
+                  hitSlop={8}
+                  accessibilityLabel="Cancel street"
+                  accessibilityRole="button"
+                >
+                  <JamIcon ionicon="close-circle" size={22} color={Colors.text.secondary} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleSaveAddress}
+                  disabled={saving}
+                  hitSlop={8}
+                  accessibilityLabel="Save street"
+                  accessibilityRole="button"
+                >
+                  {saving ? (
+                    <ActivityIndicator size="small" color={TEAL} />
+                  ) : (
+                    <JamIcon ionicon="checkmark-circle" size={22} color={Colors.accent} />
+                  )}
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                onPress={() => {
+                  setOriginalStreet(street);
+                  setEditingStreet(true);
+                }}
+                disabled={saving}
+                style={styles.rowPencil}
+                accessibilityLabel="Edit street"
+                accessibilityRole="button"
+              >
+                <JamIcon ionicon="create-outline" size={22} color={TEAL} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <Text style={styles.sectionTitle}>Birthday</Text>
+          <View style={[styles.infoRow, styles.infoRowNoBorder]}>
+            <JamIcon name="calendar" size={22} color={TEAL} />
+            <View style={styles.infoRowMid}>
+              <Text style={styles.infoRowText}>{birthday}</Text>
+            </View>
+            <TouchableOpacity
+              onPress={openBirthdayPicker}
+              disabled={saving}
+              style={styles.rowPencil}
+              accessibilityLabel="Change birthday"
+              accessibilityRole="button"
+            >
+              {saving ? (
+                <ActivityIndicator size="small" color={TEAL} />
+              ) : (
+                <JamIcon ionicon="create-outline" size={22} color={TEAL} />
+              )}
+            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
-    </SafeAreaView>
+      </KeyboardAvoidingView>
+
+      <BirthdayPickerModal
+        visible={birthdayModalVisible}
+        initialDate={parseBirthdayToDate(birthday)}
+        onClose={() => setBirthdayModalVisible(false)}
+        onConfirm={onBirthdayPicked}
+        bottomInset={Math.max(insets.bottom, 16)}
+      />
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  flex1: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.white,
+  },
+  greenHeader: {
+    backgroundColor: HEADER_GREEN,
+    paddingBottom: 14,
+    paddingHorizontal: 8,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerIconBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 20,
+    lineHeight: 24,
+    color: Colors.white,
   },
   content: {
     flex: 1,
   },
   avatarSection: {
     alignItems: 'center',
-    paddingTop: Theme.spacing.xl,
-    paddingBottom: Theme.spacing.lg,
-    marginBottom: Theme.spacing.md,
+    paddingTop: Theme.spacing.lg,
+    paddingBottom: Theme.spacing.md,
+    marginBottom: 8,
   },
   avatarContainer: {
     position: 'relative',
-    marginBottom: Theme.spacing.md,
+    marginBottom: 12,
   },
   avatar: {
     width: 132,
-    height: 130,
+    height: 132,
     borderRadius: 66,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.white,
   },
   avatarPlaceholder: {
     width: 132,
-    height: 130,
+    height: 132,
     borderRadius: 66,
-    backgroundColor: Colors.background,
+    backgroundColor: '#F3F4F3',
     alignItems: 'center',
     justifyContent: 'center',
   },
   editAvatarButton: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.primary,
+    bottom: 2,
+    right: 2,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: TEAL,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: Colors.white,
   },
   displayName: {
+    fontFamily: 'Poppins_700Bold',
     fontSize: 24,
-    fontFamily: 'Poppins',
-    fontWeight: '600',
-    color: Colors.primary,
-    marginBottom: Theme.spacing.xs,
+    lineHeight: 28,
+    color: DISPLAY_NAME_GREEN,
+    marginBottom: 6,
+    textAlign: 'center',
   },
   emailDisplay: {
-    fontSize: 13,
-    fontFamily: 'Poppins',
-    fontWeight: '400',
-    color: Colors.text.light,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 22,
+    color: PLACEHOLDER_MUTED,
+    textAlign: 'center',
   },
-  fieldContainer: {
-    marginHorizontal: Theme.spacing.md,
-    marginBottom: Theme.spacing.lg,
+  formBlock: {
+    paddingHorizontal: 20,
+    paddingTop: 4,
   },
-  fieldLabel: {
-    fontSize: 20,
-    fontFamily: 'Poppins',
-    fontWeight: '500',
-    color: Colors.primary,
-    marginBottom: Theme.spacing.sm,
+  formLabel: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+    lineHeight: 20,
+    color: TEAL,
+    marginBottom: 8,
+    marginTop: 16,
   },
-  inputRow: {
+  formLabelFirst: {
+    marginTop: 0,
+  },
+  sectionTitle: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 16,
+    lineHeight: 22,
+    color: TEAL,
+    marginTop: 22,
+    marginBottom: 10,
+  },
+  inputPill: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.white,
-    borderRadius: 14,
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.sm,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: INPUT_BORDER,
+    paddingLeft: 16,
+    paddingRight: 8,
+    paddingVertical: 4,
+    minHeight: 52,
+    marginBottom: 18,
   },
-  inputRowEditing: {
-    borderWidth: 2,
+  inputPillFocused: {
     borderColor: Colors.accent,
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+    borderWidth: 1.5,
   },
-  input: {
+  inputPillText: {
     flex: 1,
+    fontFamily: 'Poppins_400Regular',
     fontSize: 16,
-    fontFamily: 'Poppins',
-    color: Colors.text.primary,
-    paddingVertical: Theme.spacing.xs,
+    lineHeight: 22,
+    color: ROW_TEXT,
+    paddingVertical: 10,
   },
-  inputReadOnly: {
-    color: Colors.text.primary,
+  pencilInPill: {
+    padding: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  editButton: {
-    padding: Theme.spacing.xs,
-  },
-  editActions: {
+  pillActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Theme.spacing.xs,
+    gap: 4,
   },
-  cancelButton: {
-    padding: Theme.spacing.xs,
-  },
-  saveButton: {
-    padding: Theme.spacing.xs,
-  },
-  addressLabel: {
-    fontSize: 20,
-    fontFamily: 'Poppins',
-    fontWeight: '600',
-    color: Colors.primary,
-    marginBottom: Theme.spacing.md,
-  },
-  addressRow: {
+  infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Theme.spacing.md,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: INPUT_BORDER,
+    gap: 12,
   },
-  addressInputRow: {
+  infoRowLast: {
+    marginBottom: 4,
+  },
+  infoRowNoBorder: {
+    borderBottomWidth: 0,
+  },
+  infoRowMid: {
     flex: 1,
-    flexDirection: 'row',
+    minWidth: 0,
+  },
+  infoRowText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 16,
+    lineHeight: 22,
+    color: ROW_TEXT,
+  },
+  infoRowInput: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 16,
+    lineHeight: 22,
+    color: ROW_TEXT,
+    paddingVertical: 0,
+    margin: 0,
+  },
+  rowPencil: {
+    padding: 8,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: Theme.spacing.sm,
-  },
-  addressInput: {
-    flex: 1,
-    fontSize: 16,
-    fontFamily: 'Poppins',
-    fontWeight: '600',
-    color: Colors.text.primary,
-    paddingVertical: Theme.spacing.xs,
-  },
-  addressText: {
-    flex: 1,
-    fontSize: 16,
-    fontFamily: 'Poppins',
-    fontWeight: '600',
-    color: Colors.text.primary,
   },
 });
 

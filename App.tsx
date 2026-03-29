@@ -1,6 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { getFocusedRouteNameFromRoute, NavigationContainer } from '@react-navigation/native';
+import {
+  CommonActions,
+  createNavigationContainerRef,
+  getFocusedRouteNameFromRoute,
+  NavigationContainer,
+} from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import {
   useFonts,
@@ -21,6 +26,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 
 import { JamIcon } from './components/JamIcon';
 import { Colors } from './constants/Colors';
+import { LaunchAuthContext } from './contexts/LaunchAuthContext';
 import { isStoredSessionInvalidError } from './lib/authHelpers';
 import { supabase } from './lib/supabase';
 
@@ -49,6 +55,7 @@ import CreateItineraryScreen from './screens/CreateItineraryScreen';
 import CategoriesScreen from './screens/CategoriesScreen';
 
 const Stack = createStackNavigator();
+const navigationRef = createNavigationContainerRef();
 const Tab = createBottomTabNavigator();
 
 // Auth Stack
@@ -160,15 +167,6 @@ function MainTabs() {
     shadowOpacity: 0,
   };
 
-  const tabBarForStack =
-    (initialRouteName: string) =>
-    ({ route }: { route: { state?: { routes: { name: string }[]; index: number } } }) => {
-      const focused = getFocusedRouteNameFromRoute(route) ?? initialRouteName;
-      return {
-        tabBarStyle: focused === 'Notifications' ? { display: 'none' } : mainTabBarStyle,
-      };
-    };
-
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -248,7 +246,18 @@ function MainTabs() {
           };
         }}
       />
-      <Tab.Screen name="Profile" component={ProfileStack} options={tabBarForStack('ProfileMain')} />
+      <Tab.Screen
+        name="Profile"
+        component={ProfileStack}
+        options={({ route }) => {
+          const focused = getFocusedRouteNameFromRoute(route) ?? 'ProfileMain';
+          const hideTab =
+            focused === 'Notifications' || focused === 'UserDetails';
+          return {
+            tabBarStyle: hideTab ? { display: 'none' } : mainTabBarStyle,
+          };
+        }}
+      />
     </Tab.Navigator>
   );
 }
@@ -278,9 +287,12 @@ export default function App() {
     Pacifico_400Regular,
   });
   const [authHydrated, setAuthHydrated] = useState(false);
+  const [navigationReady, setNavigationReady] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [unauthedStackKey, setUnauthedStackKey] = useState(0);
   const didClearAuthRef = useRef(false);
+  /** Skip first post-ready effect so Launch stays initial; later auth flips reset to Main / Unauthed. */
+  const skipInitialAuthNavRef = useRef(true);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -401,6 +413,24 @@ export default function App() {
     }
   }, [fontsLoaded, authHydrated]);
 
+  useEffect(() => {
+    if (!fontsLoaded || !authHydrated || !navigationReady) return;
+    if (!navigationRef.isReady()) return;
+    if (skipInitialAuthNavRef.current) {
+      skipInitialAuthNavRef.current = false;
+      return;
+    }
+    if (isAuthenticated) {
+      navigationRef.dispatch(
+        CommonActions.reset({ index: 0, routes: [{ name: 'Main' }] })
+      );
+    } else {
+      navigationRef.dispatch(
+        CommonActions.reset({ index: 0, routes: [{ name: 'Unauthed' }] })
+      );
+    }
+  }, [isAuthenticated, fontsLoaded, authHydrated, navigationReady]);
+
   if (!fontsLoaded) {
     return null;
   }
@@ -420,20 +450,24 @@ export default function App() {
     );
   }
 
-  // Logged out: Unauthed stack always starts on Landing, then Sign In. Logged in: main tabs.
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-          {!isAuthenticated ? (
-            <Stack.Screen name="Unauthed" options={{ headerShown: false }}>
-              {() => <UnauthedFlow stackKey={unauthedStackKey} />}
-            </Stack.Screen>
-          ) : (
-            <Stack.Screen name="Main" component={MainTabs} />
-          )}
-        </Stack.Navigator>
-      </NavigationContainer>
+      <LaunchAuthContext.Provider value={{ isAuthenticated }}>
+        <NavigationContainer
+          ref={navigationRef}
+          onReady={() => setNavigationReady(true)}
+        >
+          <Stack.Navigator screenOptions={{ headerShown: false }}>
+            {!isAuthenticated ? (
+              <Stack.Screen name="Unauthed" options={{ headerShown: false }}>
+                {() => <UnauthedFlow stackKey={unauthedStackKey} />}
+              </Stack.Screen>
+            ) : (
+              <Stack.Screen name="Main" component={MainTabs} />
+            )}
+          </Stack.Navigator>
+        </NavigationContainer>
+      </LaunchAuthContext.Provider>
     </SafeAreaProvider>
   );
 }

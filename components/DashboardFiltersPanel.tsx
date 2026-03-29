@@ -155,6 +155,8 @@ type DashboardFiltersPanelProps = {
    * Omit or empty → all sections (dashboard default).
    */
   sectionIds?: DashboardFilterSectionId[];
+  /** Fires whenever toggle state changes (mount, flip, reset, section set change). */
+  onTogglesChange?: (toggles: Record<string, boolean>) => void;
 };
 
 export function DashboardFiltersPanel({
@@ -162,6 +164,7 @@ export function DashboardFiltersPanel({
   sheet,
   sheetScrollMaxHeight,
   sectionIds,
+  onTogglesChange,
 }: DashboardFiltersPanelProps) {
   const sectionIdsKey =
     sectionIds == null || sectionIds.length === 0
