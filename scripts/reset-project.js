@@ -10,8 +10,9 @@ const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
 
-const root = process.cwd();
-const oldDirs = ["app", "components", "hooks", "constants", "scripts"];
+/** Expo app root (monorepo: apps/mobile) */
+const root = path.join(__dirname, "..", "apps", "mobile");
+const oldDirs = ["app", "components", "hooks", "constants"];
 const exampleDir = "app-example";
 const newAppDir = "app";
 const exampleDirPath = path.join(root, exampleDir);
