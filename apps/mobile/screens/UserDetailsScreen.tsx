@@ -54,7 +54,7 @@ const UserDetailsScreen: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
-  const [city, setCity] = useState('Dasmariñas, Cavite');
+  const [city, setCity] = useState('Cavite');
   const [street, setStreet] = useState('Washington Place');
   const [birthday, setBirthday] = useState('February 20, 2005');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -100,7 +100,7 @@ const UserDetailsScreen: React.FC = () => {
         const usernameValue =
           profile?.username || (u.user_metadata?.username as string) || u.email?.split('@')[0] || '';
         const cityValue =
-          profile?.city || (u.user_metadata?.city as string) || 'Dasmariñas, Cavite';
+          profile?.city || (u.user_metadata?.city as string) || 'Cavite';
         const streetValue =
           profile?.street || (u.user_metadata?.street as string) || 'Washington Place';
         const birthdayValue =

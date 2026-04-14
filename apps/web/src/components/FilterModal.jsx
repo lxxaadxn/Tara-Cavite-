@@ -1,4 +1,26 @@
 import { useEffect } from 'react';
+
+/** Sample Cavite areas for filter chips (UI only). */
+const CAVITE_AREA_LABELS = [
+  'Amadeo',
+  'Alfonso',
+  'Bacoor City',
+  'Carmona City',
+  'Cavite City',
+  'Dasmariñas City',
+  'General Mariano Alvarez',
+  'General Trias City',
+  'Imus City',
+  'Indang',
+  'Magallanes',
+  'Mendez-Nuñez',
+  'Noveleta',
+  'Silang',
+  'Tagaytay City',
+  'Tanza',
+  'Trece Martires City',
+];
+
 const olive = '#7ea00e';
 const CATEGORIES = [
     { label: 'Nature tourism', icon: '🌿' },
@@ -10,8 +32,6 @@ const CATEGORIES = [
     { label: 'Leisure and entertainment', icon: '👑' },
     { label: 'Shopping', icon: '🛍️' },
 ];
-const CITIES = ['Bacoor City', 'Imus City', 'Tagaytay City', 'Dasmariñas City', 'General Trias City'];
-const MUNICIPALITIES = ['Amadeo', 'Silang', 'Tanza', 'Indang', 'Kawit', 'Maragondon'];
 export function FilterModal({ open, onClose }) {
     useEffect(() => {
         if (!open)
@@ -53,21 +73,12 @@ export function FilterModal({ open, onClose }) {
           </section>
 
           <section>
-            <h3 className="font-['Poppins',sans-serif] font-semibold text-sm text-neutral-800 mb-3">Cities</h3>
-            <div className="flex flex-wrap gap-2">
-              {CITIES.map((c) => (<button key={c} type="button" className="px-4 py-2 rounded-full text-sm border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-700">
-                  {c}
-                </button>))}
-            </div>
-          </section>
-
-          <section>
             <h3 className="font-['Poppins',sans-serif] font-semibold text-sm text-neutral-800 mb-3">
-              Municipalities
+              Cities &amp; municipalities (Cavite)
             </h3>
             <div className="flex flex-wrap gap-2">
-              {MUNICIPALITIES.map((m) => (<button key={m} type="button" className="px-4 py-2 rounded-full text-sm border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-700">
-                  {m}
+              {CAVITE_AREA_LABELS.map((c) => (<button key={c} type="button" className="px-4 py-2 rounded-full text-sm border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-700">
+                  {c}
                 </button>))}
             </div>
           </section>

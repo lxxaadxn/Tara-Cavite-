@@ -1,7 +1,5 @@
 /**
- * Tourist Attraction Inventory — City of Dasmariñas, Cavite (STA-v3, Year 2025).
- * Source: STA-v3_CAVITE_2025-1-Dasmariñas-City.pdf (NTDP / barangay per LGU sheet).
- * Addresses: "{name}, {Barangay}, Dasmariñas, Cavite, Philippines" for geocoding & display.
+ * Legacy Dasmariñas-only extract — kept for `scripts/geocode-dasmarinas-sta2025.mjs`.
  */
 
 export type DasmarinasStaRow = {

@@ -191,7 +191,11 @@ export async function addItineraryToSavedList(
 }
 
 export async function placeRowExists(client: SupabaseClient, placeId: string): Promise<boolean> {
-  const { data, error } = await client.from('places').select('id').eq('id', placeId).maybeSingle();
+  const { data, error } = await client
+    .from('v_cavite_establishments')
+    .select('id')
+    .eq('id', placeId)
+    .maybeSingle();
   if (error) throw error;
   return data != null;
 }

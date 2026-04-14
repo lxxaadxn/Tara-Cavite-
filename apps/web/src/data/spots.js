@@ -16,7 +16,7 @@ export const spots = [
     {
         id: 'tinatangi-cafe',
         name: 'Tinatangi Cafe',
-        address: 'Jose Abad Santos Avenue, Brgy. Salawag, Dasmariñas',
+        address: 'Jose Abad Santos Avenue, Brgy. Salawag, Silang, Cavite',
         image: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&q=80',
         lat: 14.231,
         lng: 120.985,
@@ -57,8 +57,8 @@ export const spots = [
     },
 ];
 export const routeStepsDefault = [
-    { title: 'PITX - Dasmariñas', sub: 'Gate 1, 2nd Floor', tag: 'Bus' },
-    { title: 'Salitran - Central Mall Dasmariñas', sub: 'Drop Off' },
-    { title: 'Salitran - Tricycle (Brown)', sub: 'Tinatangi Cafe', tag: 'Tricycle' },
-    { title: 'Tinatangi Cafe', sub: 'Arrive at destination' },
+    { title: 'PITX — Provincial bus', sub: 'Cavite-bound bay', tag: 'Bus' },
+    { title: 'Aguinaldo Hwy — town stop', sub: 'Drop off' },
+    { title: 'Tricycle / last mile', sub: 'Destination', tag: 'Tricycle' },
+    { title: 'Arrive', sub: 'Destination' },
 ];

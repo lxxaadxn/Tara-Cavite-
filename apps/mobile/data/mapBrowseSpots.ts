@@ -27,7 +27,7 @@ export type MapSpot = Place & {
 const tinatangiDemo: MapSpot = {
   id: 'map-tinatangi',
   name: 'Tinatangi Cafe',
-  address: 'Aguinaldo Highway, Dasmariñas, Cavite',
+  address: 'Aguinaldo Highway corridor, Cavite',
   type: 'Cafe',
   hours: '7:00 AM - 10:00 PM',
   latitude: 14.3285,
@@ -38,16 +38,16 @@ const tinatangiDemo: MapSpot = {
   closesAtLabel: 'Closes 10 PM',
   mapCommute: {
     legs: [
-      { id: '1', title: 'PITX — Dasmariñas', subtitle: 'Gate 1, 2nd Floor', kind: 'bus' },
-      { id: '2', title: 'Balibago — Central Mall Dasmariñas', badge: 'Drop Off', kind: 'terminal' },
-      { id: '3', title: 'Balibago — Tricycle (Line 1)', subtitle: 'Tinatangi Cafe', kind: 'tricycle' },
+      { id: '1', title: 'PITX — Cavite corridor', subtitle: 'Provincial bus bay', kind: 'bus' },
+      { id: '2', title: 'Central terminal / mall stop', badge: 'Drop off', kind: 'terminal' },
+      { id: '3', title: 'Local tricycle line', subtitle: 'Tinatangi Cafe', kind: 'tricycle' },
       { id: '4', title: 'Tinatangi Cafe', badge: 'At line of destination', kind: 'destination' },
     ],
     detailSteps: [
-      "In PITX, go to the 2nd Floor, Gate 1. Look for the bus labeled 'Dasma via Aguinaldo Hwy'.",
-      'Pay the conductor ₱45.00 before or as soon as the bus starts moving.',
-      'Get off at Central Mall Dasmariñas. You will see a big mall wall on your left — prepare to get off.',
-      "Walk toward the blue tricycle terminal behind the mall and ask for 'Tinatangi Cafe'.",
+      'From the provincial bus terminal, take a Cavite-bound bus on the Aguinaldo Highway corridor.',
+      'Pay the conductor before or as soon as the bus starts moving.',
+      'Get off at the stop nearest your destination town — ask the conductor if unsure.',
+      'Walk to the local tricycle queue and give the establishment name for the last mile.',
     ],
   },
 };

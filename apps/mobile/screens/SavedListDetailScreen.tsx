@@ -16,7 +16,7 @@ import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/nativ
 import { JamIcon } from '../components/JamIcon';
 import { Place, mockTerminals, mockItineraries, type Terminal, type ItineraryCard } from '../data/mockData';
 import { supabase } from '../lib/supabase';
-import { rowToPlace, type PlaceRow } from '../lib/placesFromSupabase';
+import { rowToPlace, type CavitePlaceRow } from '../lib/placesFromSupabase';
 
 const GREEN = '#7EA00E';
 const TEAL = '#1F4F59';
@@ -28,7 +28,7 @@ const PLACEHOLDER_INPUT = '#B3AAAA';
 const H_PAD = 16;
 
 const PLACES_SELECT =
-  'id, name, address, type, hours, latitude, longitude, image_url, description, ntdp_category';
+  'id, name, ta_name, type_code, ta_category, ntdp_category, city_mun, address, latitude, longitude, description, searchable_text, lgu_slug';
 
 export type SavedListDetailParams = {
   listId: string;
@@ -107,10 +107,13 @@ export default function SavedListDetailScreen() {
 
       const placeIds = (placeLinks ?? []).map((r) => (r as { place_id: string }).place_id);
       if (placeIds.length > 0) {
-        const { data: pRows, error } = await supabase.from('places').select(PLACES_SELECT).in('id', placeIds);
+        const { data: pRows, error } = await supabase
+          .from('v_cavite_establishments')
+          .select(PLACES_SELECT)
+          .in('id', placeIds);
         if (error) throw error;
         for (const row of pRows ?? []) {
-          const p = rowToPlace(row as PlaceRow);
+          const p = rowToPlace(row as CavitePlaceRow);
           if (p) {
             rows.push({
               kind: 'establishment',

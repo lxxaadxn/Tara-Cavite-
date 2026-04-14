@@ -41,6 +41,10 @@ CREATE TABLE IF NOT EXISTS public.places (
   description TEXT,
   ntdp_category TEXT,
   source_slug TEXT,
+  type_code TEXT,
+  city_mun TEXT,
+  barangay TEXT,
+  year_est INTEGER,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
