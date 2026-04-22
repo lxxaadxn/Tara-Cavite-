@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { supabase } from './lib/supabase';
-import { LandingPage } from './pages/LandingPage';
+import { LandingPageClean } from './pages/LandingPageClean';
 import { LoginPage } from './pages/LoginPage';
 import { SignupPage } from './pages/SignupPage';
 import { PrototypeTitlePage } from './pages/PrototypeTitlePage';
@@ -12,6 +12,7 @@ import { SearchPage } from './pages/SearchPage';
 import { PlaceDetailPage } from './pages/PlaceDetailPage';
 import { SavedPage } from './pages/SavedPage';
 import { ItineraryPage } from './pages/ItineraryPage';
+import { ItineraryDetailPage } from './pages/ItineraryDetailPage';
 import { TerminalsPage } from './pages/TerminalsPage';
 import { TerminalDetailPage } from './pages/TerminalDetailPage';
 import { ProfilePage } from './pages/ProfilePage';
@@ -34,7 +35,7 @@ function ProtectedRoute({ children }) {
 export default function App() {
     return (<BrowserRouter>
       <Routes>
-        <Route path="/" element={<LandingPage />}/>
+        <Route path="/" element={<LandingPageClean />}/>
         <Route path="/login" element={<LoginPage />}/>
         <Route path="/signup" element={<SignupPage />}/>
         <Route path="/prototype/title" element={<PrototypeTitlePage />}/>
@@ -49,6 +50,9 @@ export default function App() {
             </ProtectedRoute>}/>
         <Route path="/itinerary" element={<ProtectedRoute>
               <ItineraryPage />
+            </ProtectedRoute>}/>
+        <Route path="/itinerary/:id" element={<ProtectedRoute>
+              <ItineraryDetailPage />
             </ProtectedRoute>}/>
         <Route path="/terminals" element={<ProtectedRoute>
               <TerminalsPage />

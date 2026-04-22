@@ -28,6 +28,9 @@ export function rowToPlace(row) {
     ntdp_category: row.ntdp_category,
     city_mun: row.city_mun ?? null,
     lgu_slug: row.lgu_slug,
+    ta_category: row.ta_category ?? null,
+    type_code: row.type_code ?? null,
+    created_at: row.created_at ?? null,
   };
 }
 
@@ -96,6 +99,36 @@ export async function fetchTrendingPlacesFromSupabase(client, limit = 120) {
     if (p) out.push(p);
   }
   return out;
+}
+
+export async function fetchAllPlacesFromSupabase(client, pageSize = 1000) {
+  const size = Math.min(Math.max(pageSize, 100), 1000);
+  const seen = new Map();
+  let from = 0;
+
+  while (true) {
+    const to = from + size - 1;
+    const { data, error } = await client
+      .from('v_cavite_establishments')
+      .select(CAVITE_SELECT)
+      .not('latitude', 'is', null)
+      .not('longitude', 'is', null)
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
+    if (error) throw new Error(error.message);
+
+    const rows = data ?? [];
+    for (const row of rows) {
+      const p = rowToPlace(row);
+      if (p && !seen.has(p.id)) seen.set(p.id, p);
+    }
+
+    if (rows.length < size) break;
+    from += size;
+  }
+
+  return Array.from(seen.values());
 }
 
 export async function fetchPlaceById(client, id) {

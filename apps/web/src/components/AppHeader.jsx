@@ -36,9 +36,13 @@ export function AppHeader() {
         </nav>
 
         <div className="flex items-center gap-3 shrink-0">
-          <Link to="/saved" className="p-2 rounded-xl text-neutral-500 hover:bg-neutral-100 transition-colors" aria-label="Saved">
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+          <Link
+            to="/saved"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-600 transition hover:bg-neutral-50"
+            aria-label="Saved"
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <path d="m12 21.35-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09A6.02 6.02 0 0 1 16.5 3C19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54z" />
             </svg>
           </Link>
           <Link to="/profile" className="relative rounded-full ring-2 ring-white shadow-md overflow-hidden w-10 h-10 block" aria-label="Profile">
