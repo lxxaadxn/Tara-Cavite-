@@ -39,7 +39,7 @@ const CategoriesScreen: React.FC = () => {
 
   const handleCategoryPress = (category: Category) => {
     // Navigate to filtered places by category
-    navigation.navigate('PlaceDetail' as never, { category: category.name } as never);
+    navigation.navigate('PlaceDetail', { category: category.name });
   };
 
   const renderCategoryItem = ({ item }: { item: Category }) => (
@@ -65,7 +65,7 @@ const CategoriesScreen: React.FC = () => {
         showBack
         showNotification
         darkBackground
-        onNotificationPress={() => navigation.navigate('Notifications' as never)}
+        onNotificationPress={() => navigation.navigate('Notifications')}
       />
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.mainSection}>

@@ -174,7 +174,7 @@ const SignInScreen: React.FC = () => {
 
                 <View style={styles.footerRow}>
                   <Text style={styles.footerMuted}>{"Don't have an account? "}</Text>
-                  <TouchableOpacity onPress={() => navigation.navigate('SignUp' as never)} accessibilityRole="button">
+                  <TouchableOpacity onPress={() => navigation.navigate('SignUp')} accessibilityRole="button">
                     <Text style={styles.footerLink}>Sign up</Text>
                   </TouchableOpacity>
                 </View>
