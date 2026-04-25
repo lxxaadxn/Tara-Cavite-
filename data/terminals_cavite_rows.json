@@ -1,0 +1,731 @@
+[
+  {
+    "Terminal_Id": "1",
+    "Terminal_Name": "SM City Dasmarinas Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Dasmarinas",
+    "Terminal_Brgy": "Sampaloc I",
+    "First_Trip": "04:30",
+    "Last_Trip": "22:30"
+  },
+  {
+    "Terminal_Id": "2",
+    "Terminal_Name": "Robinsons Place Dasmarinas Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Dasmarinas",
+    "Terminal_Brgy": "Sampaloc I",
+    "First_Trip": "04:30",
+    "Last_Trip": "22:30"
+  },
+  {
+    "Terminal_Id": "3",
+    "Terminal_Name": "Vista Mall Dasmarinas Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Dasmarinas",
+    "Terminal_Brgy": "San Agustin I",
+    "First_Trip": "05:00",
+    "Last_Trip": "22:00"
+  },
+  {
+    "Terminal_Id": "4",
+    "Terminal_Name": "WalterMart Dasmarinas Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Dasmarinas",
+    "Terminal_Brgy": "Dasmarinas Bayan",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:30"
+  },
+  {
+    "Terminal_Id": "5",
+    "Terminal_Name": "The District Dasmarinas Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Dasmarinas",
+    "Terminal_Brgy": "Burol Main",
+    "First_Trip": "05:00",
+    "Last_Trip": "22:00"
+  },
+  {
+    "Terminal_Id": "6",
+    "Terminal_Name": "SM City Bacoor Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Bacoor",
+    "Terminal_Brgy": "Habay I",
+    "First_Trip": "04:30",
+    "Last_Trip": "22:00"
+  },
+  {
+    "Terminal_Id": "7",
+    "Terminal_Name": "SM City Molino Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Bacoor",
+    "Terminal_Brgy": "Molino IV",
+    "First_Trip": "04:30",
+    "Last_Trip": "22:30"
+  },
+  {
+    "Terminal_Id": "8",
+    "Terminal_Name": "NOMO A Vista Lifestyle Center Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Bacoor",
+    "Terminal_Brgy": "Molino III",
+    "First_Trip": "05:00",
+    "Last_Trip": "22:00"
+  },
+  {
+    "Terminal_Id": "9",
+    "Terminal_Name": "SM City Rosario Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Rosario",
+    "Terminal_Brgy": "Tejero",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:30"
+  },
+  {
+    "Terminal_Id": "10",
+    "Terminal_Name": "SM City Trece Martires Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Trece Martires",
+    "Terminal_Brgy": "San Agustin",
+    "First_Trip": "04:30",
+    "Last_Trip": "21:30"
+  },
+  {
+    "Terminal_Id": "11",
+    "Terminal_Name": "WalterMart Trece Martires Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Trece Martires",
+    "Terminal_Brgy": "Hugo Perez",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:00"
+  },
+  {
+    "Terminal_Id": "12",
+    "Terminal_Name": "SM City Tanza Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Tanza",
+    "Terminal_Brgy": "Daang Amaya 1",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:30"
+  },
+  {
+    "Terminal_Id": "13",
+    "Terminal_Name": "Vista Mall Tanza Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Tanza",
+    "Terminal_Brgy": "Tres Cruses",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:00"
+  },
+  {
+    "Terminal_Id": "14",
+    "Terminal_Name": "Robinsons Place Imus Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Imus",
+    "Terminal_Brgy": "Alapan I-C",
+    "First_Trip": "04:30",
+    "Last_Trip": "22:00"
+  },
+  {
+    "Terminal_Id": "15",
+    "Terminal_Name": "The District Imus Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Imus",
+    "Terminal_Brgy": "Alapan I-C",
+    "First_Trip": "05:00",
+    "Last_Trip": "22:00"
+  },
+  {
+    "Terminal_Id": "16",
+    "Terminal_Name": "Main Square Mall Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Bacoor",
+    "Terminal_Brgy": "Bayanan",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:00"
+  },
+  {
+    "Terminal_Id": "17",
+    "Terminal_Name": "Robinsons Place General Trias Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "General Trias",
+    "Terminal_Brgy": "Tapia",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:30"
+  },
+  {
+    "Terminal_Id": "18",
+    "Terminal_Name": "Vista Mall General Trias Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "General Trias",
+    "Terminal_Brgy": "Santiago",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:30"
+  },
+  {
+    "Terminal_Id": "19",
+    "Terminal_Name": "WalterMart General Trias Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "General Trias",
+    "Terminal_Brgy": "Tejero",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:00"
+  },
+  {
+    "Terminal_Id": "20",
+    "Terminal_Name": "Vista Mall Kawit Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Kawit",
+    "Terminal_Brgy": "Binakayan-Aplaya",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:00"
+  },
+  {
+    "Terminal_Id": "21",
+    "Terminal_Name": "RFC Mall Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "General Trias",
+    "Terminal_Brgy": "San Francisco",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:00"
+  },
+  {
+    "Terminal_Id": "22",
+    "Terminal_Name": "Ayala Malls Vermosa Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Imus",
+    "Terminal_Brgy": "Pasong Buaya II",
+    "First_Trip": "05:00",
+    "Last_Trip": "22:00"
+  },
+  {
+    "Terminal_Id": "23",
+    "Terminal_Name": "Acienda Designer Outlet Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Silang",
+    "Terminal_Brgy": "Lalaan II",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:30"
+  },
+  {
+    "Terminal_Id": "24",
+    "Terminal_Name": "WalterMart Carmona Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Carmona",
+    "Terminal_Brgy": "Maduya",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:30"
+  },
+  {
+    "Terminal_Id": "25",
+    "Terminal_Name": "Fora Mall Tagaytay Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Tagaytay",
+    "Terminal_Brgy": "Silang Junction South",
+    "First_Trip": "05:00",
+    "Last_Trip": "22:00"
+  },
+  {
+    "Terminal_Id": "26",
+    "Terminal_Name": "Pala-Pala Transport Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Dasmarinas",
+    "Terminal_Brgy": "Sampaloc I",
+    "First_Trip": "04:00",
+    "Last_Trip": "23:00"
+  },
+  {
+    "Terminal_Id": "27",
+    "Terminal_Name": "Dasmarinas Bayan Jeepney Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Dasmarinas",
+    "Terminal_Brgy": "Dasmarinas Bayan",
+    "First_Trip": "04:30",
+    "Last_Trip": "22:00"
+  },
+  {
+    "Terminal_Id": "28",
+    "Terminal_Name": "DBB-C Transport Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Dasmarinas",
+    "Terminal_Brgy": "Sampaloc IV",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:00"
+  },
+  {
+    "Terminal_Id": "29",
+    "Terminal_Name": "Salitran Transport Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Dasmarinas",
+    "Terminal_Brgy": "Salitran I",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:00"
+  },
+  {
+    "Terminal_Id": "30",
+    "Terminal_Name": "Paliparan Transport Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Dasmarinas",
+    "Terminal_Brgy": "Paliparan III",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:00"
+  },
+  {
+    "Terminal_Id": "31",
+    "Terminal_Name": "General Trias City Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "General Trias",
+    "Terminal_Brgy": "Poblacion",
+    "First_Trip": "04:30",
+    "Last_Trip": "21:30"
+  },
+  {
+    "Terminal_Id": "32",
+    "Terminal_Name": "Tejero Transport Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Rosario",
+    "Terminal_Brgy": "Tejero",
+    "First_Trip": "04:30",
+    "Last_Trip": "21:30"
+  },
+  {
+    "Terminal_Id": "33",
+    "Terminal_Name": "Imus Transport Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Imus",
+    "Terminal_Brgy": "Poblacion III-A",
+    "First_Trip": "04:30",
+    "Last_Trip": "22:00"
+  },
+  {
+    "Terminal_Id": "34",
+    "Terminal_Name": "Bacoor Strike Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Bacoor",
+    "Terminal_Brgy": "Zapote V",
+    "First_Trip": "04:30",
+    "Last_Trip": "22:00"
+  },
+  {
+    "Terminal_Id": "35",
+    "Terminal_Name": "Trece Martires City Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Trece Martires",
+    "Terminal_Brgy": "Luciano",
+    "First_Trip": "04:30",
+    "Last_Trip": "21:30"
+  },
+  {
+    "Terminal_Id": "36",
+    "Terminal_Name": "Tanza Public Transport Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Tanza",
+    "Terminal_Brgy": "Poblacion I",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:00"
+  },
+  {
+    "Terminal_Id": "37",
+    "Terminal_Name": "Naic Transport Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Naic",
+    "Terminal_Brgy": "Poblacion",
+    "First_Trip": "05:00",
+    "Last_Trip": "20:30"
+  },
+  {
+    "Terminal_Id": "38",
+    "Terminal_Name": "Maragondon Transport Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Maragondon",
+    "Terminal_Brgy": "Poblacion I-A",
+    "First_Trip": "05:00",
+    "Last_Trip": "20:00"
+  },
+  {
+    "Terminal_Id": "39",
+    "Terminal_Name": "Ternate Transport Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Ternate",
+    "Terminal_Brgy": "Poblacion I",
+    "First_Trip": "05:00",
+    "Last_Trip": "20:00"
+  },
+  {
+    "Terminal_Id": "40",
+    "Terminal_Name": "Indang Transport Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Indang",
+    "Terminal_Brgy": "Poblacion III",
+    "First_Trip": "05:00",
+    "Last_Trip": "20:00"
+  },
+  {
+    "Terminal_Id": "41",
+    "Terminal_Name": "Silang Bayan Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Silang",
+    "Terminal_Brgy": "Poblacion I",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:00"
+  },
+  {
+    "Terminal_Id": "42",
+    "Terminal_Name": "Tagaytay Olivarez Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Tagaytay",
+    "Terminal_Brgy": "San Jose",
+    "First_Trip": "04:30",
+    "Last_Trip": "22:00"
+  },
+  {
+    "Terminal_Id": "43",
+    "Terminal_Name": "Kawit Transport Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Kawit",
+    "Terminal_Brgy": "Binakayan",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:00"
+  },
+  {
+    "Terminal_Id": "44",
+    "Terminal_Name": "Noveleta Transport Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Noveleta",
+    "Terminal_Brgy": "Poblacion",
+    "First_Trip": "05:00",
+    "Last_Trip": "20:30"
+  },
+  {
+    "Terminal_Id": "45",
+    "Terminal_Name": "Cavite City Transport Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Cavite City",
+    "Terminal_Brgy": "San Roque",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:00"
+  },
+  {
+    "Terminal_Id": "46",
+    "Terminal_Name": "SM City Imus Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Imus",
+    "Terminal_Brgy": "Anabu II-E",
+    "First_Trip": "05:00",
+    "Last_Trip": "22:00"
+  },
+  {
+    "Terminal_Id": "47",
+    "Terminal_Name": "Anabu Kostal Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Imus",
+    "Terminal_Brgy": "Anabu II-B",
+    "First_Trip": "04:30",
+    "Last_Trip": "22:00"
+  },
+  {
+    "Terminal_Id": "48",
+    "Terminal_Name": "Buhay na Tubig Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Imus",
+    "Terminal_Brgy": "Buhay na Tubig",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:30"
+  },
+  {
+    "Terminal_Id": "49",
+    "Terminal_Name": "Zapote Kalinisan Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Bacoor",
+    "Terminal_Brgy": "Zapote III",
+    "First_Trip": "04:30",
+    "Last_Trip": "22:00"
+  },
+  {
+    "Terminal_Id": "50",
+    "Terminal_Name": "Longos Transport Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Bacoor",
+    "Terminal_Brgy": "Longos",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:30"
+  },
+  {
+    "Terminal_Id": "51",
+    "Terminal_Name": "Niog Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Bacoor",
+    "Terminal_Brgy": "Niog I",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:30"
+  },
+  {
+    "Terminal_Id": "52",
+    "Terminal_Name": "Talaba Transport Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Bacoor",
+    "Terminal_Brgy": "Talaba V",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:30"
+  },
+  {
+    "Terminal_Id": "53",
+    "Terminal_Name": "Manggahan Transport Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "General Trias",
+    "Terminal_Brgy": "Manggahan",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:30"
+  },
+  {
+    "Terminal_Id": "54",
+    "Terminal_Name": "Arnaldo Highway Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "General Trias",
+    "Terminal_Brgy": "San Francisco",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:30"
+  },
+  {
+    "Terminal_Id": "55",
+    "Terminal_Name": "Governor Ferrer Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "General Trias",
+    "Terminal_Brgy": "Pinagtipunan",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:00"
+  },
+  {
+    "Terminal_Id": "56",
+    "Terminal_Name": "Lancaster New City Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "General Trias",
+    "Terminal_Brgy": "Navarro",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:30"
+  },
+  {
+    "Terminal_Id": "57",
+    "Terminal_Name": "EPZA Rosario Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Rosario",
+    "Terminal_Brgy": "Tejero",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:30"
+  },
+  {
+    "Terminal_Id": "58",
+    "Terminal_Name": "Tanza Crossing Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Tanza",
+    "Terminal_Brgy": "Paradahan I",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:00"
+  },
+  {
+    "Terminal_Id": "59",
+    "Terminal_Name": "Amaya Transport Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Tanza",
+    "Terminal_Brgy": "Amaya I",
+    "First_Trip": "05:00",
+    "Last_Trip": "20:30"
+  },
+  {
+    "Terminal_Id": "60",
+    "Terminal_Name": "Naic Highway Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Naic",
+    "Terminal_Brgy": "Bagong Kalsada",
+    "First_Trip": "05:00",
+    "Last_Trip": "20:30"
+  },
+  {
+    "Terminal_Id": "61",
+    "Terminal_Name": "Ternate Junction Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Naic",
+    "Terminal_Brgy": "Labac",
+    "First_Trip": "05:00",
+    "Last_Trip": "20:00"
+  },
+  {
+    "Terminal_Id": "62",
+    "Terminal_Name": "Indang Junction Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Indang",
+    "Terminal_Brgy": "Bancod",
+    "First_Trip": "05:00",
+    "Last_Trip": "20:00"
+  },
+  {
+    "Terminal_Id": "63",
+    "Terminal_Name": "Trece-Indang Gateway Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Trece Martires",
+    "Terminal_Brgy": "Conchu",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:00"
+  },
+  {
+    "Terminal_Id": "64",
+    "Terminal_Name": "Silang Junction North Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Tagaytay",
+    "Terminal_Brgy": "Silang Junction North",
+    "First_Trip": "05:00",
+    "Last_Trip": "22:00"
+  },
+  {
+    "Terminal_Id": "65",
+    "Terminal_Name": "Mahogany Transport Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Tagaytay",
+    "Terminal_Brgy": "Maharlika East",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:30"
+  },
+  {
+    "Terminal_Id": "66",
+    "Terminal_Name": "People's Park Access Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Tagaytay",
+    "Terminal_Brgy": "Sungay East",
+    "First_Trip": "05:30",
+    "Last_Trip": "20:30"
+  },
+  {
+    "Terminal_Id": "67",
+    "Terminal_Name": "Carmona Exit Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Carmona",
+    "Terminal_Brgy": "Maduya",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:30"
+  },
+  {
+    "Terminal_Id": "68",
+    "Terminal_Name": "GMA Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "General Mariano Alvarez",
+    "Terminal_Brgy": "Poblacion",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:00"
+  },
+  {
+    "Terminal_Id": "69",
+    "Terminal_Name": "Golden City Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "General Mariano Alvarez",
+    "Terminal_Brgy": "San Jose",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:00"
+  },
+  {
+    "Terminal_Id": "70",
+    "Terminal_Name": "Manggahan-GMA Boundary Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "General Mariano Alvarez",
+    "Terminal_Brgy": "Gavino Maderan",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:00"
+  },
+  {
+    "Terminal_Id": "71",
+    "Terminal_Name": "Kawit Centennial Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Kawit",
+    "Terminal_Brgy": "Magdalo",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:00"
+  },
+  {
+    "Terminal_Id": "72",
+    "Terminal_Name": "Binakayan Transport Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Kawit",
+    "Terminal_Brgy": "Binakayan-Kanluran",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:00"
+  },
+  {
+    "Terminal_Id": "73",
+    "Terminal_Name": "Noveleta-Bacoor Boundary Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Noveleta",
+    "Terminal_Brgy": "San Rafael IV",
+    "First_Trip": "05:00",
+    "Last_Trip": "20:30"
+  },
+  {
+    "Terminal_Id": "74",
+    "Terminal_Name": "Cavite City San Antonio Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Cavite City",
+    "Terminal_Brgy": "San Antonio",
+    "First_Trip": "05:00",
+    "Last_Trip": "21:00"
+  },
+  {
+    "Terminal_Id": "75",
+    "Terminal_Name": "Cavite City Dalahican Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Cavite City",
+    "Terminal_Brgy": "Dalahican",
+    "First_Trip": "05:00",
+    "Last_Trip": "20:30"
+  },
+  {
+    "Terminal_Id": "76",
+    "Terminal_Name": "Maragondon Public Market Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Maragondon",
+    "Terminal_Brgy": "Poblacion II",
+    "First_Trip": "05:00",
+    "Last_Trip": "20:00"
+  },
+  {
+    "Terminal_Id": "77",
+    "Terminal_Name": "Magallanes Transport Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Magallanes",
+    "Terminal_Brgy": "Poblacion I",
+    "First_Trip": "05:00",
+    "Last_Trip": "19:30"
+  },
+  {
+    "Terminal_Id": "78",
+    "Terminal_Name": "General Emilio Aguinaldo Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "General Emilio Aguinaldo",
+    "Terminal_Brgy": "Poblacion I",
+    "First_Trip": "05:00",
+    "Last_Trip": "19:30"
+  },
+  {
+    "Terminal_Id": "79",
+    "Terminal_Name": "Alfonso Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Alfonso",
+    "Terminal_Brgy": "Poblacion II",
+    "First_Trip": "05:00",
+    "Last_Trip": "20:00"
+  },
+  {
+    "Terminal_Id": "80",
+    "Terminal_Name": "Mendez Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Mendez",
+    "Terminal_Brgy": "Poblacion I",
+    "First_Trip": "05:00",
+    "Last_Trip": "20:00"
+  },
+  {
+    "Terminal_Id": "81",
+    "Terminal_Name": "Amadeo Terminal",
+    "Terminal_Province": "Cavite",
+    "Terminal_City": "Amadeo",
+    "Terminal_Brgy": "Poblacion I",
+    "First_Trip": "05:00",
+    "Last_Trip": "20:00"
+  }
+]

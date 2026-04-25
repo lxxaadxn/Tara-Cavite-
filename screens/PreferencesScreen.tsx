@@ -111,7 +111,7 @@ const PreferencesScreen: React.FC = () => {
         showBack
         showNotification
         darkBackground
-        onNotificationPress={() => navigation.navigate('Notifications' as never)}
+        onNotificationPress={() => navigation.navigate('Notifications')}
       />
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {renderSection('Travel modes', travelModes, setTravelModes)}

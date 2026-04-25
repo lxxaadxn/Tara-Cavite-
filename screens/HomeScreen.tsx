@@ -50,7 +50,7 @@ const HomeScreen: React.FC = () => {
 
   const handleSearch = () => {
     if (searchQuery.trim()) {
-      navigation.navigate('PlaceDetail' as never, { query: searchQuery.trim() } as never);
+      navigation.navigate('PlaceDetail', { query: searchQuery.trim() });
     }
   };
 
@@ -58,7 +58,7 @@ const HomeScreen: React.FC = () => {
     <TouchableOpacity
       key={place.id}
       style={styles.card}
-      onPress={() => navigation.navigate('PlaceDetail' as never, { place } as never)}
+      onPress={() => navigation.navigate('PlaceDetail', { place })}
       accessibilityLabel={`${place.name}, ${place.address}`}
       accessibilityRole="button"
       activeOpacity={0.9}
@@ -97,7 +97,7 @@ const HomeScreen: React.FC = () => {
         homeBranding
         showNotification
         showFilter={false}
-        onNotificationPress={() => navigation.navigate('Notifications' as never)}
+        onNotificationPress={() => navigation.navigate('Notifications')}
       />
       <View style={styles.searchFilterRow}>
         <View style={styles.searchPill}>

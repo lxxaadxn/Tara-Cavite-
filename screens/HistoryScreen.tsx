@@ -87,7 +87,7 @@ const HistoryScreen: React.FC = () => {
         showBack
         showNotification
         darkBackground
-        onNotificationPress={() => navigation.navigate('Notifications' as never)}
+        onNotificationPress={() => navigation.navigate('Notifications')}
       />
       <View style={styles.content}>
         <View style={styles.filterContainer}>
@@ -96,7 +96,7 @@ const HistoryScreen: React.FC = () => {
             onPress={() => setShowFilter(!showFilter)}
             accessibilityLabel="Filter history"
             accessibilityRole="button"
-            accessibilityExpanded={showFilter}
+            accessibilityState={{ expanded: showFilter }}
           >
             <JamIcon ionicon="filter" size={16} color={Colors.text.primary} />
             <Text style={styles.filterText}>Filter</Text>

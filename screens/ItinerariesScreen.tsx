@@ -88,7 +88,7 @@ const ItinerariesScreen: React.FC = () => {
               longitude: 120.9,
               image: item.image,
             };
-            navigation.navigate('PlaceDetail' as never, { place } as never);
+            navigation.navigate('PlaceDetail', { place });
           }}
           accessibilityLabel={`View ${item.title}`}
           accessibilityRole="button"
@@ -151,7 +151,7 @@ const ItinerariesScreen: React.FC = () => {
 
       <TouchableOpacity
         style={[styles.fab, { bottom: 72 + Math.max(insets.bottom, 10) }]}
-        onPress={() => navigation.navigate('CreateItinerary' as never)}
+        onPress={() => navigation.navigate('CreateItinerary')}
         accessibilityLabel="Add itinerary"
         accessibilityRole="button"
       >

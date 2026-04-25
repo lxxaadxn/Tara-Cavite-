@@ -100,7 +100,7 @@ const SavedListScreen: React.FC = () => {
   };
 
   const handleEdit = (list: SavedList) => {
-    navigation.navigate('NewList' as never, { listId: list.id, listData: list } as never);
+    navigation.navigate('NewList', { listId: list.id, listData: list });
   };
 
   const getIconColor = (iconName: string): string => {
@@ -183,7 +183,7 @@ const SavedListScreen: React.FC = () => {
           showBack
           showNotification
           darkBackground
-          onNotificationPress={() => navigation.navigate('Notifications' as never)}
+          onNotificationPress={() => navigation.navigate('Notifications')}
         />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
@@ -200,13 +200,13 @@ const SavedListScreen: React.FC = () => {
         showBack
         showNotification
         darkBackground
-        onNotificationPress={() => navigation.navigate('Notifications' as never)}
+        onNotificationPress={() => navigation.navigate('Notifications')}
       />
       <View style={styles.content}>
         <View style={styles.buttonContainer}>
           <Button
             title="+ ADD NEW LIST"
-            onPress={() => navigation.navigate('NewList' as never)}
+            onPress={() => navigation.navigate('NewList')}
             accessibilityLabel="Create new list"
           />
         </View>

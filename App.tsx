@@ -22,7 +22,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { JamIcon } from './components/JamIcon';
 import { Colors } from './constants/Colors';
 import { isStoredSessionInvalidError } from './lib/authHelpers';
-import { supabase } from './lib/supabase';
+import { isSupabaseConfigured, supabase } from './lib/supabase';
 
 // Keep native splash (CaviTour logo) visible until app is ready
 SplashScreen.preventAutoHideAsync();
@@ -134,6 +134,7 @@ const MapStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="MapMain" component={MapScreen} />
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
+    <Stack.Screen name="TerminalDetail" component={TerminalDetailScreen} />
     <Stack.Screen name="Directions" component={DirectionsScreen} />
     <Stack.Screen name="Notifications" component={NotificationsScreen} />
   </Stack.Navigator>
@@ -159,15 +160,6 @@ function MainTabs() {
     elevation: 0,
     shadowOpacity: 0,
   };
-
-  const tabBarForStack =
-    (initialRouteName: string) =>
-    ({ route }: { route: { state?: { routes: { name: string }[]; index: number } } }) => {
-      const focused = getFocusedRouteNameFromRoute(route) ?? initialRouteName;
-      return {
-        tabBarStyle: focused === 'Notifications' ? { display: 'none' } : mainTabBarStyle,
-      };
-    };
 
   return (
     <Tab.Navigator
@@ -201,7 +193,9 @@ function MainTabs() {
         options={({ route }) => {
           const focused = getFocusedRouteNameFromRoute(route) ?? 'HomeMain';
           const hideTab =
-            focused === 'Notifications' || focused === 'TerminalDetail';
+            focused === 'Notifications' ||
+            focused === 'TerminalDetail' ||
+            focused === 'Directions';
           return {
             tabBarStyle: hideTab ? { display: 'none' } : mainTabBarStyle,
           };
@@ -231,7 +225,8 @@ function MainTabs() {
           const hideTab =
             focused === 'Notifications' ||
             focused === 'PlaceDetail' ||
-            focused === 'Directions';
+            focused === 'Directions' ||
+            focused === 'TerminalDetail';
           return {
             tabBarStyle: hideTab ? { display: 'none' } : mainTabBarStyle,
           };
@@ -248,7 +243,16 @@ function MainTabs() {
           };
         }}
       />
-      <Tab.Screen name="Profile" component={ProfileStack} options={tabBarForStack('ProfileMain')} />
+      <Tab.Screen
+        name="Profile"
+        component={ProfileStack}
+        options={({ route }) => {
+          const focused = getFocusedRouteNameFromRoute(route) ?? 'ProfileMain';
+          return {
+            tabBarStyle: focused === 'Notifications' ? { display: 'none' } : mainTabBarStyle,
+          };
+        }}
+      />
     </Tab.Navigator>
   );
 }
@@ -283,17 +287,19 @@ export default function App() {
   const didClearAuthRef = useRef(false);
 
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
+    let interval: ReturnType<typeof setInterval> | undefined;
 
     const init = async () => {
       await checkAuthStatus();
       setAuthHydrated(true);
-      interval = setInterval(() => {
-        checkAuthStatus();
-      }, 500);
+      if (isSupabaseConfigured) {
+        interval = setInterval(() => {
+          checkAuthStatus();
+        }, 500);
+      }
     };
 
-    init();
+    void init();
 
     return () => {
       if (interval) {
@@ -304,6 +310,10 @@ export default function App() {
 
   // Sync auth state with Supabase session (persisted across app restarts)
   useEffect(() => {
+    if (!isSupabaseConfigured) {
+      return;
+    }
+
     const updateAuthFromSession = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
@@ -353,6 +363,11 @@ export default function App() {
   }, []);
 
   const checkAuthStatus = async () => {
+    if (!isSupabaseConfigured) {
+      await AsyncStorage.setItem('isAuthenticated', 'false');
+      setIsAuthenticated(false);
+      return;
+    }
     try {
       const { data: { session }, error } = await supabase.auth.getSession();
       if (session) {

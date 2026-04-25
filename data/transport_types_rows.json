@@ -1,0 +1,26 @@
+[
+  {
+    "Transport_Type_Id": "1",
+    "Transport_Name": "Bus"
+  },
+  {
+    "Transport_Type_Id": "2",
+    "Transport_Name": "Jeepney"
+  },
+  {
+    "Transport_Type_Id": "3",
+    "Transport_Name": "Multicab"
+  },
+  {
+    "Transport_Type_Id": "4",
+    "Transport_Name": "Tricycle"
+  },
+  {
+    "Transport_Type_Id": "5",
+    "Transport_Name": "UV Express"
+  },
+  {
+    "Transport_Type_Id": "6",
+    "Transport_Name": "Shuttle"
+  }
+]

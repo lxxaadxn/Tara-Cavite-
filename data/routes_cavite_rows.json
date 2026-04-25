@@ -1,0 +1,278 @@
+[
+  {
+    "Route_Id": "1",
+    "Route_Name": "Kawit - Bacoor",
+    "Origin": "Kawit",
+    "Destination": "Bacoor"
+  },
+  {
+    "Route_Id": "2",
+    "Route_Name": "Kawit - Imus",
+    "Origin": "Kawit",
+    "Destination": "Imus"
+  },
+  {
+    "Route_Id": "3",
+    "Route_Name": "Noveleta - Bacoor",
+    "Origin": "Noveleta",
+    "Destination": "Bacoor"
+  },
+  {
+    "Route_Id": "4",
+    "Route_Name": "Bacoor - Imus",
+    "Origin": "Bacoor",
+    "Destination": "Imus"
+  },
+  {
+    "Route_Id": "5",
+    "Route_Name": "Bacoor - Dasmarinas",
+    "Origin": "Bacoor",
+    "Destination": "Dasmarinas"
+  },
+  {
+    "Route_Id": "6",
+    "Route_Name": "Imus - Dasmarinas",
+    "Origin": "Imus",
+    "Destination": "Dasmarinas"
+  },
+  {
+    "Route_Id": "7",
+    "Route_Name": "Imus - General Trias",
+    "Origin": "Imus",
+    "Destination": "General Trias"
+  },
+  {
+    "Route_Id": "8",
+    "Route_Name": "Dasmarinas - General Trias",
+    "Origin": "Dasmarinas",
+    "Destination": "General Trias"
+  },
+  {
+    "Route_Id": "9",
+    "Route_Name": "Dasmarinas - Trece Martires",
+    "Origin": "Dasmarinas",
+    "Destination": "Trece Martires"
+  },
+  {
+    "Route_Id": "10",
+    "Route_Name": "Dasmarinas - Tagaytay",
+    "Origin": "Dasmarinas",
+    "Destination": "Tagaytay"
+  },
+  {
+    "Route_Id": "11",
+    "Route_Name": "Dasmarinas - Silang",
+    "Origin": "Dasmarinas",
+    "Destination": "Silang"
+  },
+  {
+    "Route_Id": "12",
+    "Route_Name": "General Trias - Trece Martires",
+    "Origin": "General Trias",
+    "Destination": "Trece Martires"
+  },
+  {
+    "Route_Id": "13",
+    "Route_Name": "General Trias - Dasmarinas",
+    "Origin": "General Trias",
+    "Destination": "Dasmarinas"
+  },
+  {
+    "Route_Id": "14",
+    "Route_Name": "Trece Martires - Indang",
+    "Origin": "Trece Martires",
+    "Destination": "Indang"
+  },
+  {
+    "Route_Id": "15",
+    "Route_Name": "Trece Martires - Naic",
+    "Origin": "Trece Martires",
+    "Destination": "Naic"
+  },
+  {
+    "Route_Id": "16",
+    "Route_Name": "Rosario - Dasmarinas",
+    "Origin": "Rosario",
+    "Destination": "Dasmarinas"
+  },
+  {
+    "Route_Id": "17",
+    "Route_Name": "Rosario - Bacoor",
+    "Origin": "Rosario",
+    "Destination": "Bacoor"
+  },
+  {
+    "Route_Id": "18",
+    "Route_Name": "Tanza - Rosario",
+    "Origin": "Tanza",
+    "Destination": "Rosario"
+  },
+  {
+    "Route_Id": "19",
+    "Route_Name": "Tanza - Naic",
+    "Origin": "Tanza",
+    "Destination": "Naic"
+  },
+  {
+    "Route_Id": "20",
+    "Route_Name": "Naic - Ternate",
+    "Origin": "Naic",
+    "Destination": "Ternate"
+  },
+  {
+    "Route_Id": "21",
+    "Route_Name": "Naic - Maragondon",
+    "Origin": "Naic",
+    "Destination": "Maragondon"
+  },
+  {
+    "Route_Id": "22",
+    "Route_Name": "Silang - Tagaytay",
+    "Origin": "Silang",
+    "Destination": "Tagaytay"
+  },
+  {
+    "Route_Id": "23",
+    "Route_Name": "Carmona - Silang",
+    "Origin": "Carmona",
+    "Destination": "Silang"
+  },
+  {
+    "Route_Id": "24",
+    "Route_Name": "Carmona - Dasmarinas",
+    "Origin": "Carmona",
+    "Destination": "Dasmarinas"
+  },
+  {
+    "Route_Id": "25",
+    "Route_Name": "Tagaytay - Mendez",
+    "Origin": "Tagaytay",
+    "Destination": "Mendez"
+  },
+  {
+    "Route_Id": "26",
+    "Route_Name": "Tagaytay - Alfonso",
+    "Origin": "Tagaytay",
+    "Destination": "Alfonso"
+  },
+  {
+    "Route_Id": "27",
+    "Route_Name": "Cavite City - Kawit",
+    "Origin": "Cavite City",
+    "Destination": "Kawit"
+  },
+  {
+    "Route_Id": "28",
+    "Route_Name": "Cavite City - Bacoor",
+    "Origin": "Cavite City",
+    "Destination": "Bacoor"
+  },
+  {
+    "Route_Id": "29",
+    "Route_Name": "General Mariano Alvarez - Dasmarinas",
+    "Origin": "General Mariano Alvarez",
+    "Destination": "Dasmarinas"
+  },
+  {
+    "Route_Id": "30",
+    "Route_Name": "General Mariano Alvarez - General Trias",
+    "Origin": "General Mariano Alvarez",
+    "Destination": "General Trias"
+  },
+  {
+    "Route_Id": "31",
+    "Route_Name": "Maragondon - Ternate",
+    "Origin": "Maragondon",
+    "Destination": "Ternate"
+  },
+  {
+    "Route_Id": "32",
+    "Route_Name": "Magallanes - Maragondon",
+    "Origin": "Magallanes",
+    "Destination": "Maragondon"
+  },
+  {
+    "Route_Id": "33",
+    "Route_Name": "Indang - Dasmarinas",
+    "Origin": "Indang",
+    "Destination": "Dasmarinas"
+  },
+  {
+    "Route_Id": "34",
+    "Route_Name": "Amadeo - Tagaytay",
+    "Origin": "Amadeo",
+    "Destination": "Tagaytay"
+  },
+  {
+    "Route_Id": "35",
+    "Route_Name": "Mendez - Tagaytay",
+    "Origin": "Mendez",
+    "Destination": "Tagaytay"
+  },
+  {
+    "Route_Id": "36",
+    "Route_Name": "Alfonso - Tagaytay",
+    "Origin": "Alfonso",
+    "Destination": "Tagaytay"
+  },
+  {
+    "Route_Id": "37",
+    "Route_Name": "General Emilio Aguinaldo - Indang",
+    "Origin": "General Emilio Aguinaldo",
+    "Destination": "Indang"
+  },
+  {
+    "Route_Id": "38",
+    "Route_Name": "Bacoor - Rosario",
+    "Origin": "Bacoor",
+    "Destination": "Rosario"
+  },
+  {
+    "Route_Id": "39",
+    "Route_Name": "Imus - Tagaytay",
+    "Origin": "Imus",
+    "Destination": "Tagaytay"
+  },
+  {
+    "Route_Id": "40",
+    "Route_Name": "Trece Martires - Tagaytay",
+    "Origin": "Trece Martires",
+    "Destination": "Tagaytay"
+  },
+  {
+    "Route_Id": "41",
+    "Route_Name": "Dasmarinas - Naic",
+    "Origin": "Dasmarinas",
+    "Destination": "Naic"
+  },
+  {
+    "Route_Id": "42",
+    "Route_Name": "Kawit - Dasmarinas",
+    "Origin": "Kawit",
+    "Destination": "Dasmarinas"
+  },
+  {
+    "Route_Id": "43",
+    "Route_Name": "Bacoor - Tagaytay",
+    "Origin": "Bacoor",
+    "Destination": "Tagaytay"
+  },
+  {
+    "Route_Id": "44",
+    "Route_Name": "Rosario - Tagaytay",
+    "Origin": "Rosario",
+    "Destination": "Tagaytay"
+  },
+  {
+    "Route_Id": "45",
+    "Route_Name": "Tanza - Dasmarinas",
+    "Origin": "Tanza",
+    "Destination": "Dasmarinas"
+  },
+  {
+    "Route_Id": "46",
+    "Route_Name": "Silang - Dasmarinas",
+    "Origin": "Silang",
+    "Destination": "Dasmarinas"
+  }
+]

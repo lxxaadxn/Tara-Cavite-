@@ -23,6 +23,14 @@ import {
 } from '../lib/fetchOsrmRoute';
 import { parsePlaceCoords } from '../lib/placeCoords';
 import type { DirectionsMapPayload } from '../lib/directionsMapBridge';
+import {
+  isTerminalPlace,
+  parseTransportTypesFromParams,
+  terminalTransportBullets,
+} from '../lib/transportGuidance';
+import { getRoutesForTerminalId, terminalIdFromDirectionsPlace } from '../lib/caviteRouteCatalog';
+import { fetchRoutesForTerminalId } from '../lib/fetchTerminalRoutesFromSupabase';
+import type { TerminalRouteRow } from '../lib/caviteRouteCatalog';
 
 const MAP_FILTERS = [
   { id: 'restaurants', label: 'Restaurants' },
@@ -42,6 +50,36 @@ const DirectionsScreen: React.FC = () => {
     () => (place ? parsePlaceCoords(place as { latitude?: unknown; longitude?: unknown }) : null),
     [place]
   );
+
+  const transportTypes = useMemo(
+    () => parseTransportTypesFromParams(place as Record<string, unknown> | undefined),
+    [place]
+  );
+  const showTransportGuidance = useMemo(() => {
+    const p = place as Record<string, unknown> | undefined;
+    return isTerminalPlace(p) || transportTypes.length > 0;
+  }, [place, transportTypes.length]);
+
+  const directionsTerminalId = useMemo(
+    () => terminalIdFromDirectionsPlace(place as Record<string, unknown> | undefined),
+    [place]
+  );
+  const [routesAtTerminal, setRoutesAtTerminal] = useState<TerminalRouteRow[]>([]);
+
+  useEffect(() => {
+    if (!directionsTerminalId) {
+      setRoutesAtTerminal([]);
+      return;
+    }
+    setRoutesAtTerminal(getRoutesForTerminalId(directionsTerminalId));
+    let cancelled = false;
+    fetchRoutesForTerminalId(directionsTerminalId).then((rows) => {
+      if (!cancelled) setRoutesAtTerminal(rows);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [directionsTerminalId]);
 
   const [userPt, setUserPt] = useState<{ lat: number; lng: number } | null>(null);
   const [locStatus, setLocStatus] = useState<'pending' | 'granted' | 'denied'>('pending');
@@ -197,6 +235,27 @@ const DirectionsScreen: React.FC = () => {
           <Text style={styles.destAddress} numberOfLines={3}>
             {(place.address as string) || 'Destination'}
           </Text>
+          {showTransportGuidance ? (
+            <View style={styles.transportBox}>
+              <Text style={styles.transportBoxTitle}>Public transport</Text>
+              {transportTypes.length > 0 ? (
+                <View style={styles.transportChipsRow}>
+                  {transportTypes.map((mode) => (
+                    <View key={mode} style={styles.transportChip}>
+                      <Text style={styles.transportChipText}>{mode}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+              {terminalTransportBullets(transportTypes)
+                .slice(transportTypes.length > 0 ? 1 : 0)
+                .map((line, i) => (
+                  <Text key={i} style={styles.transportLine}>
+                    {line}
+                  </Text>
+                ))}
+            </View>
+          ) : null}
           {locStatus === 'denied' && !userPt ? (
             <Text style={styles.hint}>
               Location is off — enable it to see directions from where you are.
@@ -218,9 +277,33 @@ const DirectionsScreen: React.FC = () => {
           ) : null}
           {routeError ? <Text style={styles.warnText}>{routeError}</Text> : null}
           <Text style={styles.routingNote}>
-            Routes use OpenStreetMap data via OSRM (driving). Actual roads and traffic may differ.
+            {showTransportGuidance
+              ? 'Turn-by-turn below is for private/driving navigation. Jeepney and bus routes follow operator corridors; use the map to reach the area, then follow on-ground signboards.'
+              : 'Routes use OpenStreetMap data via OSRM (driving). Actual roads and traffic may differ.'}
           </Text>
         </View>
+
+        {routesAtTerminal.length > 0 ? (
+          <View style={styles.terminalRoutesCard}>
+            <Text style={styles.terminalRoutesTitle}>Routes at this terminal</Text>
+            <Text style={styles.terminalRoutesSubtitle}>
+              From your sheet data (terminal ↔ route ↔ transport type). Use the map above for
+              driving; match signboards to these corridors.
+            </Text>
+            {routesAtTerminal.map((r) => (
+              <View key={r.terminalRouteId} style={styles.terminalRouteRow}>
+                <View style={styles.terminalRouteBar} />
+                <View style={styles.terminalRouteBody}>
+                  <Text style={styles.terminalRouteName}>{r.routeName}</Text>
+                  <Text style={styles.terminalRouteCorridor}>
+                    {r.origin} → {r.destination}
+                  </Text>
+                  <Text style={styles.terminalRouteMode}>{r.transportName}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : null}
 
         {routeResult && routeResult.steps.length > 0 ? (
           <View style={styles.stepsCard}>
@@ -355,6 +438,43 @@ const styles = StyleSheet.create({
     color: Colors.text.primary,
     lineHeight: 22,
   },
+  transportBox: {
+    marginTop: 14,
+    padding: 12,
+    backgroundColor: '#f0fdf4',
+    borderRadius: Theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(34, 197, 94, 0.35)',
+  },
+  transportBoxTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.text.primary,
+    marginBottom: 8,
+  },
+  transportChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 10,
+  },
+  transportChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 16,
+    backgroundColor: Colors.primary + '22',
+  },
+  transportChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  transportLine: {
+    fontSize: 13,
+    color: Colors.text.secondary,
+    lineHeight: 19,
+    marginBottom: 6,
+  },
   hint: {
     marginTop: 10,
     fontSize: 13,
@@ -390,6 +510,61 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.text.light,
     lineHeight: 16,
+  },
+  terminalRoutesCard: {
+    marginHorizontal: Theme.spacing.md,
+    marginTop: Theme.spacing.md,
+    padding: Theme.spacing.md,
+    backgroundColor: Colors.white,
+    borderRadius: Theme.borderRadius.md,
+    ...Theme.shadows.card,
+  },
+  terminalRoutesTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.text.primary,
+    marginBottom: 6,
+  },
+  terminalRoutesSubtitle: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    lineHeight: 17,
+    marginBottom: 12,
+  },
+  terminalRouteRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    marginBottom: 10,
+    backgroundColor: Colors.background,
+    borderRadius: Theme.borderRadius.md,
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#e5e7eb',
+  },
+  terminalRouteBar: {
+    width: 4,
+    backgroundColor: Colors.primary,
+  },
+  terminalRouteBody: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  terminalRouteName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text.primary,
+  },
+  terminalRouteCorridor: {
+    fontSize: 13,
+    color: Colors.text.secondary,
+    marginTop: 4,
+  },
+  terminalRouteMode: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.primary,
+    marginTop: 6,
   },
   stepsCard: {
     marginHorizontal: Theme.spacing.md,

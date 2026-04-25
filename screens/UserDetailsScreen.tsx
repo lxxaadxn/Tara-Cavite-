@@ -208,7 +208,7 @@ const UserDetailsScreen: React.FC = () => {
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: [ImagePicker.MediaType.Images],
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
@@ -220,7 +220,7 @@ const UserDetailsScreen: React.FC = () => {
     try {
       // Read file as base64 using expo-file-system (most reliable for React Native)
       const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
+        encoding: 'base64',
       });
       
       if (!base64 || base64.length === 0) {
@@ -343,7 +343,7 @@ const UserDetailsScreen: React.FC = () => {
         showBack
         showNotification
         darkBackground
-        onNotificationPress={() => navigation.navigate('Notifications' as never)}
+        onNotificationPress={() => navigation.navigate('Notifications')}
       />
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Profile Avatar */}

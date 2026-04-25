@@ -58,12 +58,12 @@ function terminalMatchesLocationToggles(
   });
 }
 
-/** Preferred row order to match design mock */
+/** Preferred row order (names must match `data/terminals_cavite_updated.csv`). */
 const TERMINAL_DISPLAY_ORDER = [
-  'PITX',
-  'SM Pala-pala terminal',
-  'Robinsons Pala-pala terminal',
-  'SM Molino Terminal',
+  'Pala-Pala Transport Terminal',
+  'SM City Molino Terminal',
+  'Kawit Transport Terminal',
+  'General Trias City Terminal',
 ];
 
 type TransitMode = 'all' | 'modern-jeepney' | 'jeepney' | 'van' | 'bus';
@@ -139,7 +139,7 @@ const TerminalsScreen: React.FC = () => {
       key={terminal.id}
       style={styles.terminalCard}
       onPress={() =>
-        navigation.navigate('TerminalDetail' as never, { terminal } as never)
+        navigation.navigate('TerminalDetail', { terminal })
       }
       activeOpacity={0.7}
       accessibilityRole="button"

@@ -2,6 +2,10 @@
  * Mock data for the app - no API calls
  */
 
+export type { Terminal } from '../lib/terminalTypes';
+import type { Terminal } from '../lib/terminalTypes';
+import { caviteTerminalsFromCsv } from './caviteTerminalsFromCsv';
+
 export interface Place {
   id: string;
   name: string;
@@ -10,6 +14,10 @@ export interface Place {
   hours: string;
   latitude: number;
   longitude: number;
+  /** When opening Directions from a terminal (or curated spots), show commuter transport hints. */
+  transportTypes?: string[];
+  /** Matches `Terminal_Id` in sheets / Supabase; used to load Terminal_Routes on Directions. */
+  terminalId?: string;
   image?: any; // For require() statements or URI strings
   /** Shown on home cards (Figma) */
   rating?: string;
@@ -53,30 +61,6 @@ export interface Notification {
   message: string;
   date: string;
   time: string;
-}
-
-export interface Terminal {
-  id: string;
-  name: string;
-  /** City or municipality for location filter */
-  municipality: string;
-  /** Subtitle under title, e.g. barangay, city, region */
-  addressLine?: string;
-  /** Long description for detail “Description” tab */
-  description?: string;
-  category: 'dasma-bayan' | 'other';
-  transportTypes: string[];
-  status: 'OPEN' | 'CLOSED';
-  operatingHours: string;
-  averageFare: string;
-  paymentType: string;
-  /** Simple route list when the terminal has no gate groupings */
-  primaryRoutes: { label: string }[];
-  /** PITX-style: routes grouped by gate (accordion in UI) */
-  routesByGate?: { gateName: string; routes: { label: string }[] }[];
-  reminders: string[];
-  latitude: number;
-  longitude: number;
 }
 
 // Trending Tourist Spots for home screen (Figma dashboard export)
@@ -381,216 +365,5 @@ export const categories = [
   { id: '4', name: 'Bus Stops', icon: 'bus' },
 ];
 
-// Mock terminals
-export const mockTerminals: Terminal[] = [
-  {
-    id: '1',
-    name: 'Robinsons Pala-pala terminal',
-    municipality: 'Dasmariñas',
-    category: 'dasma-bayan',
-    transportTypes: ['Jeepney', 'Bus', 'Tricycle'],
-    status: 'OPEN',
-    operatingHours: '5AM - 12MN',
-    averageFare: 'PHP 15 - 100',
-    paymentType: 'Cash',
-    primaryRoutes: [
-      { label: 'To Tagaytay (Bus/Jeep)' },
-      { label: 'To Dasma Bayan (Bus/Jeep)' },
-    ],
-    reminders: [
-      'Expect long lines from 5:00 PM to 8:00 PM',
-      'Reminder to have Student/Senior Citizen/PWD IDs ready for the 20% discount.',
-    ],
-    latitude: 14.3297,
-    longitude: 120.9367,
-  },
-  {
-    id: '2',
-    name: 'SM Pala-pala terminal',
-    municipality: 'Dasmariñas',
-    category: 'dasma-bayan',
-    transportTypes: ['Jeepney', 'Bus', 'Tricycle'],
-    status: 'OPEN',
-    operatingHours: '5AM - 12MN',
-    averageFare: 'PHP 15 - 100',
-    paymentType: 'Cash',
-    primaryRoutes: [
-      { label: 'To Tagaytay (Bus/Jeep)' },
-      { label: 'To Dasma Bayan (Bus/Jeep)' },
-    ],
-    reminders: [
-      'Expect long lines from 5:00 PM to 8:00 PM',
-      'Reminder to have Student/Senior Citizen/PWD IDs ready for the 20% discount.',
-    ],
-    latitude: 14.3300,
-    longitude: 120.9370,
-  },
-  {
-    id: '3',
-    name: 'SM Dasmariñas Pala-pala Terminal',
-    municipality: 'Dasmariñas',
-    category: 'dasma-bayan',
-    transportTypes: ['Jeepney', 'Bus', 'Tricycle'],
-    status: 'OPEN',
-    operatingHours: '5AM - 12MN',
-    averageFare: 'PHP 15 - 100',
-    paymentType: 'Cash',
-    primaryRoutes: [
-      { label: 'To Tagaytay (Bus/Jeep)' },
-      { label: 'To Dasma Bayan (Bus/Jeep)' },
-    ],
-    reminders: [
-      'Expect long lines from 5:00 PM to 8:00 PM',
-      'Reminder to have Student/Senior Citizen/PWD IDs ready for the 20% discount.',
-    ],
-    latitude: 14.3297,
-    longitude: 120.9367,
-  },
-  {
-    id: '4',
-    name: 'General Trias terminal',
-    municipality: 'General Trias',
-    category: 'other',
-    transportTypes: ['Jeepney', 'Tricycle'],
-    status: 'OPEN',
-    operatingHours: '5AM - 10PM',
-    averageFare: 'PHP 12 - 50',
-    paymentType: 'Cash',
-    primaryRoutes: [{ label: 'To Baclaran' }],
-    reminders: [],
-    latitude: 14.4167,
-    longitude: 120.8833,
-  },
-  {
-    id: '5',
-    name: 'Imus terminal',
-    municipality: 'Imus',
-    category: 'other',
-    transportTypes: ['Jeepney', 'Bus', 'Tricycle'],
-    status: 'OPEN',
-    operatingHours: '5AM - 12MN',
-    averageFare: 'PHP 15 - 80',
-    paymentType: 'Cash',
-    primaryRoutes: [{ label: 'To Manila' }],
-    reminders: [],
-    latitude: 14.4297,
-    longitude: 120.9367,
-  },
-  {
-    id: '6',
-    name: 'All Homes terminal',
-    municipality: 'Dasmariñas',
-    category: 'other',
-    transportTypes: ['Jeepney'],
-    status: 'OPEN',
-    operatingHours: '6AM - 8PM',
-    averageFare: 'PHP 10 - 30',
-    paymentType: 'Cash',
-    primaryRoutes: [],
-    reminders: [],
-    latitude: 14.3500,
-    longitude: 120.9200,
-  },
-  {
-    id: '7',
-    name: 'PITX',
-    municipality: 'Parañaque',
-    addressLine: 'Tambo, Parañaque, Metro Manila',
-    description:
-      'The Parañaque Integrated Terminal Exchange (PITX) is a major land transport hub serving provincial buses, modern jeepneys, and city routes in Metro Manila. Passengers can transfer between regional services and local feeders, with amenities such as waiting areas, ticketing, and retail. Peak hours typically see higher passenger volume; plan arrivals with extra time for security and boarding.',
-    category: 'other',
-    transportTypes: ['Bus', 'Modern Jeepney', 'Jeepney', 'Van'],
-    status: 'OPEN',
-    operatingHours: '4AM - 12MN',
-    averageFare: 'PHP 15 - 120',
-    paymentType: 'Cash / Beep',
-    primaryRoutes: [],
-    routesByGate: [
-      {
-        gateName: 'Gate A — Provincial buses',
-        routes: [
-          { label: 'Cavite (Dasmariñas, Imus, Bacoor corridors)' },
-          { label: 'Batangas / Lemery' },
-          { label: 'Bicol express connections' },
-        ],
-      },
-      {
-        gateName: 'Gate B — City & metro feeders',
-        routes: [
-          { label: 'EDSA Carousel and city bus links' },
-          { label: 'Parañaque & Pasay local loops' },
-        ],
-      },
-      {
-        gateName: 'Gate C — Jeepney & UV',
-        routes: [
-          { label: 'Modern jeepney bays' },
-          { label: 'UV express pick-up zones' },
-        ],
-      },
-    ],
-    reminders: [],
-    latitude: 14.5092,
-    longitude: 120.9819,
-  },
-  {
-    id: '8',
-    name: 'SM Molino Terminal',
-    municipality: 'Bacoor',
-    category: 'other',
-    transportTypes: ['Jeepney', 'Bus', 'Van', 'Modern Jeepney'],
-    status: 'OPEN',
-    operatingHours: '5AM - 10PM',
-    averageFare: 'PHP 12 - 60',
-    paymentType: 'Cash',
-    primaryRoutes: [{ label: 'To Dasma / Manila' }],
-    reminders: [],
-    latitude: 14.3704,
-    longitude: 120.9831,
-  },
-  {
-    id: '9',
-    name: 'Waltermart Dasma terminal',
-    municipality: 'Dasmariñas',
-    category: 'dasma-bayan',
-    transportTypes: ['Jeepney', 'Tricycle'],
-    status: 'OPEN',
-    operatingHours: '6AM - 9PM',
-    averageFare: 'PHP 12 - 40',
-    paymentType: 'Cash',
-    primaryRoutes: [{ label: 'To Bayan' }],
-    reminders: [],
-    latitude: 14.3189,
-    longitude: 120.9394,
-  },
-  {
-    id: '10',
-    name: 'Trece Martires terminal',
-    municipality: 'Trece Martires',
-    category: 'other',
-    transportTypes: ['Jeepney', 'Bus', 'Tricycle'],
-    status: 'OPEN',
-    operatingHours: '5AM - 8PM',
-    averageFare: 'PHP 10 - 50',
-    paymentType: 'Cash',
-    primaryRoutes: [],
-    reminders: [],
-    latitude: 14.2833,
-    longitude: 120.8667,
-  },
-  {
-    id: '11',
-    name: 'Bacoor City Strike terminal',
-    municipality: 'Bacoor',
-    category: 'other',
-    transportTypes: ['Jeepney', 'Bus'],
-    status: 'OPEN',
-    operatingHours: '5AM - 10PM',
-    averageFare: 'PHP 12 - 45',
-    paymentType: 'Cash',
-    primaryRoutes: [],
-    reminders: [],
-    latitude: 14.4594,
-    longitude: 120.9597,
-  },
-];
+/** Cavite-wide terminals from `data/terminals_cavite_updated.csv` (see `caviteTerminalsFromCsv.ts`). */
+export const mockTerminals: Terminal[] = caviteTerminalsFromCsv();

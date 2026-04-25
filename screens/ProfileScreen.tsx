@@ -90,7 +90,7 @@ const ProfileScreen: React.FC = () => {
         showBack={false}
         showNotification
         darkBackground
-        onNotificationPress={() => navigation.navigate('Notifications' as never)}
+        onNotificationPress={() => navigation.navigate('Notifications')}
       />
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Profile Info Section */}
@@ -116,7 +116,7 @@ const ProfileScreen: React.FC = () => {
         {menuItems.map((item) => (
           <TouchableOpacity
             key={item.id}
-            onPress={() => navigation.navigate(item.screen as never)}
+            onPress={() => navigation.navigate(item.screen)}
             activeOpacity={0.7}
             accessibilityLabel={`Navigate to ${item.title}`}
             accessibilityRole="button"

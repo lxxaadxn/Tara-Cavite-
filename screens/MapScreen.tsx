@@ -5,7 +5,7 @@ import * as Location from 'expo-location';
 import { JamIcon } from '../components/JamIcon';
 import { LeafletMapView } from '../components/LeafletMapView';
 import { useNavigation } from '@react-navigation/native';
-import { supabase } from '../lib/supabase';
+import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import type { Place } from '../data/mockData';
 import { mockTerminals } from '../data/mockData';
 import { rowToPlace, type PlaceRow } from '../lib/placesFromSupabase';
@@ -24,6 +24,9 @@ export default function MapScreen() {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
+    if (!isSupabaseConfigured) {
+      return;
+    }
     let cancelled = false;
     (async () => {
       const { data, error } = await supabase
@@ -112,16 +115,14 @@ export default function MapScreen() {
         const rawId = id.replace(/^terminal-/, '');
         const terminal = mockTerminals.find((t) => String(t.id) === rawId);
         if (terminal) {
-          navigation.getParent()?.navigate('Terminals' as never, {
-            screen: 'TerminalDetail',
-            params: { terminal },
-          } as never);
+          // Prefer same-stack screen (reliable); avoids depending on tab `getParent()`.
+          navigation.navigate('TerminalDetail', { terminal });
         }
         return;
       }
       const place = placesById.get(id);
       if (place) {
-        navigation.navigate('PlaceDetail' as never, { place } as never);
+        navigation.navigate('PlaceDetail', { place });
       }
     },
     [navigation, placesById]
@@ -168,7 +169,7 @@ export default function MapScreen() {
                   returnKeyType="search"
                   onSubmitEditing={() => {
                     if (query.trim()) {
-                      navigation.navigate('PlaceDetail' as never, { query: query.trim() } as never);
+                      navigation.navigate('PlaceDetail', { query: query.trim() });
                     }
                   }}
                 />

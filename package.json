@@ -13,7 +13,12 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "build:icons": "node scripts/build-jam-svgs.mjs"
+    "typecheck": "tsc --noEmit",
+    "build:icons": "node scripts/build-jam-svgs.mjs",
+    "terminals:sync-json": "node scripts/csv-to-terminal-rows.mjs",
+    "sheets:build": "node scripts/build-terminal-sheets.mjs",
+    "sheets:sql": "node scripts/export-terminal-sql.mjs",
+    "sheets:all": "node scripts/csv-to-terminal-rows.mjs && node scripts/build-terminal-sheets.mjs && node scripts/export-terminal-sql.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",

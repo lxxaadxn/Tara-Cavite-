@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { StackActions, useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/theme';
 
 /** Slightly longer than before so the landing is easier to read */
@@ -16,7 +16,7 @@ const OnboardingScreen: React.FC = () => {
 
   useEffect(() => {
     const t = setTimeout(() => {
-      navigation.replace('Auth' as never);
+      navigation.dispatch(StackActions.replace('Auth'));
     }, LANDING_MS);
     return () => clearTimeout(t);
   }, [navigation]);

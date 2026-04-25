@@ -13,6 +13,12 @@ import { JamIcon } from '../components/JamIcon';
 import { Colors } from '../constants/theme';
 import { Terminal } from '../data/mockData';
 import { terminalAddressLine } from '../lib/terminalHelpers';
+import { terminalTransportBullets } from '../lib/transportGuidance';
+import {
+  getRoutesForTerminalId,
+  type TerminalRouteRow,
+} from '../lib/caviteRouteCatalog';
+import { fetchRoutesForTerminalId } from '../lib/fetchTerminalRoutesFromSupabase';
 
 const TITLE_DARK = '#241D13';
 const MUTED = '#868686';
@@ -61,6 +67,22 @@ const TerminalDetailScreen: React.FC = () => {
     () => (terminal ? descriptionFor(terminal) : ''),
     [terminal]
   );
+  const [sheetRoutes, setSheetRoutes] = useState<TerminalRouteRow[]>([]);
+
+  useEffect(() => {
+    if (!terminal) {
+      setSheetRoutes([]);
+      return;
+    }
+    setSheetRoutes(getRoutesForTerminalId(terminal.id));
+    let cancelled = false;
+    fetchRoutesForTerminalId(terminal.id).then((rows) => {
+      if (!cancelled) setSheetRoutes(rows);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [terminal?.id]);
 
   useEffect(() => {
     const gates = terminal?.routesByGate;
@@ -85,6 +107,7 @@ const TerminalDetailScreen: React.FC = () => {
 
   const hasGates = terminal.routesByGate && terminal.routesByGate.length > 0;
   const hasFlatRoutes = terminal.primaryRoutes.length > 0;
+  const hasSheetRoutes = sheetRoutes.length > 0;
 
   return (
     <View style={styles.root}>
@@ -193,7 +216,28 @@ const TerminalDetailScreen: React.FC = () => {
           </View>
         ) : (
           <View style={styles.routesBlock}>
-            {!hasGates && !hasFlatRoutes ? (
+            {hasSheetRoutes ? (
+              <View style={styles.sheetRoutesCard}>
+                <Text style={styles.sheetRoutesHint}>
+                  Routes where this city is the origin or destination (sheet tabs Routes and
+                  Terminal_Routes). The map uses OpenStreetMap for driving to the terminal pin.
+                </Text>
+                {sheetRoutes.map((r) => (
+                  <View key={r.terminalRouteId} style={styles.sheetRouteRow}>
+                    <View style={styles.sheetRouteAccent} />
+                    <View style={styles.sheetRouteBody}>
+                      <Text style={styles.sheetRouteName}>{r.routeName}</Text>
+                      <Text style={styles.sheetRouteMeta}>
+                        {r.origin} → {r.destination}
+                      </Text>
+                      <View style={styles.sheetRouteModePill}>
+                        <Text style={styles.sheetRouteModeText}>{r.transportName}</Text>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ) : !hasGates && !hasFlatRoutes ? (
               <Text style={styles.routesEmpty}>No routes listed yet.</Text>
             ) : hasGates && terminal.routesByGate ? (
               terminal.routesByGate.map((gate) => {
@@ -250,24 +294,44 @@ const TerminalDetailScreen: React.FC = () => {
           </View>
         )}
 
+        <View style={styles.transportSection}>
+          <Text style={styles.transportSectionTitle}>How to get here</Text>
+          <View style={styles.transportChipsRow}>
+            {terminal.transportTypes.map((mode) => (
+              <View key={mode} style={styles.transportChip}>
+                <Text style={styles.transportChipText}>{mode}</Text>
+              </View>
+            ))}
+          </View>
+          {terminalTransportBullets(terminal.transportTypes)
+            .slice(1)
+            .map((line, i) => (
+              <Text key={i} style={styles.transportBullet}>
+                • {line}
+              </Text>
+            ))}
+        </View>
+
         <TouchableOpacity
           style={styles.directionsBtn}
           onPress={() =>
-            navigation.navigate('Directions' as never, {
+            navigation.navigate('Directions', {
               place: {
                 id: terminal.id,
+                terminalId: terminal.id,
                 name: terminal.name,
                 address: addressLine,
                 type: 'Terminal',
                 hours: terminal.operatingHours,
                 latitude: terminal.latitude,
                 longitude: terminal.longitude,
+                transportTypes: terminal.transportTypes,
               },
-            } as never)
+            })
           }
           activeOpacity={0.85}
         >
-          <Text style={styles.directionsBtnText}>Get directions</Text>
+          <Text style={styles.directionsBtnText}>Get directions (map to terminal)</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
@@ -514,12 +578,109 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.white,
   },
+  transportSection: {
+    marginBottom: 20,
+    padding: 16,
+    backgroundColor: '#F6F7F6',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+  },
+  transportSectionTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 16,
+    color: TITLE_DARK,
+    marginBottom: 12,
+  },
+  transportChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  transportChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: 'rgba(126, 160, 14, 0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(126, 160, 14, 0.45)',
+  },
+  transportChipText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 13,
+    color: Colors.primary,
+  },
+  transportBullet: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 14,
+    lineHeight: 22,
+    color: TITLE_DARK,
+    marginBottom: 8,
+  },
   missingText: {
     fontFamily: 'Poppins_500Medium',
     fontSize: 16,
     color: Colors.text.secondary,
     textAlign: 'center',
     padding: 24,
+  },
+  sheetRoutesCard: {
+    backgroundColor: '#F6F7F6',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+  },
+  sheetRoutesHint: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 13,
+    lineHeight: 19,
+    color: MUTED,
+    marginBottom: 14,
+  },
+  sheetRouteRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    marginBottom: 12,
+    backgroundColor: Colors.white,
+    borderRadius: 10,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+  },
+  sheetRouteAccent: {
+    width: 4,
+    backgroundColor: Colors.accent,
+  },
+  sheetRouteBody: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+  },
+  sheetRouteName: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 15,
+    color: TITLE_DARK,
+    marginBottom: 4,
+  },
+  sheetRouteMeta: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: MUTED,
+    marginBottom: 8,
+  },
+  sheetRouteModePill: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(31, 79, 89, 0.12)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  sheetRouteModeText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 12,
+    color: Colors.primary,
   },
 });
 

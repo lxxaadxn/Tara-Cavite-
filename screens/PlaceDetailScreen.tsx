@@ -20,6 +20,13 @@ import { Place } from '../data/mockData';
 import { parsePlaceCoords } from '../lib/placeCoords';
 import { supabase } from '../lib/supabase';
 import { searchPlacesByText } from '../lib/placesFromSupabase';
+import {
+  formatModes,
+  getCommutePlansForPlaceName,
+  hubById,
+  hubToPlace,
+  type CommutePlan,
+} from '../lib/commuterTerminalRoutes';
 
 const PICNIC_FALLBACK: Place = {
   id: '1',
@@ -100,13 +107,27 @@ const PlaceDetailScreen: React.FC = () => {
 
   const place = detailPlace;
 
+  const commutePlans = useMemo(
+    () => (place ? getCommutePlansForPlaceName(place.name) : null),
+    [place?.name]
+  );
+  const [commutePlanIndex, setCommutePlanIndex] = useState(0);
+
+  useEffect(() => {
+    setCommutePlanIndex(0);
+  }, [place?.id, place?.name]);
+  const activeCommutePlan: CommutePlan | null =
+    commutePlans && commutePlans.length > 0
+      ? commutePlans[Math.min(commutePlanIndex, commutePlans.length - 1)]
+      : null;
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <Header
         title=""
         showBack
         showNotification
-        onNotificationPress={() => navigation.navigate('Notifications' as never)}
+        onNotificationPress={() => navigation.navigate('Notifications')}
       />
 
       {showLoading ? (
@@ -165,7 +186,7 @@ const PlaceDetailScreen: React.FC = () => {
       ) : null}
 
       {place && !showList && !showEmpty && !showLoading && !showError ? (
-        <ScrollView style={styles.content}>
+        <ScrollView style={styles.content} nestedScrollEnabled>
           <Card style={styles.card}>
             <Text style={styles.title}>{place.name}</Text>
 
@@ -230,13 +251,96 @@ const PlaceDetailScreen: React.FC = () => {
                 title="GET DIRECTIONS"
                 onPress={() => {
                   const c = parsePlaceCoords(place);
-                  const placeForNav: Place = c
+                  const base: Place = c
                     ? { ...place, latitude: c.lat, longitude: c.lng }
                     : place;
-                  navigation.navigate('Directions' as never, { place: placeForNav } as never);
+                  const n = place.name.toLowerCase();
+                  const placeForNav: Place =
+                    n.includes('picnic grove') || commutePlans
+                      ? { ...base, transportTypes: ['Jeepney', 'Bus', 'Tricycle'] }
+                      : base;
+                  navigation.navigate('Directions', { place: placeForNav });
                 }}
               />
             </View>
+
+            {commutePlans && activeCommutePlan ? (
+              <View style={styles.commuteSection}>
+                <Text style={styles.commuteTitle}>Commute (terminal to terminal)</Text>
+                <Text style={styles.commuteHint}>
+                  Pick where you are boarding. Each step lists allowed modes; open the map for that
+                  stop. Driving path uses OpenStreetMap (not the jeepney line itself).
+                </Text>
+                <View style={styles.commuteChipsRow}>
+                  {commutePlans.map((p, i) => {
+                    const active = i === commutePlanIndex;
+                    return (
+                      <TouchableOpacity
+                        key={p.originHubId}
+                        style={[styles.commuteChip, active && styles.commuteChipActive]}
+                        onPress={() => setCommutePlanIndex(i)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: active }}
+                      >
+                        <Text
+                          style={[styles.commuteChipText, active && styles.commuteChipTextActive]}
+                        >
+                          From {p.shortLabel}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                {(() => {
+                  const firstFrom = hubById(activeCommutePlan.legs[0]?.fromHubId);
+                  const firstLeg = activeCommutePlan.legs[0];
+                  return firstFrom && firstLeg ? (
+                    <TouchableOpacity
+                      style={styles.commuteBoardBtn}
+                      onPress={() =>
+                        navigation.navigate('Directions', {
+                          place: hubToPlace(firstFrom, firstLeg.modes),
+                        })
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel={`Directions to ${firstFrom.name}`}
+                    >
+                      <JamIcon ionicon="navigate" size={18} color={Colors.white} />
+                      <Text style={styles.commuteBoardBtnText}>
+                        Directions to boarding: {firstFrom.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null;
+                })()}
+                {activeCommutePlan.legs.map((leg, idx) => {
+                  const from = hubById(leg.fromHubId);
+                  const to = hubById(leg.toHubId);
+                  if (!from || !to) return null;
+                  return (
+                    <View key={`${leg.fromHubId}-${leg.toHubId}-${idx}`} style={styles.commuteLeg}>
+                      <Text style={styles.commuteLegStep}>Step {idx + 1}</Text>
+                      <Text style={styles.commuteLegRoute}>
+                        {from.name} → {to.name}
+                      </Text>
+                      <Text style={styles.commuteLegModes}>{formatModes(leg.modes)}</Text>
+                      <TouchableOpacity
+                        style={styles.commuteLegMapBtn}
+                        onPress={() =>
+                          navigation.navigate('Directions', {
+                            place: hubToPlace(to, leg.modes),
+                          })
+                        }
+                        accessibilityRole="button"
+                        accessibilityLabel={`Directions to ${to.name}`}
+                      >
+                        <Text style={styles.commuteLegMapBtnText}>Directions to {to.name}</Text>
+                        <JamIcon ionicon="chevron-forward" size={18} color={Colors.primary} />
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : null}
           </Card>
         </ScrollView>
       ) : null}
@@ -375,6 +479,106 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     marginTop: Theme.spacing.md,
+  },
+  commuteSection: {
+    marginTop: Theme.spacing.lg,
+    paddingTop: Theme.spacing.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(0,0,0,0.1)',
+  },
+  commuteTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: Colors.text.primary,
+    marginBottom: Theme.spacing.xs,
+  },
+  commuteHint: {
+    fontSize: 13,
+    color: Colors.text.secondary,
+    lineHeight: 18,
+    marginBottom: Theme.spacing.md,
+  },
+  commuteChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Theme.spacing.sm,
+    paddingBottom: Theme.spacing.md,
+  },
+  commuteChip: {
+    paddingHorizontal: Theme.spacing.md,
+    paddingVertical: Theme.spacing.sm,
+    borderRadius: Theme.borderRadius.md,
+    backgroundColor: Colors.background,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.12)',
+  },
+  commuteChipActive: {
+    backgroundColor: Colors.primary + '18',
+    borderColor: Colors.primary,
+  },
+  commuteChipText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Colors.text.secondary,
+  },
+  commuteChipTextActive: {
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  commuteBoardBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Theme.spacing.sm,
+    backgroundColor: Colors.primary,
+    paddingVertical: Theme.spacing.md,
+    borderRadius: Theme.borderRadius.md,
+    marginBottom: Theme.spacing.md,
+  },
+  commuteBoardBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.white,
+  },
+  commuteLeg: {
+    backgroundColor: Colors.background,
+    borderRadius: Theme.borderRadius.md,
+    padding: Theme.spacing.md,
+    marginBottom: Theme.spacing.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0,0,0,0.08)',
+  },
+  commuteLegStep: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.text.light,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  commuteLegRoute: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    lineHeight: 20,
+  },
+  commuteLegModes: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    marginTop: 6,
+  },
+  commuteLegMapBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: Theme.spacing.md,
+    paddingTop: Theme.spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(0,0,0,0.08)',
+  },
+  commuteLegMapBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.primary,
   },
 });
 
