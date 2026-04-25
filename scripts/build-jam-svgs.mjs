@@ -7,8 +7,11 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const svgDir = path.join(__dirname, '../node_modules/jam-icons/svg');
-const outFile = path.join(__dirname, '../lib/jamSvgMap.ts');
+const repoRoot = path.join(__dirname, '..');
+const svgDirMobile = path.join(repoRoot, 'apps/mobile/node_modules/jam-icons/svg');
+const svgDirHoist = path.join(repoRoot, 'node_modules/jam-icons/svg');
+const svgDir = fs.existsSync(svgDirMobile) ? svgDirMobile : svgDirHoist;
+const outFile = path.join(repoRoot, 'apps/mobile/lib/jamSvgMap.ts');
 
 const ICONS = [
   'alert',

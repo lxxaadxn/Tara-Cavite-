@@ -1,77 +1,78 @@
-# Welcome to your Expo app 👋
+# CaviTour
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Monorepo for the CaviTour Cavite travel guide: **mobile** (Expo), **marketing web** (Vite), **admin** (Vite), and **Supabase** backend assets.
 
-## Get started
+## Repository layout
 
-1. Install dependencies
+| Folder | App |
+|--------|-----|
+| [`apps/mobile/`](apps/mobile/) | React Native / Expo (`cavitour-mobile`) |
+| [`apps/web/`](apps/web/) | Public website — Vite + React + Tailwind (`cavitour-web`) |
+| [`apps/admin/`](apps/admin/) | Admin dashboard — Vite + React (`cavitour-admin`) |
+| [`supabase/`](supabase/) | SQL migrations & seeds |
+| [`scripts/`](scripts/) | Build helpers (e.g. Jam icons → `apps/mobile/lib/jamSvgMap.ts`) |
+| [`docs/`](docs/) | Setup / verification notes, [layout reference](docs/REPOSITORY_LAYOUT.md) |
+| [`packages/`](packages/) | Reserved for shared code later |
 
-   ```bash
-   npm install
-   ```
+## Quick start
 
-2. Start the app
+From the **repository root**:
 
-   ```bash
-   npx expo start
-   ```
+```bash
+npm install
+```
 
-In the output, you'll find options to open the app in a
+### Mobile (Expo)
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+```bash
+npm run mobile
+# or
+npm run start --workspace=cavitour-mobile
+```
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+Uses **tunnel** by default (see [`docs/QUICK_SETUP.md`](docs/QUICK_SETUP.md) for LAN / firewall tips). Edit routes under `apps/mobile/app/`.
 
-## Running on your phone (Expo Go)
+### Marketing web (Vite)
 
-- **Install Expo Go** on your phone ([Android](https://play.google.com/store/apps/details?id=host.exp.exponent) / [iOS](https://apps.apple.com/app/expo-go/id982107779)).
-- Run `npm start` (uses **tunnel** by default so it works across networks).
-- **Scan the QR code with the Expo Go app** (Expo Go’s built-in scanner), not with your normal camera or browser.
+```bash
+npm run web
+```
 
-### If scanning the QR code doesn’t connect
+### Admin (Vite, port 3001)
 
-1. **Tunnel is slow or fails**  
-   Use LAN instead (phone and PC must be on the **same Wi‑Fi**):
-   ```bash
-   npm run start:lan
-   ```
-   Then scan the new QR code with Expo Go.
+```bash
+npm run admin
+```
 
-2. **Windows Firewall**  
-   If you use LAN and the phone still can’t connect, allow Node/Metro through Windows Firewall:
-   - Windows Security → Firewall & network protection → Allow an app through firewall.
-   - Find **Node.js** and allow it on **Private** (and **Public** if you need it).
-   - Or allow **inbound TCP** for ports **8081** and **19000–19002**.
+### Regenerate icon map (mobile)
 
-3. **Same Wi‑Fi**  
-   For LAN, the phone and the computer must be on the same Wi‑Fi. Avoid guest networks.
+```bash
+npm run build:icons
+```
 
-4. **Scan with Expo Go**  
-   Open the **Expo Go** app → “Scan QR code” and point it at the QR in the terminal. Don’t use the device’s default camera app.
-
-## Get a fresh project
-
-When you're ready, run:
+### Reset Expo `app/` starter (destructive)
 
 ```bash
 npm run reset-project
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Targets `apps/mobile/` automatically.
+
+---
+
+## Supabase & Cavite STA-v3 data
+
+The shared **Supabase project URL and anon key** are committed in `apps/web/src/lib/supabase.js` and `apps/mobile/lib/supabase.ts` so anyone who clones the repo can run **web** and **mobile** against the same backend without a local `.env`.
+
+Live listings use **`public.v_cavite_establishments`** (see [`docs/CAVITE_STA_V3_SETUP.md`](docs/CAVITE_STA_V3_SETUP.md)). The one-file SQL bundle is [`supabase/cavite_sta_v3_FULL_for_sql_editor.sql`](supabase/cavite_sta_v3_FULL_for_sql_editor.sql) (run once in the Supabase SQL Editor if you reset the DB).
+
+---
+
+## Legacy `web/` folder at repo root
+
+If you still see a top-level `web/` directory (e.g. after copying), **stop any Vite dev server**, close processes locking `web/node_modules`, then delete that folder so **only** `apps/web/` remains. See [`docs/REPOSITORY_LAYOUT.md`](docs/REPOSITORY_LAYOUT.md).
 
 ## Learn more
 
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- [Expo documentation](https://docs.expo.dev/)
+- [Expo Router](https://docs.expo.dev/router/introduction)
