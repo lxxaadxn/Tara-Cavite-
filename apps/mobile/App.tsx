@@ -34,11 +34,14 @@ import HomeScreen from './screens/HomeScreen';
 import ItinerariesScreen from './screens/ItinerariesScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
 import MapScreen from './screens/MapScreen';
+import MapCommuteDetailScreen from './screens/MapCommuteDetailScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
 import PlaceDetailScreen from './screens/PlaceDetailScreen';
+import AboutEstablishmentScreen from './screens/AboutEstablishmentScreen';
 import PreferencesScreen from './screens/PreferencesScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import SavedListScreen from './screens/SavedListScreen';
+import SavedListDetailScreen from './screens/SavedListDetailScreen';
 import SignInScreen from './screens/SignInScreen';
 import SignUpScreen from './screens/SignUpScreen';
 import TerminalDetailScreen from './screens/TerminalDetailScreen';
@@ -47,9 +50,12 @@ import UserDetailsScreen from './screens/UserDetailsScreen';
 import NewListScreen from './screens/NewListScreen';
 import CreateItineraryScreen from './screens/CreateItineraryScreen';
 import CategoriesScreen from './screens/CategoriesScreen';
+import ItineraryDetailScreen from './screens/ItineraryDetailScreen';
+import FullRouteMapScreen from './screens/FullRouteMapScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
+const REQUIRE_SIGN_IN_ON_EACH_LAUNCH = true;
 
 // Auth Stack
 const AuthStack = () => (
@@ -88,7 +94,9 @@ const DashboardStack = () => (
     <Stack.Screen name="Terminals" component={TerminalsScreen} />
     <Stack.Screen name="TerminalDetail" component={TerminalDetailScreen} />
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
+    <Stack.Screen name="AboutEstablishment" component={AboutEstablishmentScreen} />
     <Stack.Screen name="Directions" component={DirectionsScreen} />
+    <Stack.Screen name="FullRouteMap" component={FullRouteMapScreen} />
     <Stack.Screen name="Categories" component={CategoriesScreen} />
     <Stack.Screen name="Notifications" component={NotificationsScreen} />
   </Stack.Navigator>
@@ -98,10 +106,13 @@ const DashboardStack = () => (
 const ItinerariesStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="ItinerariesMain" component={ItinerariesScreen} />
+    <Stack.Screen name="ItineraryDetail" component={ItineraryDetailScreen} />
     <Stack.Screen name="History" component={HistoryScreen} />
     <Stack.Screen name="Notifications" component={NotificationsScreen} />
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
+    <Stack.Screen name="AboutEstablishment" component={AboutEstablishmentScreen} />
     <Stack.Screen name="Directions" component={DirectionsScreen} />
+    <Stack.Screen name="FullRouteMap" component={FullRouteMapScreen} />
     <Stack.Screen name="NewList" component={NewListScreen} />
     <Stack.Screen name="CreateItinerary" component={CreateItineraryScreen} />
   </Stack.Navigator>
@@ -115,6 +126,7 @@ const ProfileStack = () => (
     <Stack.Screen name="Preferences" component={PreferencesScreen} />
     <Stack.Screen name="History" component={HistoryScreen} />
     <Stack.Screen name="SavedList" component={SavedListScreen} />
+    <Stack.Screen name="SavedListDetail" component={SavedListDetailScreen} />
     <Stack.Screen name="NewList" component={NewListScreen} />
     <Stack.Screen name="Notifications" component={NotificationsScreen} />
   </Stack.Navigator>
@@ -126,6 +138,7 @@ const TerminalsStack = () => (
     <Stack.Screen name="TerminalsMain" component={TerminalsScreen} />
     <Stack.Screen name="TerminalDetail" component={TerminalDetailScreen} />
     <Stack.Screen name="Directions" component={DirectionsScreen} />
+    <Stack.Screen name="FullRouteMap" component={FullRouteMapScreen} />
   </Stack.Navigator>
 );
 
@@ -134,8 +147,11 @@ const MapStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="MapMain" component={MapScreen} />
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
+    <Stack.Screen name="AboutEstablishment" component={AboutEstablishmentScreen} />
     <Stack.Screen name="TerminalDetail" component={TerminalDetailScreen} />
     <Stack.Screen name="Directions" component={DirectionsScreen} />
+    <Stack.Screen name="MapCommuteDetail" component={MapCommuteDetailScreen} />
+    <Stack.Screen name="FullRouteMap" component={FullRouteMapScreen} />
     <Stack.Screen name="Notifications" component={NotificationsScreen} />
   </Stack.Navigator>
 );
@@ -290,6 +306,16 @@ export default function App() {
     let interval: ReturnType<typeof setInterval> | undefined;
 
     const init = async () => {
+      if (REQUIRE_SIGN_IN_ON_EACH_LAUNCH && isSupabaseConfigured) {
+        try {
+          await supabase.auth.signOut();
+        } catch {
+          // Ignore startup cleanup errors; app will still route to auth flow.
+        }
+        await AsyncStorage.setItem('isAuthenticated', 'false');
+        setIsAuthenticated(false);
+        setUnauthedStackKey((k) => k + 1);
+      }
       await checkAuthStatus();
       setAuthHydrated(true);
       if (isSupabaseConfigured) {

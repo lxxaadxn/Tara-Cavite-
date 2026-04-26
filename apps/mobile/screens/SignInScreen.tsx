@@ -16,7 +16,11 @@ import { FontAwesome, Ionicons } from '@expo/vector-icons';
 import { JamIcon } from '../components/JamIcon';
 import { Colors } from '../constants/theme';
 import { Button } from '../components/Button';
-import { supabase } from '../lib/supabase';
+import {
+  isSupabaseConfigured,
+  SUPABASE_ENV_MISSING_MESSAGE,
+  supabase,
+} from '../lib/supabase';
 import { withAuthRetry, isNetworkErrorMsg, NETWORK_ERROR_USER_MESSAGE } from '../lib/authHelpers';
 
 const TURQUOISE = '#54C0CC';
@@ -33,7 +37,11 @@ const SignInScreen: React.FC = () => {
 
   const handleSignIn = async () => {
     setFormError(null);
-    const trimmedEmail = email.trim();
+    if (!isSupabaseConfigured) {
+      setFormError(SUPABASE_ENV_MISSING_MESSAGE);
+      return;
+    }
+    const trimmedEmail = email.trim().toLowerCase();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!trimmedEmail || !password) {
       setFormError('Please enter your email and password.');

@@ -43,6 +43,8 @@ import {
   placeRowExists,
   fetchUserListsForPicker,
 } from '../lib/savedListItems';
+import { planTerminalTransit, type TerminalTransitPlan } from '../lib/terminalTransitPlanner';
+import { haversineDistanceKm } from '../lib/placesFromSupabase';
 
 const GREEN = '#7EA00E';
 const TEAL = '#1F4F59';
@@ -135,6 +137,7 @@ const DirectionsScreen: React.FC = () => {
   const [routeFoot, setRouteFoot] = useState<OsrmRouteResult | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
+  const [terminalPlan, setTerminalPlan] = useState<TerminalTransitPlan | null>(null);
 
   const [saved, setSaved] = useState(false);
   const [saveModalVisible, setSaveModalVisible] = useState(false);
@@ -143,6 +146,11 @@ const DirectionsScreen: React.FC = () => {
   const [checkingSaved, setCheckingSaved] = useState(false);
 
   const tags = useMemo(() => (place ? buildTags(place) : []), [place]);
+  const departureInstruction = useMemo(() => {
+    const first = routeDriving?.steps?.[0]?.instruction?.trim();
+    if (first) return first;
+    return 'Depart from your current location.';
+  }, [routeDriving]);
 
   useEffect(() => {
     if (!place) return;
@@ -209,6 +217,25 @@ const DirectionsScreen: React.FC = () => {
       cancelled = true;
     };
   }, [place, destCoords, userPt]);
+
+  useEffect(() => {
+    if (!userPt || !destCoords) {
+      setTerminalPlan(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const plan = await planTerminalTransit(supabase, userPt, destCoords);
+        if (!cancelled) setTerminalPlan(plan);
+      } catch {
+        if (!cancelled) setTerminalPlan(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userPt, destCoords]);
 
   const mapPayload: DirectionsMapPayload = useMemo(
     () => ({
@@ -598,7 +625,79 @@ const DirectionsScreen: React.FC = () => {
                 plan transfers and walking.
               </Text>
             ) : null}
-            {routeDriving && routeDriving.steps.length > 0 ? (
+            {terminalPlan && terminalPlan.legs.length > 0 ? (
+              <>
+                <Text style={styles.routeSummaryLabel}>Terminal-to-terminal route</Text>
+                <Text style={styles.routeSummary}>
+                  Start at {terminalPlan.originTerminal.name}, transfer by Cavite routes, then arrive at{' '}
+                  {terminalPlan.destinationTerminal.name}.
+                </Text>
+                <Text style={styles.routeFootHint}>
+                  Approximate walk/ride to start terminal:{" "}
+                  {formatDistanceM(
+                    haversineDistanceKm(
+                      userPt?.lat ?? 0,
+                      userPt?.lng ?? 0,
+                      terminalPlan.originTerminal.latitude,
+                      terminalPlan.originTerminal.longitude
+                    ) * 1000
+                  )}
+                  {' · '}
+                  last-mile from destination terminal:{" "}
+                  {formatDistanceM(
+                    haversineDistanceKm(
+                      destCoords?.lat ?? 0,
+                      destCoords?.lng ?? 0,
+                      terminalPlan.destinationTerminal.latitude,
+                      terminalPlan.destinationTerminal.longitude
+                    ) * 1000
+                  )}
+                </Text>
+                <View style={styles.routeStepRow}>
+                  <Text style={styles.routeStepNum}>1</Text>
+                  <View style={styles.routeStepBody}>
+                    <Text style={styles.routeStepInstruction}>
+                      {departureInstruction}
+                    </Text>
+                    <Text style={styles.routeStepMeta}>Departure from your exact/current location</Text>
+                  </View>
+                </View>
+                {terminalPlan.legs.map((leg, index) => (
+                  <View key={`${leg.fromTerminalId}-${leg.toTerminalId}-${index}`} style={styles.routeStepRow}>
+                    <Text style={styles.routeStepNum}>{index + 3}</Text>
+                    <View style={styles.routeStepBody}>
+                      <Text style={styles.routeStepInstruction}>
+                        Ride {leg.transportName} via {leg.routeName}
+                      </Text>
+                      <Text style={styles.routeStepMeta}>
+                        Terminal {leg.fromTerminalId} → Terminal {leg.toTerminalId}
+                      </Text>
+                      <Text style={styles.commuterStepHint}>
+                        Transfer at the destination terminal of this leg before taking the next route.
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+                <View style={styles.routeStepRow}>
+                  <Text style={styles.routeStepNum}>2</Text>
+                  <View style={styles.routeStepBody}>
+                    <Text style={styles.routeStepInstruction}>
+                      Go to {terminalPlan.originTerminal.name} ({terminalPlan.originTerminal.municipality}).
+                    </Text>
+                    <Text style={styles.routeStepMeta}>Nearest boarding terminal from your location</Text>
+                  </View>
+                </View>
+                <View style={styles.routeStepRow}>
+                  <Text style={styles.routeStepNum}>{terminalPlan.legs.length + 3}</Text>
+                  <View style={styles.routeStepBody}>
+                    <Text style={styles.routeStepInstruction}>
+                      From {terminalPlan.destinationTerminal.name}, take a short local ride or walk to {place.name}.
+                    </Text>
+                    <Text style={styles.routeStepMeta}>Final last-mile leg to destination</Text>
+                  </View>
+                </View>
+              </>
+            ) : routeDriving && routeDriving.steps.length > 0 ? (
               <>
                 <Text style={styles.routeSummaryLabel}>Whole corridor (road length)</Text>
                 <Text style={styles.routeSummary}>

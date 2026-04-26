@@ -86,9 +86,37 @@ function sanitizeSearchToken(raw: string): string {
   return raw
     .trim()
     .replace(/[%_,()]/g, ' ')
+    .replace(/['"`]/g, ' ')
     .replace(/\./g, ' ')
+    .replace(/-/g, ' ')
     .replace(/\s+/g, ' ')
     .slice(0, 120);
+}
+
+function foldSearchText(raw: string): string {
+  return raw
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ');
+}
+
+function scoreMatch(place: Place, query: string): number {
+  const q = foldSearchText(query);
+  const name = foldSearchText(place.name);
+  const addr = foldSearchText(place.address);
+  const city = foldSearchText(place.city_mun ?? '');
+  const haystack = `${name} ${addr} ${city}`;
+  if (!q || !haystack.includes(q)) return Number.MAX_SAFE_INTEGER;
+  const inName = name.indexOf(q);
+  if (inName >= 0) return inName;
+  const inAddr = addr.indexOf(q);
+  if (inAddr >= 0) return 100 + inAddr;
+  const inCity = city.indexOf(q);
+  if (inCity >= 0) return 200 + inCity;
+  return 300;
 }
 
 export async function searchPlacesByText(
@@ -99,38 +127,46 @@ export async function searchPlacesByText(
   const safe = sanitizeSearchToken(rawQuery);
   if (!safe) return [];
 
-  const pattern = `%${safe}%`;
-  const fetchCap = Math.min(Math.max(limit * 4, 80), 500);
-
-  const orFilter = [
-    `name.ilike.${pattern}`,
-    `searchable_text.ilike.${pattern}`,
-    `ta_category.ilike.${pattern}`,
-    `address.ilike.${pattern}`,
-    `city_mun.ilike.${pattern}`,
-    `ntdp_category.ilike.${pattern}`,
-    `type_code.ilike.${pattern}`,
-  ].join(',');
-
+  const fetchCap = 3000;
   const { data, error } = await client
     .from('v_cavite_establishments')
     .select(CAVITE_SELECT)
-    .or(orFilter)
     .not('latitude', 'is', null)
     .not('longitude', 'is', null)
     .limit(fetchCap);
-
   if (error) throw new Error(error.message);
 
-  const seen = new Map<string, Place>();
-  for (const row of data ?? []) {
-    const p = rowToPlace(row as CavitePlaceRow);
-    if (p && !seen.has(p.id)) seen.set(p.id, p);
+  const q = foldSearchText(safe);
+  const qTokens = q.split(' ').filter(Boolean);
+
+  const scored: { place: Place; score: number }[] = [];
+  for (const row of (data ?? []) as CavitePlaceRow[]) {
+    const p = rowToPlace(row);
+    if (!p) continue;
+    const searchable = foldSearchText(
+      [
+        row.name,
+        row.ta_name,
+        row.address,
+        row.city_mun ?? '',
+        row.searchable_text ?? '',
+        row.ta_category ?? '',
+        row.ntdp_category ?? '',
+        row.type_code ?? '',
+        row.description ?? '',
+      ]
+        .filter(Boolean)
+        .join(' ')
+    );
+    if (!qTokens.every((tok) => searchable.includes(tok))) continue;
+    const score = scoreMatch(p, safe);
+    scored.push({ place: p, score });
   }
 
-  return Array.from(seen.values())
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .slice(0, limit);
+  return scored
+    .sort((a, b) => a.score - b.score || a.place.name.localeCompare(b.place.name))
+    .slice(0, limit)
+    .map((x) => x.place);
 }
 
 export async function fetchTrendingPlacesFromSupabase(

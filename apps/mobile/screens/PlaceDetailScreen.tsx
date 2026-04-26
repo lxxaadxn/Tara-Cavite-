@@ -15,6 +15,8 @@ import { Header } from '../components/Header';
 import { Place } from '../data/mockData';
 import { supabase } from '../lib/supabase';
 import { searchPlacesByText } from '../lib/placesFromSupabase';
+import { fetchTerminalsFromSupabase, filterTerminalsByText } from '../lib/terminalsFromSupabase';
+import type { Terminal } from '../data/mockData';
 
 type RouteParams = { place?: Place; query?: string };
 
@@ -28,6 +30,7 @@ const PlaceDetailScreen: React.FC = () => {
 
   const [loading, setLoading] = useState(false);
   const [candidates, setCandidates] = useState<Place[]>([]);
+  const [terminalCandidates, setTerminalCandidates] = useState<Terminal[]>([]);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   const isSearchFlow = !initialPlace && Boolean(searchQuery);
@@ -44,6 +47,7 @@ const PlaceDetailScreen: React.FC = () => {
     if (initialPlace) return;
     if (!searchQuery) {
       setCandidates([]);
+      setTerminalCandidates([]);
       setFetchError(null);
       return;
     }
@@ -51,10 +55,11 @@ const PlaceDetailScreen: React.FC = () => {
     let cancelled = false;
     setLoading(true);
     setFetchError(null);
-    searchPlacesByText(supabase, searchQuery)
-      .then((list) => {
+    Promise.all([searchPlacesByText(supabase, searchQuery), fetchTerminalsFromSupabase(supabase)])
+      .then(([placeList, terminals]) => {
         if (cancelled) return;
-        setCandidates(list);
+        setCandidates(placeList);
+        setTerminalCandidates(filterTerminalsByText(terminals, searchQuery, 25));
       })
       .catch((e: Error) => {
         if (!cancelled) setFetchError(e.message ?? 'Search failed');
@@ -70,15 +75,26 @@ const PlaceDetailScreen: React.FC = () => {
 
   useLayoutEffect(() => {
     if (!isSearchFlow || loading || fetchError) return;
-    if (candidates.length === 1) {
+    if (candidates.length === 1 && terminalCandidates.length === 0) {
       (navigation as { replace: (name: string, params: object) => void }).replace('AboutEstablishment', {
         place: candidates[0],
       });
+      return;
     }
-  }, [isSearchFlow, loading, fetchError, candidates, navigation]);
+    if (terminalCandidates.length === 1 && candidates.length === 0) {
+      (navigation as { replace: (name: string, params: object) => void }).replace('TerminalDetail', {
+        terminal: terminalCandidates[0],
+      });
+    }
+  }, [isSearchFlow, loading, fetchError, candidates, terminalCandidates, navigation]);
 
-  const showList = isSearchFlow && !loading && !fetchError && candidates.length > 1;
-  const showEmpty = isSearchFlow && !loading && !fetchError && candidates.length === 0;
+  const showList =
+    isSearchFlow &&
+    !loading &&
+    !fetchError &&
+    (candidates.length > 1 || terminalCandidates.length > 1 || (candidates.length && terminalCandidates.length));
+  const showEmpty =
+    isSearchFlow && !loading && !fetchError && candidates.length === 0 && terminalCandidates.length === 0;
   const showLoading = isSearchFlow && loading;
   const showError = isSearchFlow && !loading && fetchError;
 
@@ -134,6 +150,32 @@ const PlaceDetailScreen: React.FC = () => {
       {showList ? (
         <View style={styles.listWrap}>
           <Text style={styles.listHeading}>{listHeading}</Text>
+          {terminalCandidates.length ? (
+            <Text style={styles.sectionCaption}>Terminals</Text>
+          ) : null}
+          {terminalCandidates.map((item) => (
+            <TouchableOpacity
+              key={`t-${item.id}`}
+              style={styles.resultRow}
+              onPress={() => navigation.navigate('TerminalDetail' as never, { terminal: item } as never)}
+              accessibilityRole="button"
+              accessibilityLabel={`${item.name}, ${item.addressLine ?? item.municipality}`}
+            >
+              <JamIcon ionicon="bus" size={22} color={Colors.primary} />
+              <View style={styles.resultTextCol}>
+                <Text style={styles.resultName} numberOfLines={2}>
+                  {item.name}
+                </Text>
+                <Text style={styles.resultAddr} numberOfLines={2}>
+                  {item.addressLine ?? item.municipality}
+                </Text>
+              </View>
+              <JamIcon ionicon="chevron-forward" size={20} color={Colors.text.light} />
+            </TouchableOpacity>
+          ))}
+          {candidates.length ? (
+            <Text style={styles.sectionCaption}>Places & establishments</Text>
+          ) : null}
           <FlatList
             data={candidates}
             keyExtractor={(item) => item.id}
@@ -205,6 +247,14 @@ const styles = StyleSheet.create({
     color: Colors.text.primary,
     marginBottom: Theme.spacing.md,
     marginTop: Theme.spacing.sm,
+  },
+  sectionCaption: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.text.secondary,
+    marginBottom: Theme.spacing.xs,
+    marginTop: Theme.spacing.sm,
+    textTransform: 'uppercase',
   },
   listContent: {
     paddingBottom: Theme.spacing.xl,
