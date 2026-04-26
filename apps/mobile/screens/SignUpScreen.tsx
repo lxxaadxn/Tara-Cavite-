@@ -16,7 +16,11 @@ import { FontAwesome, Ionicons } from '@expo/vector-icons';
 import { JamIcon } from '../components/JamIcon';
 import { Colors } from '../constants/theme';
 import { Button } from '../components/Button';
-import { supabase } from '../lib/supabase';
+import {
+  isSupabaseConfigured,
+  SUPABASE_ENV_MISSING_MESSAGE,
+  supabase,
+} from '../lib/supabase';
 import { withAuthRetry, isNetworkErrorMsg, NETWORK_ERROR_USER_MESSAGE } from '../lib/authHelpers';
 
 const TURQUOISE = '#54C0CC';
@@ -24,7 +28,6 @@ const MUTED = '#7A7878';
 const LINE = 'rgba(122, 120, 120, 0.45)';
 
 const MIN_PASSWORD_LENGTH = 6;
-const hasUppercase = (str: string) => /[A-Z]/.test(str);
 
 const SignUpScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
@@ -38,7 +41,11 @@ const SignUpScreen: React.FC = () => {
 
   const handleSignUp = async () => {
     setFormError(null);
-    const trimmedEmail = email.trim();
+    if (!isSupabaseConfigured) {
+      setFormError(SUPABASE_ENV_MISSING_MESSAGE);
+      return;
+    }
+    const trimmedEmail = email.trim().toLowerCase();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     setConfirmPasswordError('');
 
@@ -50,15 +57,8 @@ const SignUpScreen: React.FC = () => {
       setFormError('Please enter a valid email address.');
       return;
     }
-    const trimmedUsername = trimmedEmail.split('@')[0];
     if (password.length < MIN_PASSWORD_LENGTH) {
-      setFormError(
-        'Password must be at least 6 characters and contain at least one uppercase letter.'
-      );
-      return;
-    }
-    if (!hasUppercase(password)) {
-      setFormError('Password must contain at least one uppercase letter.');
+      setFormError('Password must be at least 6 characters.');
       return;
     }
     if (password !== confirmPassword) {
@@ -71,7 +71,6 @@ const SignUpScreen: React.FC = () => {
         supabase.auth.signUp({
           email: trimmedEmail,
           password,
-          options: { data: { username: trimmedUsername } },
         })
       );
       if (error) throw error;

@@ -24,6 +24,7 @@ import {
   addTerminalToSavedList,
   fetchUserListsForPicker,
 } from '../lib/savedListItems';
+import { fetchRoutesForTerminalId } from '../lib/fetchTerminalRoutesFromSupabase';
 
 /** Match AboutEstablishmentScreen */
 const GREEN = '#7EA00E';
@@ -79,6 +80,7 @@ const TerminalDetailScreen: React.FC = () => {
   const [pickLists, setPickLists] = useState<SaveToListRow[]>([]);
   const [saveListBusyId, setSaveListBusyId] = useState<string | null>(null);
   const [openGates, setOpenGates] = useState<Record<string, boolean>>({});
+  const [liveRoutes, setLiveRoutes] = useState<{ label: string }[]>([]);
 
   const addressLine = useMemo(
     () => (terminal ? terminalAddressLine(terminal) : ''),
@@ -110,6 +112,28 @@ const TerminalDetailScreen: React.FC = () => {
       setOpenGates({});
     }
   }, [terminal?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!terminal) return;
+    (async () => {
+      try {
+        const rows = await fetchRoutesForTerminalId(terminal.id);
+        if (cancelled) return;
+        const unique = new Map<string, { label: string }>();
+        for (const r of rows) {
+          const label = `${r.routeName} (${r.transportName})`;
+          if (!unique.has(label)) unique.set(label, { label });
+        }
+        setLiveRoutes(Array.from(unique.values()));
+      } catch {
+        if (!cancelled) setLiveRoutes([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [terminal]);
 
   const refreshSavedState = useCallback(async () => {
     if (!terminal) return;
@@ -247,7 +271,8 @@ const TerminalDetailScreen: React.FC = () => {
   }
 
   const hasGates = terminal.routesByGate && terminal.routesByGate.length > 0;
-  const hasFlatRoutes = terminal.primaryRoutes.length > 0;
+  const fallbackRoutes = terminal.primaryRoutes.length > 0 ? terminal.primaryRoutes : liveRoutes;
+  const hasFlatRoutes = fallbackRoutes.length > 0;
 
   const greenHeader = (
     <View style={[styles.greenHeader, { paddingTop: insets.top + 8 }]}>
@@ -420,10 +445,10 @@ const TerminalDetailScreen: React.FC = () => {
             ) : (
               <View style={styles.descriptionCard}>
                 <Text style={styles.descriptionLabel}>Routes</Text>
-                {terminal.primaryRoutes.map((r, i) => (
+                {fallbackRoutes.map((r, i) => (
                   <View
                     key={i}
-                    style={[styles.flatRouteRow, i < terminal.primaryRoutes.length - 1 && styles.flatRouteRowBorder]}
+                    style={[styles.flatRouteRow, i < fallbackRoutes.length - 1 && styles.flatRouteRowBorder]}
                   >
                     <View style={styles.routeAccentBar} />
                     <Text style={styles.flatRouteText}>{r.label}</Text>

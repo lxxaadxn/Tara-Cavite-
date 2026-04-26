@@ -13,7 +13,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
 import { JamIcon } from '../components/JamIcon';
 import { Colors, Theme } from '../constants/theme';
 import { Header } from '../components/Header';
@@ -214,43 +213,41 @@ const UserDetailsScreen: React.FC = () => {
       quality: 0.8,
     });
     if (result.canceled || !result.assets[0]) return;
-    const uri = result.assets[0].uri;
+    const asset = result.assets[0];
+    const uri = asset.uri;
     if (!user) return;
     setSaving(true);
     try {
-      // Read file as base64 using expo-file-system (most reliable for React Native)
-      const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: 'base64',
-      });
-      
-      if (!base64 || base64.length === 0) {
-        throw new Error('Failed to read image file or file is empty');
+      const fileResponse = await fetch(uri);
+      if (!fileResponse.ok) {
+        throw new Error('Failed to read selected image file.');
       }
-      
-      // Convert base64 to ArrayBuffer using a more reliable method
-      // Create a binary string from base64
-      const binaryString = atob(base64);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
+      const fileBuffer = await fileResponse.arrayBuffer();
+      if (!fileBuffer || fileBuffer.byteLength === 0) {
+        throw new Error('Selected image is empty.');
       }
-      
+
       // Determine file extension and MIME type
-      const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
-      const mimeType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
-      const fileName = `${Date.now()}.${ext}`;
+      const guessedExt = uri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
+      const ext =
+        guessedExt === 'jpeg' || guessedExt === 'jpg' || guessedExt === 'png' || guessedExt === 'webp'
+          ? guessedExt
+          : 'jpg';
+      const mimeType =
+        asset.mimeType ||
+        (ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg');
+      const normalizedExt = ext === 'jpeg' ? 'jpg' : ext;
+      const fileName = `${Date.now()}.${normalizedExt}`;
       const path = `${user.id}/${fileName}`;
       
-      console.log('File size before upload:', bytes.length, 'bytes');
-      console.log('Base64 length:', base64.length);
+      console.log('File size before upload:', fileBuffer.byteLength, 'bytes');
       console.log('MIME type:', mimeType);
       console.log('File URI:', uri);
       
-      // Upload to Supabase storage - use ArrayBuffer/Uint8Array
-      // Supabase accepts ArrayBuffer, Uint8Array, Blob, File, or FormData
+      // Upload as ArrayBuffer (Expo 54+ compatible).
       const { error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(path, bytes.buffer, { 
+        .upload(path, fileBuffer, { 
           upsert: true,
           contentType: mimeType,
         });
@@ -282,7 +279,7 @@ const UserDetailsScreen: React.FC = () => {
       const publicUrl = urlData.publicUrl;
       
       console.log('Uploaded image URL:', publicUrl);
-      console.log('Upload successful, file size:', bytes.length, 'bytes');
+      console.log('Upload successful, file size:', fileBuffer.byteLength, 'bytes');
       
       // Update user_profiles table
       const { error: profileError } = await supabase

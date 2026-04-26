@@ -66,8 +66,11 @@ const ProfileScreen: React.FC = () => {
   const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
   const [user, setUser] = useState<User | null>(null);
   const [displayName, setDisplayName] = useState('Username');
+  const [savedCount, setSavedCount] = useState(0);
+  const [listsCount, setListsCount] = useState(0);
+  const [terminalsCount, setTerminalsCount] = useState(0);
 
-  const loadUser = async () => {
+  const loadUserAndStats = async () => {
     const {
       data: { user: u },
     } = await supabase.auth.getUser();
@@ -86,12 +89,59 @@ const ProfileScreen: React.FC = () => {
         u.email?.split('@')[0] ||
         'Username';
       setDisplayName(name);
+
+      // Per-user list stats.
+      const { data: userLists, error: listsError } = await supabase
+        .from('saved_lists')
+        .select('id')
+        .eq('user_id', u.id);
+      if (listsError) {
+        console.error('Failed to load saved lists count:', listsError);
+        setListsCount(0);
+        setSavedCount(0);
+      } else {
+        const listIds = (userLists ?? []).map((r) => r.id as string);
+        setListsCount(listIds.length);
+        if (listIds.length === 0) {
+          setSavedCount(0);
+        } else {
+          const [placeItems, terminalItems, itineraryItems] = await Promise.all([
+            supabase.from('saved_list_items').select('list_id', { count: 'exact', head: true }).in('list_id', listIds),
+            supabase
+              .from('saved_list_terminal_items')
+              .select('list_id', { count: 'exact', head: true })
+              .in('list_id', listIds),
+            supabase
+              .from('saved_list_itinerary_items')
+              .select('list_id', { count: 'exact', head: true })
+              .in('list_id', listIds),
+          ]);
+          const totalSaved =
+            (placeItems.count ?? 0) + (terminalItems.count ?? 0) + (itineraryItems.count ?? 0);
+          setSavedCount(totalSaved);
+        }
+      }
+    } else {
+      setDisplayName('Username');
+      setSavedCount(0);
+      setListsCount(0);
+    }
+
+    // Global terminals count from Cavite terminals dataset.
+    const { count: tCount, error: terminalsError } = await supabase
+      .from('cavitour_terminals')
+      .select('terminal_id', { count: 'exact', head: true });
+    if (terminalsError) {
+      console.error('Failed to load terminals count:', terminalsError);
+      setTerminalsCount(0);
+    } else {
+      setTerminalsCount(tCount ?? 0);
     }
   };
 
   useFocusEffect(
     React.useCallback(() => {
-      loadUser();
+      loadUserAndStats();
     }, [])
   );
 
@@ -164,9 +214,9 @@ const ProfileScreen: React.FC = () => {
 
         <View style={styles.statsRow}>
           {[
-            { value: '12', label: 'Saved' },
-            { value: '3', label: 'Lists' },
-            { value: '6', label: 'Terminals' },
+            { value: String(savedCount), label: 'Saved' },
+            { value: String(listsCount), label: 'Lists' },
+            { value: String(terminalsCount), label: 'Terminals' },
           ].map((s) => (
             <View key={s.label} style={styles.statCell}>
               <Text style={styles.statValue}>{s.value}</Text>

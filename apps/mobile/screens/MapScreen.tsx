@@ -25,6 +25,8 @@ import {
 import { getMainFloatingTabBarStyle } from '../lib/mainTabBarStyle';
 import { supabase } from '../lib/supabase';
 import { fetchTrendingPlacesFromSupabase } from '../lib/placesFromSupabase';
+import { fetchTerminalsFromSupabase } from '../lib/terminalsFromSupabase';
+import { mockTerminals, type Place, type Terminal } from '../data/mockData';
 
 const H_PAD = 16;
 const OVERLAY_TOP = 10;
@@ -63,6 +65,8 @@ export default function MapScreen() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sheetMode, setSheetMode] = useState<'preview' | 'routes'>('preview');
   const [dbMarkers, setDbMarkers] = useState<LeafletMarker[]>([]);
+  const [dbPlaces, setDbPlaces] = useState<Place[]>([]);
+  const [terminals, setTerminals] = useState<Terminal[]>(mockTerminals);
 
   const spots = useMemo(() => getMapSpots(), []);
   const markers = useMemo(() => mapSpotsToMarkers(spots), [spots]);
@@ -73,6 +77,7 @@ export default function MapScreen() {
     (async () => {
       try {
         const places = await fetchTrendingPlacesFromSupabase(supabase, 600);
+        setDbPlaces(places);
         const m: LeafletMarker[] = places.map((p) => ({
           id: p.id,
           name: p.name,
@@ -81,13 +86,42 @@ export default function MapScreen() {
         }));
         if (!cancelled) setDbMarkers(m);
       } catch {
-        if (!cancelled) setDbMarkers([]);
+        if (!cancelled) {
+          setDbPlaces([]);
+          setDbMarkers([]);
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const live = await fetchTerminalsFromSupabase(supabase);
+        if (!cancelled && live.length > 0) setTerminals(live);
+      } catch {
+        if (!cancelled) setTerminals(mockTerminals);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const terminalMarkers = useMemo(
+    () =>
+      terminals.map((t) => ({
+        id: `terminal-${t.id}`,
+        name: t.name,
+        lat: t.latitude,
+        lng: t.longitude,
+      })),
+    [terminals]
+  );
 
   const combinedMarkers = useMemo(() => {
     // Prefer DB markers (real establishments). Fall back to bundled map data if DB is empty.
@@ -163,6 +197,19 @@ export default function MapScreen() {
   }, [navigation]);
 
   const openSpot = (id: string) => {
+    if (id.startsWith('terminal-')) {
+      const terminalId = id.replace('terminal-', '');
+      const terminal = terminals.find((t) => t.id === terminalId);
+      if (terminal) {
+        navigation.navigate('TerminalDetail' as never, { terminal } as never);
+      }
+      return;
+    }
+    const livePlace = dbPlaces.find((p) => p.id === id);
+    if (livePlace) {
+      navigation.navigate('AboutEstablishment' as never, { place: livePlace } as never);
+      return;
+    }
     setSelectedId(id);
     setSheetMode('preview');
   };
@@ -194,7 +241,7 @@ export default function MapScreen() {
           <LeafletMapView
             style={styles.mapLayer}
             markers={combinedMarkers}
-            terminals={[]}
+            terminals={terminalMarkers}
             userLocation={userLocation}
             onMarkerPress={(id) => openSpot(id)}
           />

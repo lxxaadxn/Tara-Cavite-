@@ -16,7 +16,7 @@ import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/nativ
 import { JamIcon } from '../components/JamIcon';
 import { Place, mockTerminals, mockItineraries, type Terminal, type ItineraryCard } from '../data/mockData';
 import { supabase } from '../lib/supabase';
-import { rowToPlace, type CavitePlaceRow } from '../lib/placesFromSupabase';
+import { fetchTerminalsFromSupabase } from '../lib/terminalsFromSupabase';
 
 const GREEN = '#7EA00E';
 const TEAL = '#1F4F59';
@@ -27,8 +27,8 @@ const PAGE_BG = '#F5F5F6';
 const PLACEHOLDER_INPUT = '#B3AAAA';
 const H_PAD = 16;
 
-const PLACES_SELECT =
-  'id, name, ta_name, type_code, ta_category, ntdp_category, city_mun, address, latitude, longitude, description, searchable_text, lgu_slug';
+const SAVED_PLACES_SELECT =
+  'id, name, address, type, hours, latitude, longitude, image_url, description, ntdp_category, city_mun';
 
 export type SavedListDetailParams = {
   listId: string;
@@ -108,26 +108,55 @@ export default function SavedListDetailScreen() {
       const placeIds = (placeLinks ?? []).map((r) => (r as { place_id: string }).place_id);
       if (placeIds.length > 0) {
         const { data: pRows, error } = await supabase
-          .from('v_cavite_establishments')
-          .select(PLACES_SELECT)
+          .from('places')
+          .select(SAVED_PLACES_SELECT)
           .in('id', placeIds);
         if (error) throw error;
         for (const row of pRows ?? []) {
-          const p = rowToPlace(row as CavitePlaceRow);
-          if (p) {
-            rows.push({
-              kind: 'establishment',
-              key: `e-${p.id}`,
-              title: p.name,
-              place: p,
-            });
-          }
+          const placeRow = row as {
+            id: string;
+            name: string;
+            address: string;
+            type: string | null;
+            hours: string | null;
+            latitude: number | null;
+            longitude: number | null;
+            description: string | null;
+            ntdp_category: string | null;
+            city_mun: string | null;
+          };
+          if (placeRow.latitude == null || placeRow.longitude == null) continue;
+          const p: Place = {
+            id: placeRow.id,
+            name: placeRow.name,
+            address: placeRow.address,
+            type: placeRow.type ?? 'Place',
+            hours: placeRow.hours ?? '',
+            latitude: placeRow.latitude,
+            longitude: placeRow.longitude,
+            description: placeRow.description ?? undefined,
+            ntdp_category: placeRow.ntdp_category ?? undefined,
+            city_mun: placeRow.city_mun ?? undefined,
+          };
+          rows.push({
+            kind: 'establishment',
+            key: `e-${p.id}`,
+            title: p.name,
+            place: p,
+          });
         }
       }
 
       if (!termErr) {
         const tRefs = new Set((termLinks ?? []).map((r) => (r as { terminal_ref: string }).terminal_ref));
-        for (const t of mockTerminals) {
+        let terminalsCatalog: Terminal[] = mockTerminals;
+        try {
+          const liveTerminals = await fetchTerminalsFromSupabase(supabase);
+          if (liveTerminals.length) terminalsCatalog = liveTerminals;
+        } catch {
+          terminalsCatalog = mockTerminals;
+        }
+        for (const t of terminalsCatalog) {
           if (tRefs.has(t.id)) {
             rows.push({ kind: 'terminal', key: `t-${t.id}`, title: t.name, terminal: t });
           }

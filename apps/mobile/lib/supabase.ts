@@ -11,6 +11,8 @@ const SUPABASE_URL = (process.env.EXPO_PUBLIC_SUPABASE_URL ?? '').trim();
 const SUPABASE_ANON_KEY = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '').trim();
 
 const configured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+export const SUPABASE_ENV_MISSING_MESSAGE =
+  'Supabase is not configured on this device. Create apps/mobile/.env with EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY, then restart Expo.';
 
 if (!configured && __DEV__) {
   console.warn(

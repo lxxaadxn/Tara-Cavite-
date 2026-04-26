@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useContext, useCallback } from 'react';
+import React, { useState, useMemo, useContext, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,8 @@ import {
 } from '../components/DashboardFiltersPanel';
 import { mockTerminals, Terminal } from '../data/mockData';
 import { terminalAddressLine } from '../lib/terminalHelpers';
+import { supabase } from '../lib/supabase';
+import { fetchTerminalsFromSupabase } from '../lib/terminalsFromSupabase';
 
 const TITLE_DARK = '#241D13';
 const PLACEHOLDER = '#B3AAAA';
@@ -128,6 +130,7 @@ const TerminalsScreen: React.FC = () => {
   const [transitMode, setTransitMode] = useState<TransitMode>('all');
   const [filtersVisible, setFiltersVisible] = useState(false);
   const [locationToggles, setLocationToggles] = useState<Record<string, boolean>>({});
+  const [terminals, setTerminals] = useState<Terminal[]>(mockTerminals);
 
   const filterSheetPadBottom = Math.max(insets.bottom, 10);
   const filterScrollMaxHeight = FILTER_SHEET_MAX_HEIGHT - filterSheetPadBottom;
@@ -136,11 +139,26 @@ const TerminalsScreen: React.FC = () => {
     setLocationToggles(toggles);
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const live = await fetchTerminalsFromSupabase(supabase);
+        if (!cancelled && live.length > 0) setTerminals(live);
+      } catch {
+        if (!cancelled) setTerminals(mockTerminals);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const scrollBottomPadding = tabBarHeight + Math.max(insets.bottom, 8) + EXTRA_SCROLL_BOTTOM;
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    let list = mockTerminals.filter((t) => terminalMatchesTransit(t, transitMode));
+    let list = terminals.filter((t) => terminalMatchesTransit(t, transitMode));
     list = list.filter((t) => terminalMatchesLocationToggles(t, locationToggles));
     if (q) {
       list = list.filter(
@@ -151,7 +169,7 @@ const TerminalsScreen: React.FC = () => {
       );
     }
     return sortTerminals(list);
-  }, [searchQuery, transitMode, locationToggles]);
+  }, [searchQuery, transitMode, locationToggles, terminals]);
 
   const renderTerminalItem = (terminal: Terminal, listIndex: number) => {
     const step = corridorStepIndex(terminal);
@@ -223,7 +241,7 @@ const TerminalsScreen: React.FC = () => {
           <View style={styles.headerTitleBlock}>
             <Text style={styles.headerTitle}>Terminals</Text>
             <Text style={styles.headerSubtitle} pointerEvents="none">
-              {mockTerminals.length} waypoints · demo corridor
+              {terminals.length} terminals in Cavite
             </Text>
           </View>
           <View style={styles.headerIconBtn} />
