@@ -5,9 +5,9 @@ import { fetchAllPlacesFromSupabase, fetchPlaceById } from '../lib/placesFromSup
 import { AppHeader } from '../components/AppHeader';
 import { RouteLeafletMap } from '../components/RouteLeafletMap';
 import { savePlaceToList } from '../lib/savedPlaces';
+import { planTerminalTransit } from '../lib/terminalTransitPlanner';
 
 const olive = '#7ea00e';
-const teal = '#1f4f59';
 const PLACEHOLDER_IMG =
   'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80';
 const DEFAULT_FALLBACK_SPOT = {
@@ -135,6 +135,7 @@ export function PlaceDetailPage() {
   const [saveStatus, setSaveStatus] = useState('');
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [listNameDraft, setListNameDraft] = useState('');
+  const [terminalTransitPlan, setTerminalTransitPlan] = useState(null);
 
   useEffect(() => {
     const q = searchParams.get('tab');
@@ -164,6 +165,25 @@ export function PlaceDetailPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!userCoords || spot?.lat == null || spot?.lng == null) {
+      setTerminalTransitPlan(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const plan = await planTerminalTransit(supabase, userCoords, { lat: spot.lat, lng: spot.lng });
+        if (!cancelled) setTerminalTransitPlan(plan);
+      } catch {
+        if (!cancelled) setTerminalTransitPlan(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userCoords, spot?.lat, spot?.lng]);
 
   useEffect(() => {
     let cancelled = false;
@@ -272,7 +292,7 @@ export function PlaceDetailPage() {
           image: s.imageUrl || PLACEHOLDER_IMG,
           price: estimatePrice(s.id),
         })),
-    [relatedPlacesRaw, spot?.id]
+    [relatedPlacesRaw, spot]
   );
   const routeOptions = useMemo(() => {
     if (!spot) return [];
@@ -451,7 +471,7 @@ export function PlaceDetailPage() {
               <div className="space-y-4">
                 <div className="grid grid-cols-1 gap-4 rounded-2xl border border-neutral-200 bg-white p-4 shadow-[0_8px_28px_rgba(0,0,0,0.04)] sm:grid-cols-[1.2fr_320px]">
                   <div className="space-y-2.5">
-                    {reviewBreakdown.map((row, i) => (
+                    {reviewBreakdown.map((row) => (
                       <div key={row.label} className="grid grid-cols-[52px_18px_minmax(0,1fr)_44px] items-center gap-2.5">
                         <p className="text-[11px] font-semibold uppercase text-neutral-600">{row.label}</p>
                         <ReviewStars value={1} size="h-3.5 w-3.5" />
@@ -537,7 +557,45 @@ export function PlaceDetailPage() {
             )}
 
             {tab === 'route' && (
-              <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
+              <div className="space-y-3">
+                {userCoords && (
+                  <div className="overflow-hidden rounded-2xl border border-[#cddcab] bg-[#f7faef] p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[#5d7211]">Cavite terminal transfers</p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-neutral-600">
+                      Nearest terminals to you and this place, connected via the same route graph as the mobile commute screen (
+                      <code className="rounded bg-white/80 px-1 text-[10px]">cavitour_terminal_routes</code>
+                      ).
+                    </p>
+                    {!terminalTransitPlan ? (
+                      <p className="mt-2 text-xs text-neutral-500">No linked path in the dataset, or still loading…</p>
+                    ) : (
+                      <div className="mt-3 rounded-xl border border-neutral-200 bg-white p-3">
+                        <p className="text-[11px] text-neutral-600">
+                          <span className="font-semibold text-neutral-900">{terminalTransitPlan.originTerminal.name}</span>
+                          <span className="mx-1">→</span>
+                          <span className="font-semibold text-neutral-900">{terminalTransitPlan.destinationTerminal.name}</span>
+                        </p>
+                        {terminalTransitPlan.legs.length === 0 ? (
+                          <p className="mt-2 text-xs text-neutral-500">Same nearest terminal — ride the corridor on the map below.</p>
+                        ) : (
+                          <ol className="mt-2 list-decimal space-y-2 pl-4 text-xs text-neutral-800">
+                            {terminalTransitPlan.legs.map((leg, idx) => (
+                              <li key={`${leg.fromTerminalId}-${leg.toTerminalId}-${idx}`}>
+                                Route: {leg.routeName} · {leg.transportName}
+                              </li>
+                            ))}
+                          </ol>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {!userCoords && (
+                  <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    Allow location to see Cavite terminal-to-terminal legs (same as mobile directions).
+                  </p>
+                )}
+                <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
                 <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)]">
                   <aside className="border-b border-neutral-200 bg-[#f8faf7] p-3.5 lg:border-b-0 lg:border-r">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Route options</p>
@@ -623,6 +681,7 @@ export function PlaceDetailPage() {
                       </div>
                     </div>
                   </div>
+                </div>
                 </div>
               </div>
             )}

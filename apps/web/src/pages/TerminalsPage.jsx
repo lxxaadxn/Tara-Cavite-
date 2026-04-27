@@ -1,9 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AppHeader } from '../components/AppHeader';
 import { pitxGallery } from '../data/terminalPitx';
+import { supabase } from '../lib/supabase';
+import { fetchTerminalsFromSupabase } from '../lib/terminalsFromSupabase';
+import { planTerminalTransitBetween } from '../lib/terminalTransitPlanner';
 
-const terminals = [
+const FALLBACK_TERMINALS = [
   {
     id: 'pitx',
     name: 'PITX',
@@ -54,9 +57,65 @@ const terminals = [
   },
 ];
 
+const olive = '#7ea00e';
+
 export function TerminalsPage() {
-  const [selectedTerminalId, setSelectedTerminalId] = useState(terminals[0].id);
+  const [terminals, setTerminals] = useState(FALLBACK_TERMINALS);
+  const [selectedTerminalId, setSelectedTerminalId] = useState(FALLBACK_TERMINALS[0].id);
   const [search, setSearch] = useState('');
+  const [fromTerminalId, setFromTerminalId] = useState(FALLBACK_TERMINALS[0].id);
+  const [toTerminalId, setToTerminalId] = useState(
+    FALLBACK_TERMINALS[1]?.id ?? FALLBACK_TERMINALS[0].id
+  );
+  const [transitPlan, setTransitPlan] = useState(null);
+  const [transitLoading, setTransitLoading] = useState(false);
+  const [transitError, setTransitError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const live = await fetchTerminalsFromSupabase(supabase);
+        if (!cancelled && live.length > 0) {
+          setTerminals(live);
+          setSelectedTerminalId((prev) => (live.some((terminal) => terminal.id === prev) ? prev : live[0].id));
+          setFromTerminalId(live[0].id);
+          setToTerminalId(live.length > 1 ? live[1].id : live[0].id);
+        }
+      } catch {
+        if (!cancelled) setTerminals(FALLBACK_TERMINALS);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleFindTransit = async () => {
+    if (!fromTerminalId || !toTerminalId) return;
+    if (fromTerminalId === toTerminalId) {
+      setTransitError('Choose two different terminals.');
+      setTransitPlan(null);
+      return;
+    }
+    setTransitLoading(true);
+    setTransitError('');
+    setTransitPlan(null);
+    try {
+      const plan = await planTerminalTransitBetween(supabase, fromTerminalId, toTerminalId);
+      if (!plan) {
+        setTransitError('No route connects these terminals in the Cavite routes graph.');
+        return;
+      }
+      setTransitPlan(plan);
+    } catch (err) {
+      setTransitError(err?.message ?? 'Could not load routes.');
+    } finally {
+      setTransitLoading(false);
+    }
+  };
+
+  const terminalName = (id) => terminals.find((t) => String(t.id) === String(id))?.name ?? id;
 
   const filteredTerminals = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -65,10 +124,12 @@ export function TerminalsPage() {
       (terminal) =>
         `${terminal.name} ${terminal.subtitle} ${terminal.city}`.toLowerCase().includes(q)
     );
-  }, [search]);
+  }, [search, terminals]);
 
   const selectedTerminal =
-    filteredTerminals.find((terminal) => terminal.id === selectedTerminalId) ?? filteredTerminals[0] ?? terminals[0];
+    filteredTerminals.find((terminal) => terminal.id === selectedTerminalId) ??
+    filteredTerminals[0] ??
+    terminals[0];
 
   const mapSrc = `https://www.openstreetmap.org/export/embed.html?bbox=${selectedTerminal.lng - 0.08}%2C${selectedTerminal.lat - 0.06}%2C${selectedTerminal.lng + 0.08}%2C${selectedTerminal.lat + 0.06}&layer=mapnik&marker=${selectedTerminal.lat}%2C${selectedTerminal.lng}`;
 
@@ -98,6 +159,79 @@ export function TerminalsPage() {
                     className="w-full bg-transparent text-sm text-neutral-700 outline-none placeholder:text-neutral-400"
                   />
                 </div>
+              </div>
+
+              <div className="mt-3 rounded-xl border border-[#cddcab] bg-[#f7faef] p-3">
+                <p className="text-xs font-semibold text-neutral-800">Terminal-to-terminal route</p>
+                <p className="mt-0.5 text-[11px] leading-snug text-neutral-500">
+                  Same logic as the mobile app: builds a graph from{' '}
+                  <code className="rounded bg-white/80 px-1 text-[10px]">cavitour_terminal_routes</code> and finds a path (BFS).
+                </p>
+                <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <label className="block text-[11px] font-medium text-neutral-600">
+                    From
+                    <select
+                      value={fromTerminalId}
+                      onChange={(e) => setFromTerminalId(e.target.value)}
+                      className="mt-1 w-full rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-sm text-neutral-900"
+                    >
+                      {terminals.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block text-[11px] font-medium text-neutral-600">
+                    To
+                    <select
+                      value={toTerminalId}
+                      onChange={(e) => setToTerminalId(e.target.value)}
+                      className="mt-1 w-full rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-sm text-neutral-900"
+                    >
+                      {terminals.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleFindTransit}
+                  disabled={transitLoading || !fromTerminalId || !toTerminalId || fromTerminalId === toTerminalId}
+                  className="mt-2 w-full rounded-lg py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  style={{ backgroundColor: olive }}
+                >
+                  {transitLoading ? 'Planning…' : 'Find route'}
+                </button>
+                {transitError ? <p className="mt-2 text-xs text-red-600">{transitError}</p> : null}
+                {transitPlan ? (
+                  <div className="mt-3 space-y-2 border-t border-[#dfe8d3] pt-3">
+                    <p className="text-[11px] text-neutral-600">
+                      <span className="font-semibold text-neutral-800">{transitPlan.originTerminal.name}</span>
+                      <span className="mx-1 text-neutral-400">→</span>
+                      <span className="font-semibold text-neutral-800">{transitPlan.destinationTerminal.name}</span>
+                    </p>
+                    {transitPlan.legs.length === 0 ? (
+                      <p className="text-xs text-neutral-500">Same terminal — no transfers needed.</p>
+                    ) : (
+                      <ol className="list-decimal space-y-2 pl-4 text-xs text-neutral-800">
+                        {transitPlan.legs.map((leg, index) => (
+                          <li key={`${leg.fromTerminalId}-${leg.toTerminalId}-${index}`}>
+                            <span className="font-semibold">{terminalName(leg.fromTerminalId)}</span>
+                            {' → '}
+                            <span className="font-semibold">{terminalName(leg.toTerminalId)}</span>
+                            <span className="mt-0.5 block text-[11px] font-normal text-neutral-500">
+                              {leg.routeName} · {leg.transportName}
+                            </span>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                  </div>
+                ) : null}
               </div>
 
               <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">

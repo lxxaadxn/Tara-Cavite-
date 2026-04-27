@@ -5,6 +5,7 @@ import { fetchAllPlacesFromSupabase, searchPlacesByText } from '../lib/placesFro
 import { AppHeader } from '../components/AppHeader';
 import { FilterModal } from '../components/FilterModal';
 import { PlacesLeafletMap } from '../components/PlacesLeafletMap';
+import { spots } from '../data/spots';
 
 const PLACEHOLDER_IMG = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80';
 
@@ -96,6 +97,21 @@ function formatDistance(distanceKm) {
   return `${distanceKm.toFixed(1)} km`;
 }
 
+function mapSpotToPlace(spot) {
+  return {
+    id: spot.id,
+    name: spot.name,
+    address: spot.address,
+    lat: spot.lat,
+    lng: spot.lng,
+    imageUrl: spot.image,
+    description: spot.description,
+    ntdp_category: Array.isArray(spot.tags) ? spot.tags[0] : null,
+    city_mun: (spot.address || '').split(',').slice(-1)[0]?.trim() || 'Cavite',
+    type: Array.isArray(spot.tags) ? spot.tags[0] : 'Place',
+  };
+}
+
 export function SearchPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
@@ -105,7 +121,9 @@ export function SearchPage() {
   const [selectedPlaceId, setSelectedPlaceId] = useState(null);
   const [dataSource, setDataSource] = useState('loading');
   const [userCoords, setUserCoords] = useState(null);
-  const [locationStatus, setLocationStatus] = useState('idle');
+  const [locationStatus, setLocationStatus] = useState(
+    typeof window !== 'undefined' && window.navigator?.geolocation ? 'locating' : 'unsupported'
+  );
   const trendingRef = useRef([]);
 
   useEffect(() => {
@@ -120,10 +138,11 @@ export function SearchPage() {
         setDataSource('supabase');
       } catch {
         if (cancelled) return;
-        trendingRef.current = [];
-        setAllPlaces([]);
-        setDisplayPlaces([]);
-        setDataSource('error');
+        const fallbackPlaces = spots.map(mapSpotToPlace);
+        trendingRef.current = fallbackPlaces;
+        setAllPlaces(fallbackPlaces);
+        setDisplayPlaces(fallbackPlaces);
+        setDataSource('fallback');
       }
     })();
     return () => {
@@ -132,13 +151,9 @@ export function SearchPage() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.navigator?.geolocation) {
-      setLocationStatus('unsupported');
-      return;
-    }
+    if (typeof window === 'undefined' || !window.navigator?.geolocation) return;
 
     let cancelled = false;
-    setLocationStatus('locating');
     window.navigator.geolocation.getCurrentPosition(
       (position) => {
         if (cancelled) return;
@@ -171,12 +186,23 @@ export function SearchPage() {
       return;
     }
     const t = setTimeout(() => {
-      searchPlacesByText(supabase, q, 1000)
-        .then((list) => setDisplayPlaces(list.length ? list : []))
-        .catch(() => {});
+      if (dataSource === 'supabase') {
+        searchPlacesByText(supabase, q, 1000)
+          .then((list) => setDisplayPlaces(list.length ? list : []))
+          .catch(() => {});
+        return;
+      }
+      const qLower = q.toLowerCase();
+      setDisplayPlaces(
+        trendingRef.current.filter((place) =>
+          `${place.name} ${place.address} ${place.city_mun ?? ''} ${place.ntdp_category ?? ''}`
+            .toLowerCase()
+            .includes(qLower)
+        )
+      );
     }, 380);
     return () => clearTimeout(t);
-  }, [search]);
+  }, [search, dataSource]);
 
   const filteredPlaces = useMemo(() => {
     if (!userCoords) return displayPlaces;
@@ -200,20 +226,15 @@ export function SearchPage() {
     return distances;
   }, [filteredPlaces, userCoords]);
 
-  useEffect(() => {
-    if (!filteredPlaces.length) {
-      setSelectedPlaceId(null);
-      return;
-    }
-    if (selectedPlaceId && !filteredPlaces.some((p) => p.id === selectedPlaceId)) {
-      setSelectedPlaceId(null);
-    }
-  }, [filteredPlaces, selectedPlaceId]);
+  const effectiveSelectedPlaceId = useMemo(() => {
+    if (!selectedPlaceId) return null;
+    return filteredPlaces.some((p) => p.id === selectedPlaceId) ? selectedPlaceId : null;
+  }, [selectedPlaceId, filteredPlaces]);
 
-  const selectedPlace = filteredPlaces.find((p) => p.id === selectedPlaceId) ?? null;
+  const selectedPlace = filteredPlaces.find((p) => p.id === effectiveSelectedPlaceId) ?? null;
   const thumbnailPlaces = useMemo(
-    () => filteredPlaces.filter((p) => p.id !== selectedPlaceId),
-    [filteredPlaces, selectedPlaceId]
+    () => filteredPlaces.filter((p) => p.id !== effectiveSelectedPlaceId),
+    [filteredPlaces, effectiveSelectedPlaceId]
   );
   const selectedPlaceTags = useMemo(() => buildPlaceTags(selectedPlace), [selectedPlace]);
   const selectedPlaceDescription = useMemo(
@@ -410,7 +431,7 @@ export function SearchPage() {
                     key={place.id}
                     onClick={() => setSelectedPlaceId(place.id)}
                     className={`flex h-full min-h-[234px] cursor-pointer flex-col overflow-hidden rounded-2xl border bg-white p-2 text-left transition ${
-                      selectedPlaceId === place.id ? 'border-neutral-900 shadow-md' : 'border-neutral-200'
+                      effectiveSelectedPlaceId === place.id ? 'border-neutral-900 shadow-md' : 'border-neutral-200'
                     }`}
                   >
                     <div className="overflow-hidden rounded-xl bg-neutral-100">
@@ -471,9 +492,9 @@ export function SearchPage() {
           </section>
         </div>
 
-        {dataSource === 'error' && (
+        {dataSource === 'fallback' && (
           <p className="mx-auto mt-3 max-w-3xl text-center text-xs text-amber-800">
-            Unable to load places from Supabase right now.
+            Supabase is currently unavailable. Showing local fallback places.
           </p>
         )}
       </div>

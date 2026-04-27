@@ -95,9 +95,6 @@ export function FilterModal({ open, onClose, places = [] }) {
     ? places.filter((p) => `${p.name} ${p.address} ${p.city_mun} ${p.ta_category} ${p.ntdp_category}`.toLowerCase().includes(queryLower)).length
     : places.length;
 
-  const pillClass =
-    'rounded-full border px-3 py-1.5 text-xs font-medium transition';
-
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="filters-title">
       <div className="max-h-[92vh] w-full max-w-[860px] overflow-y-auto rounded-3xl border border-neutral-200 bg-[#f8f9f8] shadow-2xl">

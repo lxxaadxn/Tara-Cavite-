@@ -18,7 +18,10 @@ L.Icon.Default.mergeOptions({
 export function PlacesLeafletMap({ places, userLocation, onMarkerClick }) {
   const containerRef = useRef(null);
   const clickRef = useRef(onMarkerClick);
-  clickRef.current = onMarkerClick;
+
+  useEffect(() => {
+    clickRef.current = onMarkerClick;
+  }, [onMarkerClick]);
 
   useEffect(() => {
     if (!containerRef.current) return;

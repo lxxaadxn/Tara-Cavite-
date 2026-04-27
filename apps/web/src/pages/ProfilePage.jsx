@@ -31,6 +31,7 @@ export function ProfilePage() {
     const [profile, setProfile] = useState(() => deriveProfile(null));
     const [systemStats, setSystemStats] = useState({
         placesInSystem: 0,
+        terminalsInSystem: 0,
         placesSaved: 0,
         listsCreated: 0,
     });
@@ -47,16 +48,26 @@ export function ProfilePage() {
             const lists = readSavedLists();
             const placesSaved = lists.reduce((sum, list) => sum + (Array.isArray(list.items) ? list.items.length : 0), 0);
             let placesInSystem = 0;
+            let terminalsInSystem = 0;
             try {
                 const places = await fetchAllPlacesFromSupabase(supabase, 1000);
                 placesInSystem = places.length;
             } catch {
                 placesInSystem = 0;
             }
+            try {
+                const { count } = await supabase
+                    .from('cavitour_terminals')
+                    .select('terminal_id', { count: 'exact', head: true });
+                terminalsInSystem = count ?? 0;
+            } catch {
+                terminalsInSystem = 0;
+            }
             if (cancelled) return;
             setSavedLists(lists);
             setSystemStats({
                 placesInSystem,
+                terminalsInSystem,
                 placesSaved,
                 listsCreated: lists.length,
             });
@@ -80,6 +91,7 @@ export function ProfilePage() {
 
     const stats = [
         { label: 'Destinations in system', value: systemStats.placesInSystem, accent: '#ffb7c3' },
+        { label: 'Terminals in system', value: systemStats.terminalsInSystem, accent: '#b7d4ff' },
         { label: 'Places saved', value: systemStats.placesSaved, accent: '#8be4dc' },
         { label: 'Lists created', value: systemStats.listsCreated, accent: '#ffe08a' },
     ];
@@ -88,7 +100,7 @@ export function ProfilePage() {
         return [
             { title: 'Saved Lists', update: nowLabel, value: systemStats.listsCreated, tone: 'bg-[#eaf6c7]' },
             { title: 'Saved Places', update: nowLabel, value: systemStats.placesSaved, tone: 'bg-[#c8f0f1]' },
-            { title: 'Discoverable Places', update: nowLabel, value: systemStats.placesInSystem, tone: 'bg-[#f9d6df]' },
+            { title: 'Cavite Terminals', update: nowLabel, value: systemStats.terminalsInSystem, tone: 'bg-[#dce7ff]' },
         ];
     }, [systemStats]);
     const recentObjects = useMemo(() => {
