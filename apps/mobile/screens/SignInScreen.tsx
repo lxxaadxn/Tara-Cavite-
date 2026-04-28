@@ -22,6 +22,7 @@ import {
   supabase,
 } from '../lib/supabase';
 import { withAuthRetry, isNetworkErrorMsg, NETWORK_ERROR_USER_MESSAGE } from '../lib/authHelpers';
+import { signInWithGoogleMobile } from '../lib/googleAuth';
 
 const TURQUOISE = '#54C0CC';
 const MUTED = '#7A7878';
@@ -70,6 +71,27 @@ const SignInScreen: React.FC = () => {
     }
   };
 
+  const handleGoogleSignIn = async () => {
+    setFormError(null);
+    if (!isSupabaseConfigured) {
+      setFormError(SUPABASE_ENV_MISSING_MESSAGE);
+      return;
+    }
+    setLoading(true);
+    try {
+      await signInWithGoogleMobile();
+      await AsyncStorage.setItem('isAuthenticated', 'true');
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'Google sign in failed. Please try again.';
+      setFormError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <View style={styles.root}>
       <KeyboardAvoidingView
@@ -92,7 +114,7 @@ const SignInScreen: React.FC = () => {
             <ScrollView
               style={styles.sheetScroll}
               contentContainerStyle={styles.sheetScrollContent}
-              keyboardShouldPersistTaps="handled"
+              keyboardShouldPersistTaps="always"
               showsVerticalScrollIndicator={false}
               bounces={false}
             >
@@ -133,7 +155,15 @@ const SignInScreen: React.FC = () => {
               <TouchableOpacity
                 style={styles.forgotWrap}
                 accessibilityRole="button"
-                onPress={() => {}}
+                hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                onPress={() => {
+                  const parent = navigation.getParent();
+                  if (parent) {
+                    parent.navigate('Auth' as never, { screen: 'ForgotPassword' } as never);
+                  } else {
+                    navigation.navigate('ForgotPassword' as never);
+                  }
+                }}
               >
                 <Text style={styles.forgotText}>Forgot Password?</Text>
               </TouchableOpacity>
@@ -174,7 +204,7 @@ const SignInScreen: React.FC = () => {
                   <TouchableOpacity
                     style={styles.socialBtn}
                     accessibilityLabel="Log in with Google"
-                    onPress={() => {}}
+                    onPress={handleGoogleSignIn}
                   >
                     <JamIcon ionicon="logo-google" size={22} color={Colors.primary} />
                   </TouchableOpacity>

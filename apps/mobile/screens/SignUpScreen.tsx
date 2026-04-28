@@ -22,6 +22,7 @@ import {
   supabase,
 } from '../lib/supabase';
 import { withAuthRetry, isNetworkErrorMsg, NETWORK_ERROR_USER_MESSAGE } from '../lib/authHelpers';
+import { signInWithGoogleMobile } from '../lib/googleAuth';
 
 const TURQUOISE = '#54C0CC';
 const MUTED = '#7A7878';
@@ -88,6 +89,27 @@ const SignUpScreen: React.FC = () => {
         : error instanceof Error
           ? error.message
           : String(error);
+      setFormError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignUp = async () => {
+    setFormError(null);
+    if (!isSupabaseConfigured) {
+      setFormError(SUPABASE_ENV_MISSING_MESSAGE);
+      return;
+    }
+    setLoading(true);
+    try {
+      await signInWithGoogleMobile();
+      await AsyncStorage.setItem('isAuthenticated', 'true');
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'Google sign up failed. Please try again.';
       setFormError(message);
     } finally {
       setLoading(false);
@@ -220,7 +242,7 @@ const SignUpScreen: React.FC = () => {
                   <TouchableOpacity
                     style={styles.socialBtn}
                     accessibilityLabel="Sign up with Google"
-                    onPress={() => {}}
+                    onPress={handleGoogleSignUp}
                   >
                     <JamIcon ionicon="logo-google" size={22} color={Colors.primary} />
                   </TouchableOpacity>

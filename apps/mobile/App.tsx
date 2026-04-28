@@ -15,12 +15,16 @@ import {
   Poppins_700Bold,
 } from '@expo-google-fonts/poppins';
 import * as SplashScreen from 'expo-splash-screen';
-import React, { useEffect, useRef, useState } from 'react';
+import * as Linking from 'expo-linking';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { createNavigationContainerRef } from '@react-navigation/native';
 
 import { JamIcon } from './components/JamIcon';
+import { AuthRecoveryProvider } from './context/AuthRecoveryContext';
 import { Colors } from './constants/Colors';
+import { applyPasswordRecoveryFromUrl, isPasswordRecoveryUrl } from './lib/authRecoveryDeepLink';
 import { isStoredSessionInvalidError } from './lib/authHelpers';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 
@@ -42,6 +46,8 @@ import PreferencesScreen from './screens/PreferencesScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import SavedListScreen from './screens/SavedListScreen';
 import SavedListDetailScreen from './screens/SavedListDetailScreen';
+import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
+import ResetPasswordScreen from './screens/ResetPasswordScreen';
 import SignInScreen from './screens/SignInScreen';
 import SignUpScreen from './screens/SignUpScreen';
 import TerminalDetailScreen from './screens/TerminalDetailScreen';
@@ -57,6 +63,8 @@ const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 const REQUIRE_SIGN_IN_ON_EACH_LAUNCH = true;
 
+const navigationRef = createNavigationContainerRef();
+
 // Auth Stack
 const AuthStack = () => (
   <Stack.Navigator
@@ -67,6 +75,8 @@ const AuthStack = () => (
   >
     <Stack.Screen name="SignIn" component={SignInScreen} />
     <Stack.Screen name="SignUp" component={SignUpScreen} />
+    <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+    <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
   </Stack.Navigator>
 );
 
@@ -300,13 +310,45 @@ export default function App() {
   const [authHydrated, setAuthHydrated] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [unauthedStackKey, setUnauthedStackKey] = useState(0);
+  const [blockMainForRecovery, setBlockMainForRecovery] = useState(false);
   const didClearAuthRef = useRef(false);
+  const pendingRecoveryNavRef = useRef(false);
+
+  const navigateToRecoveryScreen = useCallback(() => {
+    requestAnimationFrame(() => {
+      if (navigationRef.isReady()) {
+        navigationRef.navigate('Unauthed' as never, {
+          screen: 'Auth',
+          params: { screen: 'ResetPassword' },
+        } as never);
+      }
+    });
+  }, []);
+
+  const endPasswordRecoveryFlow = useCallback(() => {
+    setBlockMainForRecovery(false);
+  }, []);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | undefined;
 
     const init = async () => {
-      if (REQUIRE_SIGN_IN_ON_EACH_LAUNCH && isSupabaseConfigured) {
+      let skipStartupSignOut = false;
+      try {
+        const initialUrl = await Linking.getInitialURL();
+        if (initialUrl && isPasswordRecoveryUrl(initialUrl)) {
+          setBlockMainForRecovery(true);
+          const ok = await applyPasswordRecoveryFromUrl(supabase, initialUrl);
+          if (ok) {
+            skipStartupSignOut = true;
+            pendingRecoveryNavRef.current = true;
+          }
+        }
+      } catch {
+        // Ignore invalid recovery URLs on cold start.
+      }
+
+      if (REQUIRE_SIGN_IN_ON_EACH_LAUNCH && isSupabaseConfigured && !skipStartupSignOut) {
         try {
           await supabase.auth.signOut();
         } catch {
@@ -333,6 +375,22 @@ export default function App() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    const sub = Linking.addEventListener('url', ({ url }) => {
+      if (!isPasswordRecoveryUrl(url)) {
+        return;
+      }
+      void (async () => {
+        setBlockMainForRecovery(true);
+        const ok = await applyPasswordRecoveryFromUrl(supabase, url);
+        if (ok) {
+          navigateToRecoveryScreen();
+        }
+      })();
+    });
+    return () => sub.remove();
+  }, [navigateToRecoveryScreen]);
 
   // Sync auth state with Supabase session (persisted across app restarts)
   useEffect(() => {
@@ -375,6 +433,10 @@ export default function App() {
     updateAuthFromSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setBlockMainForRecovery(true);
+        navigateToRecoveryScreen();
+      }
       const isSignedIn = !!session;
       await AsyncStorage.setItem('isAuthenticated', isSignedIn ? 'true' : 'false');
       setIsAuthenticated(isSignedIn);
@@ -386,7 +448,7 @@ export default function App() {
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [navigateToRecoveryScreen]);
 
   const checkAuthStatus = async () => {
     if (!isSupabaseConfigured) {
@@ -461,20 +523,32 @@ export default function App() {
     );
   }
 
+  const showMainTabs = isAuthenticated && !blockMainForRecovery;
+
   // Logged out: Unauthed stack always starts on Landing, then Sign In. Logged in: main tabs.
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-          {!isAuthenticated ? (
-            <Stack.Screen name="Unauthed" options={{ headerShown: false }}>
-              {() => <UnauthedFlow stackKey={unauthedStackKey} />}
-            </Stack.Screen>
-          ) : (
-            <Stack.Screen name="Main" component={MainTabs} />
-          )}
-        </Stack.Navigator>
-      </NavigationContainer>
+      <AuthRecoveryProvider endPasswordRecoveryFlow={endPasswordRecoveryFlow}>
+        <NavigationContainer
+          ref={navigationRef}
+          onReady={() => {
+            if (pendingRecoveryNavRef.current) {
+              navigateToRecoveryScreen();
+              pendingRecoveryNavRef.current = false;
+            }
+          }}
+        >
+          <Stack.Navigator screenOptions={{ headerShown: false }}>
+            {!showMainTabs ? (
+              <Stack.Screen name="Unauthed" options={{ headerShown: false }}>
+                {() => <UnauthedFlow stackKey={unauthedStackKey} />}
+              </Stack.Screen>
+            ) : (
+              <Stack.Screen name="Main" component={MainTabs} />
+            )}
+          </Stack.Navigator>
+        </NavigationContainer>
+      </AuthRecoveryProvider>
     </SafeAreaProvider>
   );
 }
