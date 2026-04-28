@@ -8,4 +8,10 @@ export default defineConfig({
   resolve: {
     dedupe: ['react', 'react-dom'],
   },
+  // Lets phones / other PCs on your Wi‑Fi open the dev server via http://<your-LAN-ip>:5173
+  // (Terminal prints “Network” URL after `npm run dev`.)
+  server: {
+    host: true,
+    port: 5173,
+  },
 })

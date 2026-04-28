@@ -115,7 +115,7 @@ export function LoginPage() {
                   />
                   Remember login
                 </label>
-                <Link to="#" className="font-medium hover:underline" style={{ color: teal }}>
+                <Link to="/forgot-password" className="font-medium hover:underline" style={{ color: teal }}>
                   Forgot Password?
                 </Link>
               </div>
