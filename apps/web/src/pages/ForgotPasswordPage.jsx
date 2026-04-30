@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { LogoWordmark } from '../components/LogoWordmark';
+import { getAdminReservedEmailMessage, isAdminReservedEmail } from '../lib/adminReservedEmail';
 
 const teal = 'var(--ct-teal)';
 const ink = 'var(--ct-ink)';
@@ -19,6 +20,10 @@ export function ForgotPasswordPage() {
     const trimmed = email.trim();
     if (!trimmed) {
       setError('Please enter your email.');
+      return;
+    }
+    if (isAdminReservedEmail(trimmed)) {
+      setError(getAdminReservedEmailMessage());
       return;
     }
     setLoading(true);

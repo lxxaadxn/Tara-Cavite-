@@ -17,6 +17,9 @@ import { MobileNotifications } from './pages/MobileNotifications';
 import { MobileAppReleases } from './pages/MobileAppReleases';
 import { MobileOnboarding } from './pages/MobileOnboarding';
 import { ToastProvider } from './components/Toast';
+import { useAuth } from './contexts/AuthContext';
+import { LoginPage } from './pages/LoginPage';
+import bootStyles from './App.module.css';
 
 function AppContent() {
   return (
@@ -65,10 +68,38 @@ function AppContent() {
   );
 }
 
+function ProtectedApp() {
+  const { session, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className={bootStyles.boot} role="status" aria-live="polite">
+        Loading…
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    );
+  }
+
+  return (
+    <Routes>
+      <Route path="/login" element={<Navigate to="/web/dashboard" replace />} />
+      <Route path="/*" element={<AppContent />} />
+    </Routes>
+  );
+}
+
 export default function App() {
   return (
     <ToastProvider>
-      <AppContent />
+      <ProtectedApp />
     </ToastProvider>
   );
 }
