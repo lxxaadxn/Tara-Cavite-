@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { LogoWordmark } from '../components/LogoWordmark';
+import { getAdminReservedEmailMessage, isAdminReservedEmail } from '../lib/adminReservedEmail';
 
 const olive = 'var(--ct-olive)';
 const teal = 'var(--ct-teal)';
@@ -35,6 +36,10 @@ export function LoginPage() {
     const trimmedEmail = email.trim();
     if (!trimmedEmail || !password) {
       setError('Please enter your email and password.');
+      return;
+    }
+    if (isAdminReservedEmail(trimmedEmail)) {
+      setError(getAdminReservedEmailMessage());
       return;
     }
 

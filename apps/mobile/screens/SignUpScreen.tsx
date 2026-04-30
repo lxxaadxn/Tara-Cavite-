@@ -23,6 +23,7 @@ import {
 } from '../lib/supabase';
 import { withAuthRetry, isNetworkErrorMsg, NETWORK_ERROR_USER_MESSAGE } from '../lib/authHelpers';
 import { signInWithGoogleMobile } from '../lib/googleAuth';
+import { getAdminReservedEmailMessage, isAdminReservedEmail } from '../lib/adminReservedEmail';
 
 const TURQUOISE = '#54C0CC';
 const MUTED = '#7A7878';
@@ -56,6 +57,10 @@ const SignUpScreen: React.FC = () => {
     }
     if (!emailRegex.test(trimmedEmail)) {
       setFormError('Please enter a valid email address.');
+      return;
+    }
+    if (isAdminReservedEmail(trimmedEmail)) {
+      setFormError(getAdminReservedEmailMessage());
       return;
     }
     if (password.length < MIN_PASSWORD_LENGTH) {

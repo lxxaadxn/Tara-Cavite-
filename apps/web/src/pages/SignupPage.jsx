@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { LogoWordmark } from '../components/LogoWordmark';
+import { getAdminReservedEmailMessage, isAdminReservedEmail } from '../lib/adminReservedEmail';
 
 const MIN_PASSWORD_LENGTH = 8;
 const teal = 'var(--ct-teal)';
@@ -36,6 +37,10 @@ export function SignupPage() {
     const trimmedEmail = email.trim();
     if (!trimmedEmail || !password) {
       setError('Please fill in all required fields.');
+      return;
+    }
+    if (isAdminReservedEmail(trimmedEmail)) {
+      setError(getAdminReservedEmailMessage());
       return;
     }
 

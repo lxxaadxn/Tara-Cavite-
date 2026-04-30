@@ -22,6 +22,7 @@ import {
   supabase,
 } from '../lib/supabase';
 import { isNetworkErrorMsg, NETWORK_ERROR_USER_MESSAGE } from '../lib/authHelpers';
+import { getAdminReservedEmailMessage, isAdminReservedEmail } from '../lib/adminReservedEmail';
 
 const TURQUOISE = '#54C0CC';
 const MUTED = '#7A7878';
@@ -49,6 +50,10 @@ const ForgotPasswordScreen: React.FC = () => {
     }
     if (!emailRegex.test(trimmed)) {
       setFormError('Please enter a valid email address.');
+      return;
+    }
+    if (isAdminReservedEmail(trimmed)) {
+      setFormError(getAdminReservedEmailMessage());
       return;
     }
     setLoading(true);
