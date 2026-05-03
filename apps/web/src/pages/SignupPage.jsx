@@ -9,6 +9,15 @@ const teal = 'var(--ct-teal)';
 const ink = 'var(--ct-ink)';
 const cream = 'var(--ct-cream)';
 
+function toFriendlySignupError(err) {
+  const message = err instanceof Error ? err.message : String(err || '');
+  const normalized = message.toLowerCase();
+  if (normalized.includes('user already registered') || normalized.includes('already exists')) {
+    return 'This email is already registered. Please log in instead. If you previously used Google, choose "Sign in with Google".';
+  }
+  return message || 'Sign up failed';
+}
+
 export function SignupPage() {
   const navigate = useNavigate();
   const [name, setName] = useState('');
@@ -22,7 +31,7 @@ export function SignupPage() {
     setLoading(true);
     const { error: err } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/search` },
+      options: { redirectTo: `${window.location.origin}/auth/google` },
     });
     if (err) {
       setError(err.message || 'Google sign up failed');
@@ -34,7 +43,7 @@ export function SignupPage() {
     e.preventDefault();
     setError('');
 
-    const trimmedEmail = email.trim();
+    const trimmedEmail = email.trim().toLowerCase();
     if (!trimmedEmail || !password) {
       setError('Please fill in all required fields.');
       return;
@@ -67,7 +76,7 @@ export function SignupPage() {
         navigate('/login', { replace: true });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign up failed');
+      setError(toFriendlySignupError(err));
     } finally {
       setLoading(false);
     }

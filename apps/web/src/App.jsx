@@ -10,6 +10,7 @@ import { PrototypeTitlePage } from './pages/PrototypeTitlePage';
 import { PrototypeStartupFeaturesPage } from './pages/PrototypeStartupFeaturesPage';
 import { PrototypeSignInPage } from './pages/PrototypeSignInPage';
 import { PrototypeSignUpPage } from './pages/PrototypeSignUpPage';
+import { GoogleAuthProcessingPage } from './pages/GoogleAuthProcessingPage';
 import { SearchPage } from './pages/SearchPage';
 import { PlaceDetailPage } from './pages/PlaceDetailPage';
 import { SavedPage } from './pages/SavedPage';
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="/prototype/startup" element={<PrototypeStartupFeaturesPage />}/>
         <Route path="/prototype/sign-in" element={<PrototypeSignInPage />}/>
         <Route path="/prototype/sign-up" element={<PrototypeSignUpPage />}/>
+        <Route path="/auth/google" element={<GoogleAuthProcessingPage />}/>
         <Route path="/search" element={<ProtectedRoute>
               <SearchPage />
             </ProtectedRoute>}/>

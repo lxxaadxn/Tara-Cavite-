@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -20,7 +20,11 @@ import {
   DashboardFiltersPanel,
   type DashboardFilterSectionId,
 } from '../components/DashboardFiltersPanel';
-import { mockItineraries, ItineraryCard } from '../data/mockData';
+import { getBrowseEstablishmentsForItineraries, type Place } from '../data/mockData';
+import {
+  placeMatchesDashboardFilters,
+  sortPlacesByDashboardSort,
+} from '../lib/dashboardPlaceFilters';
 
 const HEADER_GREEN = '#7EA00E';
 const TEAL = '#1F4F59';
@@ -34,7 +38,19 @@ const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const CARD_IMG_H = Math.round(SCREEN_W * 0.38);
 const FILTER_SHEET_MAX_HEIGHT = Math.round(SCREEN_H * 0.5);
 
-const ITINERARY_FILTER_SECTION_IDS: DashboardFilterSectionId[] = ['cities', 'municipalities'];
+const ITINERARY_FILTER_SECTION_IDS: DashboardFilterSectionId[] = [
+  'sort',
+  'categories',
+  'cities',
+  'municipalities',
+  'access',
+  'amenities',
+];
+
+type ItineraryEstablishmentItem = {
+  place: Place;
+  itineraryTitle: string;
+};
 
 const ItinerariesScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -44,6 +60,8 @@ const ItinerariesScreen: React.FC = () => {
   const [search, setSearch] = useState('');
   const [filtersVisible, setFiltersVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [filterToggles, setFilterToggles] = useState<Record<string, boolean>>({});
+  const [filterPanelKey, setFilterPanelKey] = useState(0);
 
   const onBack = () => {
     if (navigation.canGoBack()) {
@@ -53,68 +71,71 @@ const ItinerariesScreen: React.FC = () => {
     }
   };
 
-  const filtered = useMemo(
-    () =>
-      mockItineraries.filter(
-        (it) =>
-          !search.trim() ||
-          it.title.toLowerCase().includes(search.toLowerCase()) ||
-          it.subtitle.toLowerCase().includes(search.toLowerCase()) ||
-          (it.tags?.some((t) => t.toLowerCase().includes(search.toLowerCase())) ?? false)
-      ),
-    [search]
-  );
+  const availableEstablishments = useMemo(() => getBrowseEstablishmentsForItineraries(), []);
+
+  const onFilterTogglesChange = useCallback((toggles: Record<string, boolean>) => {
+    setFilterToggles(toggles);
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    let rows = availableEstablishments;
+    if (q) {
+      rows = rows.filter(({ place, itineraryTitle }) =>
+        [place.name, place.address, place.type, itineraryTitle].some((v) => v.toLowerCase().includes(q))
+      );
+    }
+    const hasFilter = Object.keys(filterToggles).some((k) => filterToggles[k]);
+    if (hasFilter) {
+      rows = rows.filter(({ place }) => placeMatchesDashboardFilters(place, filterToggles));
+    }
+    const sortKeys = Object.keys(filterToggles).filter((k) => k.startsWith('sort-') && filterToggles[k]);
+    if (sortKeys.length) {
+      const places = rows.map((r) => r.place);
+      const sortedPlaces = sortPlacesByDashboardSort(places, filterToggles);
+      const order = new Map(sortedPlaces.map((p, i) => [p.id, i]));
+      rows = [...rows].sort((a, b) => (order.get(a.place.id) ?? 0) - (order.get(b.place.id) ?? 0));
+    }
+    return rows;
+  }, [search, availableEstablishments, filterToggles]);
 
   const onRefresh = () => {
     setRefreshing(true);
     setTimeout(() => setRefreshing(false), 600);
   };
 
-  const renderCard = ({ item }: { item: ItineraryCard }) => (
+  const renderCard = ({ item }: { item: ItineraryEstablishmentItem }) => (
     <TouchableOpacity
       style={styles.card}
       activeOpacity={0.92}
       onPress={() =>
-        navigation.navigate('ItineraryDetail' as never, { itineraryId: item.id } as never)
+        navigation.navigate('AboutEstablishment' as never, { place: item.place } as never)
       }
-      accessibilityLabel={`${item.title} itinerary`}
+      accessibilityLabel={`${item.place.name} establishment`}
       accessibilityRole="button"
     >
       <Image
-        source={item.image}
+        source={item.place.image}
         style={styles.cardImage}
         resizeMode="cover"
-        accessibilityLabel={`${item.title} cover`}
+        accessibilityLabel={`${item.place.name} cover`}
       />
       <View style={styles.cardBody}>
         <View style={styles.cardTextCol}>
           <Text style={styles.cardTitle} numberOfLines={2}>
-            {item.title}
+            {item.place.name}
           </Text>
           <Text style={styles.cardSubtitle} numberOfLines={2}>
-            {item.subtitle}
+            {item.place.address}
           </Text>
           <View style={styles.pillRow}>
-            {item.stops != null ? (
-              <View style={styles.pill}>
-                <Text style={styles.pillText}>{item.stops} stops</Text>
-              </View>
-            ) : null}
-            {item.durationLabel ? (
-              <View style={styles.pill}>
-                <Text style={styles.pillText}>{item.durationLabel}</Text>
-              </View>
-            ) : null}
-          </View>
-          {item.tags?.length ? (
-            <View style={styles.tagRow}>
-              {item.tags.slice(0, 3).map((t) => (
-                <Text key={t} style={styles.tagChip}>
-                  {t}
-                </Text>
-              ))}
+            <View style={styles.pill}>
+              <Text style={styles.pillText}>{item.place.type}</Text>
             </View>
-          ) : null}
+            <Text style={styles.tagChip} numberOfLines={1}>
+              via {item.itineraryTitle}
+            </Text>
+          </View>
         </View>
         <View style={styles.viewBtn}>
           <Text style={styles.viewBtnText}>View</Text>
@@ -139,10 +160,10 @@ const ItinerariesScreen: React.FC = () => {
           </TouchableOpacity>
           <View style={styles.headerTitleBlock}>
             <Text style={styles.headerTitle} pointerEvents="none">
-              Itineraries
+              Available Itinerary Establishments
             </Text>
             <Text style={styles.headerSubtitle} pointerEvents="none">
-              {mockItineraries.length} featured route{mockItineraries.length === 1 ? '' : 's'}
+              {availableEstablishments.length} ideas — route stops + same city or municipality
             </Text>
           </View>
           <View style={styles.headerSide} />
@@ -154,11 +175,11 @@ const ItinerariesScreen: React.FC = () => {
           <JamIcon name="search" size={18} color={TEAL} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search itineraries…"
+            placeholder="Search establishments…"
             placeholderTextColor={PLACEHOLDER}
             value={search}
             onChangeText={setSearch}
-            accessibilityLabel="Search itineraries"
+            accessibilityLabel="Search establishments"
             returnKeyType="search"
           />
           {search.length > 0 ? (
@@ -179,7 +200,7 @@ const ItinerariesScreen: React.FC = () => {
 
       <FlatList
         data={filtered}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.place.id}
         renderItem={renderCard}
         contentContainerStyle={[
           styles.listContent,
@@ -191,9 +212,15 @@ const ItinerariesScreen: React.FC = () => {
           <View style={styles.emptyWrap}>
             <JamIcon ionicon="map-outline" size={48} color={MUTED} />
             <Text style={styles.emptyTitle}>No matches</Text>
-            <Text style={styles.emptySub}>Try another search or clear the filter.</Text>
-            <TouchableOpacity onPress={() => setSearch('')} style={styles.emptyBtn}>
-              <Text style={styles.emptyBtnText}>Clear search</Text>
+            <Text style={styles.emptySub}>Try another search, open filters, or reset them.</Text>
+            <TouchableOpacity
+              onPress={() => {
+                setSearch('');
+                setFilterPanelKey((k) => k + 1);
+              }}
+              style={styles.emptyBtn}
+            >
+              <Text style={styles.emptyBtnText}>Clear search & filters</Text>
             </TouchableOpacity>
           </View>
         }
@@ -233,10 +260,12 @@ const ItinerariesScreen: React.FC = () => {
             ]}
           >
             <DashboardFiltersPanel
+              key={filterPanelKey}
               embedded
               sheet
               sheetScrollMaxHeight={filterScrollMaxHeight}
               sectionIds={ITINERARY_FILTER_SECTION_IDS}
+              onTogglesChange={onFilterTogglesChange}
             />
           </View>
         </View>

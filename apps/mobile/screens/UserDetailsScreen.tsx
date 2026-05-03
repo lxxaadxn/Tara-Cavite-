@@ -26,8 +26,8 @@ const UserDetailsScreen: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
-  const [city, setCity] = useState('Dasmarñas, Cavite');
-  const [street, setStreet] = useState('Washington Place');
+  const [city, setCity] = useState('');
+  const [street, setStreet] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [editingUsername, setEditingUsername] = useState(false);
@@ -54,8 +54,8 @@ const UserDetailsScreen: React.FC = () => {
           .single();
         
         const usernameValue = profile?.username || (u.user_metadata?.username as string) || u.email?.split('@')[0] || '';
-        const cityValue = profile?.city || (u.user_metadata?.city as string) || 'Dasmarñas, Cavite';
-        const streetValue = profile?.street || (u.user_metadata?.street as string) || 'Washington Place';
+        const cityValue = profile?.city || (u.user_metadata?.city as string) || '';
+        const streetValue = profile?.street || (u.user_metadata?.street as string) || '';
         const avatarValue = profile?.avatar_url || (u.user_metadata?.avatar_url as string | null);
         
         setUsername(usernameValue);

@@ -134,6 +134,7 @@ INSERT INTO cavitour_routes (route_id, route_name, origin, destination) VALUES
   (37, 'General Emilio Aguinaldo - Indang', 'General Emilio Aguinaldo', 'Indang'),
   (38, 'Bacoor - Rosario', 'Bacoor', 'Rosario'),
   (39, 'Imus - Tagaytay', 'Imus', 'Tagaytay'),
+  -- Row kept for inventory; app transfer graph omits this pair (Tagaytay traffic goes via Dasma/Silang/Aguinaldo).
   (40, 'Trece Martires - Tagaytay', 'Trece Martires', 'Tagaytay'),
   (41, 'Dasmarinas - Naic', 'Dasmarinas', 'Naic'),
   (42, 'Kawit - Dasmarinas', 'Kawit', 'Dasmarinas'),

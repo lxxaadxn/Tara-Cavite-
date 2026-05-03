@@ -45,6 +45,7 @@ export function rowToPlace(row) {
     ta_category: row.ta_category ?? null,
     type_code: row.type_code ?? null,
     created_at: row.created_at ?? null,
+    searchable_text: row.searchable_text ?? null,
   };
 }
 

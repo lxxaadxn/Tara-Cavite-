@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
+import * as Location from 'expo-location';
 import { JamIcon } from '../components/JamIcon';
 import { SaveToListSheet, type SaveToListRow } from '../components/SaveToListSheet';
 import { ReviewCardsList } from '../components/ReviewCardsList';
@@ -25,6 +26,7 @@ import {
   fetchUserListsForPicker,
 } from '../lib/savedListItems';
 import { fetchRoutesForTerminalId } from '../lib/fetchTerminalRoutesFromSupabase';
+import { haversineDistanceKm } from '../lib/placesFromSupabase';
 
 /** Match AboutEstablishmentScreen */
 const GREEN = '#7EA00E';
@@ -81,6 +83,7 @@ const TerminalDetailScreen: React.FC = () => {
   const [saveListBusyId, setSaveListBusyId] = useState<string | null>(null);
   const [openGates, setOpenGates] = useState<Record<string, boolean>>({});
   const [liveRoutes, setLiveRoutes] = useState<{ label: string }[]>([]);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   const addressLine = useMemo(
     () => (terminal ? terminalAddressLine(terminal) : ''),
@@ -134,6 +137,25 @@ const TerminalDetailScreen: React.FC = () => {
       cancelled = true;
     };
   }, [terminal]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (cancelled || status !== 'granted') return;
+      try {
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        if (!cancelled) {
+          setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        }
+      } catch {
+        // Ignore location failures; personalization stays hidden.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const refreshSavedState = useCallback(async () => {
     if (!terminal) return;
@@ -273,6 +295,9 @@ const TerminalDetailScreen: React.FC = () => {
   const hasGates = terminal.routesByGate && terminal.routesByGate.length > 0;
   const fallbackRoutes = terminal.primaryRoutes.length > 0 ? terminal.primaryRoutes : liveRoutes;
   const hasFlatRoutes = fallbackRoutes.length > 0;
+  const distanceToTerminalKm = userLocation
+    ? haversineDistanceKm(userLocation.lat, userLocation.lng, terminal.latitude, terminal.longitude)
+    : null;
 
   const greenHeader = (
     <View style={[styles.greenHeader, { paddingTop: insets.top + 8 }]}>
@@ -315,6 +340,14 @@ const TerminalDetailScreen: React.FC = () => {
           <Text style={styles.addressLine} numberOfLines={2}>
             {addressLine}
           </Text>
+        ) : null}
+        {distanceToTerminalKm != null ? (
+          <View style={styles.personalizedFromCard}>
+            <Text style={styles.personalizedFromTitle}>From your current location</Text>
+            <Text style={styles.personalizedFromBody}>
+              You are approximately {distanceToTerminalKm.toFixed(1)} km away from {terminal.name}.
+            </Text>
+          </View>
         ) : null}
 
         <View style={styles.tagsAndActionsRow}>
@@ -536,6 +569,27 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: MUTED,
     marginBottom: 12,
+  },
+  personalizedFromCard: {
+    marginBottom: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(31, 79, 89, 0.15)',
+    backgroundColor: '#f5faf8',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  personalizedFromTitle: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 12,
+    color: TEAL,
+    marginBottom: 2,
+  },
+  personalizedFromBody: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 18,
+    color: TITLE,
   },
   tagsAndActionsRow: {
     flexDirection: 'row',

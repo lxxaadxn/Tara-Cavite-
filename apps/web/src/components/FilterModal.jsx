@@ -1,6 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
+import {
+  WEB_ACCESS_FILTER_OPTIONS,
+  WEB_AMENITY_FILTER_OPTIONS,
+  WEB_SORT_OPTIONS,
+} from '../lib/placeFilterHelpers';
 
 const olive = '#7ea00e';
+
+/**
+ * @typedef {Object} AppliedPlaceFilters
+ * @property {string[]} selectedNtdpCategories
+ * @property {string[]} selectedTypeCodes
+ * @property {string[]} selectedCities
+ * @property {string[]} selectedLgus
+ * @property {''|'recent'|'top'|'reviewed'} sortMode
+ * @property {string[]} selectedAccessKeys
+ * @property {string[]} selectedAmenityKeys
+ */
 
 function prettySlug(slug) {
   return String(slug ?? '')
@@ -22,12 +38,22 @@ function Section({ title, subtitle, children }) {
   );
 }
 
-export function FilterModal({ open, onClose, places = [] }) {
+/**
+ * @param {Object} props
+ * @param {boolean} props.open
+ * @param {() => void} props.onClose
+ * @param {any[]} [props.places]
+ * @param {(filters: AppliedPlaceFilters) => void} [props.onApply] — called with selections when user taps Apply
+ */
+export function FilterModal({ open, onClose, places = [], onApply }) {
   const [query, setQuery] = useState('');
+  const [sortMode, setSortMode] = useState('');
   const [selectedNtdpCategories, setSelectedNtdpCategories] = useState(() => new Set());
   const [selectedTypeCodes, setSelectedTypeCodes] = useState(() => new Set());
   const [selectedCities, setSelectedCities] = useState(() => new Set());
   const [selectedLgus, setSelectedLgus] = useState(() => new Set());
+  const [selectedAccess, setSelectedAccess] = useState(() => new Set());
+  const [selectedAmenities, setSelectedAmenities] = useState(() => new Set());
 
   useEffect(() => {
     if (!open) return;
@@ -82,10 +108,13 @@ export function FilterModal({ open, onClose, places = [] }) {
 
   const clearAll = () => {
     setQuery('');
+    setSortMode('');
     setSelectedNtdpCategories(new Set());
     setSelectedTypeCodes(new Set());
     setSelectedCities(new Set());
     setSelectedLgus(new Set());
+    setSelectedAccess(new Set());
+    setSelectedAmenities(new Set());
   };
 
   if (!open) return null;
@@ -179,6 +208,63 @@ export function FilterModal({ open, onClose, places = [] }) {
             </Section>
           </div>
 
+          <Section title="Sort by" subtitle="When set, list order follows this instead of nearest-first.">
+            <div className="space-y-2">
+              {WEB_SORT_OPTIONS.map((opt) => (
+                <label key={opt.key || 'default'} className="flex cursor-pointer items-center gap-2 text-xs text-neutral-700">
+                  <input
+                    type="radio"
+                    name="cavitour-sort"
+                    checked={sortMode === opt.key}
+                    onChange={() => setSortMode(opt.key)}
+                    className="h-3.5 w-3.5 border-neutral-300"
+                    style={{ accentColor: olive }}
+                  />
+                  {opt.label}
+                </label>
+              ))}
+            </div>
+          </Section>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <Section
+              title="Accessibility & transport"
+              subtitle="Matched against listing text (address, description, searchable_text) — same rules as the mobile app."
+            >
+              <div className="space-y-1.5">
+                {WEB_ACCESS_FILTER_OPTIONS.map((opt) => (
+                  <label key={opt.key} className="flex items-center gap-2 text-xs text-neutral-700">
+                    <input
+                      type="checkbox"
+                      checked={selectedAccess.has(opt.key)}
+                      onChange={() => toggleSet(setSelectedAccess, opt.key)}
+                      className="h-3.5 w-3.5 rounded border-neutral-300"
+                      style={{ accentColor: olive }}
+                    />
+                    {opt.label}
+                  </label>
+                ))}
+              </div>
+            </Section>
+
+            <Section title="Features & amenities" subtitle="Keyword match on listing text.">
+              <div className="space-y-1.5">
+                {WEB_AMENITY_FILTER_OPTIONS.map((opt) => (
+                  <label key={opt.key} className="flex items-center gap-2 text-xs text-neutral-700">
+                    <input
+                      type="checkbox"
+                      checked={selectedAmenities.has(opt.key)}
+                      onChange={() => toggleSet(setSelectedAmenities, opt.key)}
+                      className="h-3.5 w-3.5 rounded border-neutral-300"
+                      style={{ accentColor: olive }}
+                    />
+                    {opt.label}
+                  </label>
+                ))}
+              </div>
+            </Section>
+          </div>
+
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <Section title="City / Municipality" subtitle="Supabase column: `city_mun`">
               <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
@@ -229,7 +315,18 @@ export function FilterModal({ open, onClose, places = [] }) {
             </button>
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => {
+                onApply?.({
+                  selectedNtdpCategories: Array.from(selectedNtdpCategories),
+                  selectedTypeCodes: Array.from(selectedTypeCodes),
+                  selectedCities: Array.from(selectedCities),
+                  selectedLgus: Array.from(selectedLgus),
+                  sortMode: sortMode || '',
+                  selectedAccessKeys: Array.from(selectedAccess),
+                  selectedAmenityKeys: Array.from(selectedAmenities),
+                });
+                onClose();
+              }}
               className="rounded-lg px-3.5 py-2 text-xs font-semibold text-white"
               style={{ backgroundColor: olive }}
             >

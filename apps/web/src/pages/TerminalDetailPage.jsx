@@ -9,6 +9,18 @@ import { planTerminalTransitBetween } from '../lib/terminalTransitPlanner';
 const teal = '#1f4f59';
 const olive = '#7ea00e';
 
+function haversineDistanceKm(lat1, lng1, lat2, lng2) {
+  const toRadians = (deg) => (deg * Math.PI) / 180;
+  const earthRadiusKm = 6371;
+  const dLat = toRadians(lat2 - lat1);
+  const dLng = toRadians(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusKm * c;
+}
+
 /** Optional same fallbacks as TerminalsPage when Supabase fails. */
 const FALLBACK_BY_ID = {
   pitx: {
@@ -39,6 +51,7 @@ export function TerminalDetailPage() {
   const [transitPlan, setTransitPlan] = useState(null);
   const [transitError, setTransitError] = useState('');
   const [transitLoading, setTransitLoading] = useState(false);
+  const [userCoords, setUserCoords] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,6 +87,25 @@ export function TerminalDetailPage() {
       cancelled = true;
     };
   }, [id]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.navigator?.geolocation) return;
+    let cancelled = false;
+    window.navigator.geolocation.getCurrentPosition(
+      (position) => {
+        if (cancelled) return;
+        setUserCoords({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+      },
+      () => {},
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handlePlanTo = async () => {
     if (!planTo || String(planTo) === String(id)) return;
@@ -117,6 +149,8 @@ export function TerminalDetailPage() {
   }
 
   const mapSrc = `https://www.openstreetmap.org/export/embed.html?bbox=${terminal.lng - 0.06}%2C${terminal.lat - 0.05}%2C${terminal.lng + 0.06}%2C${terminal.lat + 0.05}&layer=mapnik&marker=${terminal.lat}%2C${terminal.lng}`;
+  const distanceToTerminalKm =
+    userCoords ? haversineDistanceKm(userCoords.lat, userCoords.lng, terminal.lat, terminal.lng) : null;
 
   return (
     <div className="min-h-screen bg-white font-['Inter',sans-serif]">
@@ -144,6 +178,14 @@ export function TerminalDetailPage() {
             </div>
 
             <p className="mt-3 text-sm text-neutral-600">{terminal.blurb ?? terminal.subtitle}</p>
+            {distanceToTerminalKm != null ? (
+              <div className="mt-3 rounded-xl border border-[rgba(31,79,89,0.15)] bg-[#f5faf8] p-3">
+                <p className="text-xs font-semibold text-[#1f4f59]">From your current location</p>
+                <p className="mt-1 text-xs text-neutral-700">
+                  You are approximately {distanceToTerminalKm.toFixed(1)} km away from {terminal.name}.
+                </p>
+              </div>
+            ) : null}
 
             <div className="mt-4 rounded-xl border border-[#cddcab] bg-[#f7faef] p-3">
               <p className="text-xs font-semibold text-[#5d7211]">Route graph (aligned with mobile)</p>

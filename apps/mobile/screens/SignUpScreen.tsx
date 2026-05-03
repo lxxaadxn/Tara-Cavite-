@@ -31,6 +31,15 @@ const LINE = 'rgba(122, 120, 120, 0.45)';
 
 const MIN_PASSWORD_LENGTH = 6;
 
+function toFriendlySignupError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  const normalized = message.toLowerCase();
+  if (normalized.includes('user already registered') || normalized.includes('already exists')) {
+    return 'This email is already registered. Log in instead, or use Google sign in if you first created the account with Google.';
+  }
+  return message || 'Sign up failed.';
+}
+
 const SignUpScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
@@ -91,9 +100,7 @@ const SignUpScreen: React.FC = () => {
     } catch (error: unknown) {
       const message = isNetworkErrorMsg(error)
         ? NETWORK_ERROR_USER_MESSAGE
-        : error instanceof Error
-          ? error.message
-          : String(error);
+        : toFriendlySignupError(error);
       setFormError(message);
     } finally {
       setLoading(false);

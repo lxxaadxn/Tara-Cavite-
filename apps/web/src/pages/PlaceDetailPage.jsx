@@ -10,6 +10,7 @@ import { planTerminalTransit } from '../lib/terminalTransitPlanner';
 const olive = '#7ea00e';
 const PLACEHOLDER_IMG =
   'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80';
+const COMMON_TRANSPORT_CHOICES = ['All', 'Jeepney', 'Bus', 'Van', 'Tricycle'];
 const DEFAULT_FALLBACK_SPOT = {
   id: 'fallback-spot',
   name: 'Tagaytay Picnic Grove',
@@ -136,6 +137,11 @@ export function PlaceDetailPage() {
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [listNameDraft, setListNameDraft] = useState('');
   const [terminalTransitPlan, setTerminalTransitPlan] = useState(null);
+  const [terminalTransitLoading, setTerminalTransitLoading] = useState(false);
+  const [routeGuideMode, setRouteGuideMode] = useState('direct');
+  const [terminalRoadSegments, setTerminalRoadSegments] = useState(null);
+  const [terminalRoadSegmentsLoading, setTerminalRoadSegmentsLoading] = useState(false);
+  const [selectedTransport, setSelectedTransport] = useState('All');
 
   useEffect(() => {
     const q = searchParams.get('tab');
@@ -169,21 +175,82 @@ export function PlaceDetailPage() {
   useEffect(() => {
     if (!userCoords || spot?.lat == null || spot?.lng == null) {
       setTerminalTransitPlan(null);
+      setTerminalTransitLoading(false);
       return;
     }
     let cancelled = false;
+    setTerminalTransitLoading(true);
     (async () => {
       try {
         const plan = await planTerminalTransit(supabase, userCoords, { lat: spot.lat, lng: spot.lng });
         if (!cancelled) setTerminalTransitPlan(plan);
       } catch {
         if (!cancelled) setTerminalTransitPlan(null);
+      } finally {
+        if (!cancelled) setTerminalTransitLoading(false);
       }
     })();
     return () => {
       cancelled = true;
     };
   }, [userCoords, spot?.lat, spot?.lng]);
+
+  useEffect(() => {
+    if (routeGuideMode !== 'terminal' || !userCoords || !terminalTransitPlan || spot?.lat == null || spot?.lng == null) {
+      setTerminalRoadSegments(null);
+      setTerminalRoadSegmentsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setTerminalRoadSegmentsLoading(true);
+    (async () => {
+      const segs = [];
+      const o = terminalTransitPlan.originTerminal;
+      const d = terminalTransitPlan.destinationTerminal;
+
+      async function pushOsrm(from, to) {
+        const url = `https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?alternatives=false&overview=full&steps=false&geometries=geojson`;
+        const res = await fetch(url);
+        if (!res.ok) return;
+        const payload = await res.json();
+        const coords = payload?.routes?.[0]?.geometry?.coordinates;
+        if (!Array.isArray(coords) || coords.length < 2) return;
+        segs.push(coords.map(([lng, lat]) => [lat, lng]));
+      }
+
+      try {
+        await pushOsrm(userCoords, { lat: o.latitude, lng: o.longitude });
+        if (cancelled) return;
+        if (terminalTransitPlan.legs?.length) {
+          for (const leg of terminalTransitPlan.legs) {
+            await pushOsrm(
+              { lat: leg.fromLatitude, lng: leg.fromLongitude },
+              { lat: leg.toLatitude, lng: leg.toLongitude }
+            );
+            if (cancelled) return;
+          }
+        } else if (o.id !== d.id) {
+          await pushOsrm({ lat: o.latitude, lng: o.longitude }, { lat: d.latitude, lng: d.longitude });
+          if (cancelled) return;
+        }
+        await pushOsrm({ lat: d.latitude, lng: d.longitude }, { lat: spot.lat, lng: spot.lng });
+      } catch {
+        /* keep partial segs */
+      }
+      if (!cancelled) {
+        setTerminalRoadSegments(segs.length ? segs : null);
+        setTerminalRoadSegmentsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [routeGuideMode, userCoords, terminalTransitPlan, spot?.lat, spot?.lng]);
+
+  const mapExternalSegments = useMemo(() => {
+    if (routeGuideMode !== 'terminal' || !terminalRoadSegments?.length) return undefined;
+    return terminalRoadSegments;
+  }, [routeGuideMode, terminalRoadSegments]);
 
   useEffect(() => {
     let cancelled = false;
@@ -313,24 +380,85 @@ export function PlaceDetailPage() {
     ];
   }, [spot]);
   const selectedRoute = routeOptions[0] ?? null;
+  const transportChoices = useMemo(() => {
+    const dynamic = (terminalTransitPlan?.legs ?? [])
+      .map((leg) => (leg.transportName || '').trim())
+      .filter(Boolean);
+    const seen = new Set();
+    return [...COMMON_TRANSPORT_CHOICES, ...dynamic].filter((name) => {
+      const key = name.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [terminalTransitPlan]);
+
+  const shownTerminalLegs = useMemo(() => {
+    const legs = terminalTransitPlan?.legs ?? [];
+    if (selectedTransport.toLowerCase() === 'all') return legs;
+    const key = selectedTransport.toLowerCase();
+    return legs.filter((leg) => String(leg.transportName || '').toLowerCase().includes(key));
+  }, [terminalTransitPlan, selectedTransport]);
 
   const routeTimeline = useMemo(() => {
-    if (!selectedRoute) return [];
+    if (!selectedRoute || !spot) return [];
+    const destAddr = cleanPlaceAddress(spot.name, spot.address);
+
+    if (routeGuideMode === 'terminal' && terminalTransitPlan) {
+      const o = terminalTransitPlan.originTerminal;
+      const d = terminalTransitPlan.destinationTerminal;
+      const items = [
+        {
+          title: userCoords ? 'Start from your area' : 'Starting point',
+          meta: userCoords
+            ? 'Take a trike, jeepney, or ride-hail toward your first terminal if needed'
+            : 'Allow location for boarding suggestions',
+        },
+        {
+          title: `Board at ${o.name}`,
+          meta: `${o.municipality} — hub near your GPS point`,
+        },
+      ];
+      for (const leg of shownTerminalLegs) {
+        const mode = (leg.transportName || 'jeepney or bus').trim();
+        const routeLine = leg.routeName?.trim();
+        const toward = leg.toMunicipality || leg.toTerminalName;
+        items.push({
+          title: routeLine
+            ? `Ride ${mode} on the ${routeLine} line toward ${toward}`
+            : `Ride ${mode} toward ${toward}`,
+          meta: `${leg.fromTerminalName} → ${leg.toTerminalName}`,
+        });
+      }
+      if ((terminalTransitPlan.legs?.length ?? 0) > 0 && shownTerminalLegs.length === 0) {
+        items.push({
+          title: 'Try another transport filter',
+          meta: 'No leg matches this vehicle type — choose “All” to see every transfer.',
+        });
+      }
+      items.push({
+        title: `Near ${spot.name}`,
+        meta: `From ${d.name} — short walk or trike (${destAddr})`,
+      });
+      return items;
+    }
+
     return [
       {
         title: userCoords ? 'Your location' : 'Starting point',
         meta: userCoords ? 'Detected via GPS' : 'Set your current location',
       },
       {
-        title: 'Main junction',
-        meta: selectedRoute.mode,
+        title: `Commute toward ${spot.name}`,
+        meta:
+          'Prefer jeepneys, buses, or UV Express on main roads (many trips pass through Dasmariñas / major Cavite terminals). Ask drivers if they go toward your destination.',
       },
       {
         title: spot.name,
-        meta: cleanPlaceAddress(spot.name, spot.address),
+        meta: destAddr,
       },
     ];
-  }, [selectedRoute, spot, userCoords]);
+  }, [selectedRoute, spot, userCoords, routeGuideMode, terminalTransitPlan, shownTerminalLegs]);
 
   if (loading || !spot) {
     return (
@@ -558,42 +686,163 @@ export function PlaceDetailPage() {
 
             {tab === 'route' && (
               <div className="space-y-3">
-                {userCoords && (
-                  <div className="overflow-hidden rounded-2xl border border-[#cddcab] bg-[#f7faef] p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[#5d7211]">Cavite terminal transfers</p>
-                    <p className="mt-1 text-[11px] leading-relaxed text-neutral-600">
-                      Nearest terminals to you and this place, connected via the same route graph as the mobile commute screen (
-                      <code className="rounded bg-white/80 px-1 text-[10px]">cavitour_terminal_routes</code>
-                      ).
-                    </p>
-                    {!terminalTransitPlan ? (
-                      <p className="mt-2 text-xs text-neutral-500">No linked path in the dataset, or still loading…</p>
-                    ) : (
-                      <div className="mt-3 rounded-xl border border-neutral-200 bg-white p-3">
-                        <p className="text-[11px] text-neutral-600">
-                          <span className="font-semibold text-neutral-900">{terminalTransitPlan.originTerminal.name}</span>
-                          <span className="mx-1">→</span>
-                          <span className="font-semibold text-neutral-900">{terminalTransitPlan.destinationTerminal.name}</span>
-                        </p>
-                        {terminalTransitPlan.legs.length === 0 ? (
-                          <p className="mt-2 text-xs text-neutral-500">Same nearest terminal — ride the corridor on the map below.</p>
-                        ) : (
-                          <ol className="mt-2 list-decimal space-y-2 pl-4 text-xs text-neutral-800">
-                            {terminalTransitPlan.legs.map((leg, idx) => (
-                              <li key={`${leg.fromTerminalId}-${leg.toTerminalId}-${idx}`}>
-                                Route: {leg.routeName} · {leg.transportName}
-                              </li>
-                            ))}
-                          </ol>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {!userCoords && (
-                  <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                    Allow location to see Cavite terminal-to-terminal legs (same as mobile directions).
+                <div className="rounded-2xl border border-[rgba(31,79,89,0.15)] bg-[#f5faf8] p-4">
+                  <p className="text-sm font-bold text-[#1f4f59]">Terminals for this trip</p>
+                  <p className="mt-1 text-xs leading-relaxed text-neutral-600">
+                    Nearest boarding and drop-off terminals for commuting to {spot.name}.
                   </p>
+                  {!userCoords ? (
+                    <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                      Allow location access to load terminals matched to you and this establishment.
+                    </p>
+                  ) : terminalTransitLoading ? (
+                    <p className="mt-3 text-xs text-neutral-500">Finding nearest terminals…</p>
+                  ) : terminalTransitPlan ? (
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <Link
+                        to={`/terminals/${terminalTransitPlan.originTerminal.id}`}
+                        className="block rounded-xl border border-neutral-200 bg-white p-3 transition hover:border-[#7ea00e] hover:shadow-sm"
+                      >
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-[#7ea00e]">
+                          Board near you
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-neutral-900">
+                          {terminalTransitPlan.originTerminal.name}
+                        </p>
+                        <p className="mt-1 text-[11px] text-neutral-600">
+                          {terminalTransitPlan.originTerminal.municipality}
+                          {' · ~'}
+                          {haversineDistanceKm(
+                            userCoords.lat,
+                            userCoords.lng,
+                            terminalTransitPlan.originTerminal.latitude,
+                            terminalTransitPlan.originTerminal.longitude
+                          ).toFixed(1)}
+                          {' km away'}
+                        </p>
+                        <p className="mt-2 text-xs font-semibold text-[#1f4f59]">Open terminal →</p>
+                      </Link>
+                      <Link
+                        to={`/terminals/${terminalTransitPlan.destinationTerminal.id}`}
+                        className="block rounded-xl border border-neutral-200 bg-white p-3 transition hover:border-[#7ea00e] hover:shadow-sm"
+                      >
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-[#7ea00e]">
+                          Near {spot.name}
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-neutral-900">
+                          {terminalTransitPlan.destinationTerminal.name}
+                        </p>
+                        <p className="mt-1 text-[11px] text-neutral-600">
+                          {terminalTransitPlan.destinationTerminal.municipality}
+                          {' · ~'}
+                          {haversineDistanceKm(
+                            spot.lat,
+                            spot.lng,
+                            terminalTransitPlan.destinationTerminal.latitude,
+                            terminalTransitPlan.destinationTerminal.longitude
+                          ).toFixed(1)}
+                          {' km from destination'}
+                        </p>
+                        <p className="mt-2 text-xs font-semibold text-[#1f4f59]">Open terminal →</p>
+                      </Link>
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-xs text-neutral-500">
+                      No terminal data is available for this area. Use the map and route options below.
+                    </p>
+                  )}
+                </div>
+
+                <div className="rounded-2xl border border-[rgba(126,160,14,0.35)] bg-[rgba(126,160,14,0.06)] p-4">
+                  <p className="text-sm font-bold text-[#1f4f59]">Route style</p>
+                  <p className="mt-1 text-xs leading-relaxed text-neutral-600">
+                    The map draws a <span className="font-semibold text-[#1d4ed8]">blue line</span> on real roads (OSRM).
+                    Choose door-to-door from your exact location, or a chain through the nearest terminals.
+                  </p>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => setRouteGuideMode('direct')}
+                      className="rounded-xl border-2 px-3 py-3 text-left transition"
+                      style={
+                        routeGuideMode === 'direct'
+                          ? { borderColor: olive, backgroundColor: 'rgba(126,160,14,0.12)' }
+                          : { borderColor: '#e5e5e5', backgroundColor: '#fff' }
+                      }
+                    >
+                      <p className="text-sm font-semibold text-neutral-900">From my location</p>
+                      <p className="mt-1 text-[11px] text-neutral-600">Fastest road path to {spot.name}</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRouteGuideMode('terminal')}
+                      className="rounded-xl border-2 px-3 py-3 text-left transition"
+                      style={
+                        routeGuideMode === 'terminal'
+                          ? { borderColor: olive, backgroundColor: 'rgba(126,160,14,0.12)' }
+                          : { borderColor: '#e5e5e5', backgroundColor: '#fff' }
+                      }
+                    >
+                      <p className="text-sm font-semibold text-neutral-900">Via terminals</p>
+                      <p className="mt-1 text-[11px] text-neutral-600">You → hubs → transfers → destination</p>
+                    </button>
+                  </div>
+                </div>
+
+                {routeGuideMode === 'terminal' && (terminalTransitPlan?.legs?.length ?? 0) > 0 ? (
+                  <div className="overflow-x-auto rounded-xl border border-neutral-200 bg-white p-2">
+                    <div className="flex min-w-max items-center gap-2">
+                      {transportChoices.map((choice) => {
+                        const active = selectedTransport.toLowerCase() === choice.toLowerCase();
+                        return (
+                          <button
+                            key={choice}
+                            type="button"
+                            onClick={() => setSelectedTransport(choice)}
+                            className="rounded-full border px-3 py-1.5 text-xs font-semibold transition"
+                            style={
+                              active
+                                ? { backgroundColor: 'rgba(126,160,14,0.2)', borderColor: olive, color: olive }
+                                : { backgroundColor: '#fff', borderColor: '#d4d4d8', color: '#52525b' }
+                            }
+                          >
+                            {choice}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+                {routeGuideMode === 'terminal' && userCoords && terminalTransitPlan && (
+                  <div className="overflow-hidden rounded-2xl border border-[#cddcab] bg-[#f7faef] p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[#5d7211]">
+                      Terminal-to-terminal legs
+                    </p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-neutral-600">
+                      Suggested transfers from{' '}
+                      <span className="font-semibold text-neutral-800">{terminalTransitPlan.originTerminal.name}</span> to{' '}
+                      <span className="font-semibold text-neutral-800">{terminalTransitPlan.destinationTerminal.name}</span>{' '}
+                      using{' '}
+                      <code className="rounded bg-white/80 px-1 text-[10px]">cavitour_terminal_routes</code>.
+                    </p>
+                    <div className="mt-3 rounded-xl border border-neutral-200 bg-white p-3">
+                      {shownTerminalLegs.length === 0 ? (
+                        <p className="text-xs text-neutral-500">
+                          {terminalTransitPlan.legs.length === 0
+                            ? 'No multi-leg chain in the dataset — use the terminals above, then the road map below.'
+                            : `No ${selectedTransport.toLowerCase()} leg found for this route. Try another transport option.`}
+                        </p>
+                      ) : (
+                        <ol className="list-decimal space-y-2 pl-4 text-xs text-neutral-800">
+                          {shownTerminalLegs.map((leg, idx) => (
+                            <li key={`${leg.fromTerminalId}-${leg.toTerminalId}-${idx}`}>
+                              Route: {leg.routeName} · {leg.transportName}
+                            </li>
+                          ))}
+                        </ol>
+                      )}
+                    </div>
+                  </div>
                 )}
                 <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
                 <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)]">
@@ -644,6 +893,11 @@ export function PlaceDetailPage() {
                         <div>
                           <p className="text-sm font-semibold text-neutral-900">Tracking route to {spot.name}</p>
                           <p className="text-[11px] text-neutral-500">{selectedRoute?.distanceKm ?? '--'} km • {formatDuration(selectedRoute?.durationMin ?? 0)}</p>
+                          <p className="mt-1 text-[10px] text-[#1d4ed8]">
+                            {routeGuideMode === 'terminal'
+                              ? 'Map: chained road segments via terminals (when loaded).'
+                              : 'Map: single road path from your location (driving, then walking if needed).'}
+                          </p>
                         </div>
                         <div className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-1 text-[11px] font-semibold text-neutral-600">
                           <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: selectedRoute?.color ?? '#10b981' }} />
@@ -652,12 +906,23 @@ export function PlaceDetailPage() {
                       </div>
 
                       <div className="overflow-hidden rounded-xl border border-neutral-200">
-                        <RouteLeafletMap
-                          start={userCoords}
-                          end={{ lat: spot.lat, lng: spot.lng }}
-                          routeId={selectedRoute?.id ?? 'main-road'}
-                          lineColor={selectedRoute?.color ?? '#0ea5e9'}
-                        />
+                        {routeGuideMode === 'terminal' && terminalRoadSegmentsLoading ? (
+                          <div className="flex h-[350px] flex-col items-center justify-center gap-3 bg-neutral-50 px-4 text-center text-sm text-neutral-600">
+                            <span
+                              className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-neutral-300 border-t-[#7ea00e]"
+                              aria-hidden
+                            />
+                            <p>Building road path through terminals…</p>
+                          </div>
+                        ) : (
+                          <RouteLeafletMap
+                            start={userCoords}
+                            end={{ lat: spot.lat, lng: spot.lng }}
+                            routeId={selectedRoute?.id ?? 'main-road'}
+                            lineColor={selectedRoute?.color ?? '#0ea5e9'}
+                            externalSegments={mapExternalSegments}
+                          />
+                        )}
                       </div>
                     </div>
 
@@ -666,7 +931,7 @@ export function PlaceDetailPage() {
                         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Route timeline</p>
                         <div className="space-y-2.5">
                           {routeTimeline.map((step, idx) => (
-                            <div key={step.title} className="grid grid-cols-[18px_minmax(0,1fr)] items-start gap-2">
+                            <div key={`route-tl-${idx}-${step.title}`} className="grid grid-cols-[18px_minmax(0,1fr)] items-start gap-2">
                               <div className="relative mt-0.5">
                                 <span className={`block h-2.5 w-2.5 rounded-full ${idx === routeTimeline.length - 1 ? 'bg-neutral-900' : 'bg-sky-500'}`} />
                                 {idx < routeTimeline.length - 1 && <span className="absolute left-[4px] top-3 block h-6 w-[1.5px] bg-neutral-200" />}
