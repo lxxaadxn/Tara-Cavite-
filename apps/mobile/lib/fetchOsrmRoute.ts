@@ -4,9 +4,12 @@
  */
 
 export type RouteStepUi = {
+  /** Raw OSRM turn-by-turn (not shown to commuters by default). */
   instruction: string;
   distanceM: number;
   durationS: number;
+  /** Street/highway name when OSRM provides it; used only as optional hint in commuter copy. */
+  roadName: string | null;
 };
 
 export type OsrmRouteResult = {
@@ -65,10 +68,12 @@ export async function fetchOsrmRoute(
   const legSteps = route.legs?.[0]?.steps;
   if (legSteps) {
     for (const s of legSteps) {
+      const rn = s.name?.trim();
       steps.push({
         instruction: stepInstruction(s),
         distanceM: s.distance ?? 0,
         durationS: s.duration ?? 0,
+        roadName: rn && rn.length >= 2 ? rn : null,
       });
     }
   }

@@ -33,7 +33,7 @@ const HEADER_EXTEND_PAST_AVATAR = 40;
 /** Extra overlap into the green (larger = avatar sits higher on screen) */
 const AVATAR_PULLUP = 45;
 
-const defaultAvatar = require('../assets/images/profile-settings-avatar.png');
+const defaultAvatar = require('../assets/images/cavitour-logo.png');
 
 interface MenuItem {
   id: string;
@@ -190,9 +190,9 @@ const ProfileScreen: React.FC = () => {
         </View>
 
         <View style={[styles.avatarOverlap, { marginTop: -(AVATAR_HALF + AVATAR_PULLUP) }]}>
-          {user?.user_metadata?.avatar_url ? (
+          {user?.user_metadata?.avatar_url || user?.user_metadata?.picture ? (
             <Image
-              source={{ uri: user.user_metadata.avatar_url as string }}
+              source={{ uri: String(user.user_metadata.avatar_url ?? user.user_metadata.picture) }}
               style={styles.avatar}
               resizeMode="cover"
               accessibilityLabel="Profile picture"
@@ -201,8 +201,8 @@ const ProfileScreen: React.FC = () => {
             <Image
               source={defaultAvatar}
               style={styles.avatar}
-              resizeMode="contain"
-              accessibilityLabel="Profile picture"
+              resizeMode="cover"
+              accessibilityLabel="Default profile logo"
             />
           )}
         </View>

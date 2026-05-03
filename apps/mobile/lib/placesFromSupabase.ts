@@ -16,6 +16,7 @@ export type CavitePlaceRow = {
   description: string | null;
   searchable_text: string | null;
   lgu_slug: string | null;
+  created_at?: string | null;
 };
 
 /** Alias for screens that still import `PlaceRow`. */
@@ -79,6 +80,11 @@ export function rowToPlace(row: CavitePlaceRow): Place | null {
   if (row.description) p.description = normalizeNtdpCopy(row.description);
   if (row.ntdp_category) p.ntdp_category = normalizeNtdpCopy(row.ntdp_category);
   if (row.city_mun) p.city_mun = row.city_mun;
+  if (row.created_at) p.created_at = row.created_at;
+  if (row.searchable_text) p.searchable_text = row.searchable_text;
+  if (row.type_code) p.type_code = row.type_code;
+  if (row.ta_category) p.ta_category = row.ta_category;
+  if (row.lgu_slug) p.lgu_slug = row.lgu_slug;
   return p;
 }
 
@@ -221,4 +227,25 @@ export async function fetchNearbyPlacesFromSupabase(
 
   scored.sort((a, b) => a.km - b.km);
   return scored.slice(0, limit).map(({ place }) => place);
+}
+
+/** Large pool for dashboard filtering (client-side city/category toggles). */
+export async function fetchDashboardPlacesPool(client: SupabaseClient, limit = 1500): Promise<Place[]> {
+  const cap = Math.min(Math.max(limit, 1), 3000);
+  const { data, error } = await client
+    .from('v_cavite_establishments')
+    .select(CAVITE_SELECT)
+    .not('latitude', 'is', null)
+    .not('longitude', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(cap);
+
+  if (error) throw new Error(error.message);
+
+  const out: Place[] = [];
+  for (const row of data ?? []) {
+    const p = rowToPlace(row as CavitePlaceRow);
+    if (p) out.push(p);
+  }
+  return out;
 }

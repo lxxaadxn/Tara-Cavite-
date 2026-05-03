@@ -5,7 +5,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   TouchableOpacity,
-  FlatList,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation } from '@react-navigation/native';
@@ -59,7 +59,7 @@ const PlaceDetailScreen: React.FC = () => {
       .then(([placeList, terminals]) => {
         if (cancelled) return;
         setCandidates(placeList);
-        setTerminalCandidates(filterTerminalsByText(terminals, searchQuery, 25));
+        setTerminalCandidates(filterTerminalsByText(terminals, searchQuery, 10));
       })
       .catch((e: Error) => {
         if (!cancelled) setFetchError(e.message ?? 'Search failed');
@@ -148,8 +148,37 @@ const PlaceDetailScreen: React.FC = () => {
       ) : null}
 
       {showList ? (
-        <View style={styles.listWrap}>
+        <ScrollView
+          style={styles.listWrap}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        >
           <Text style={styles.listHeading}>{listHeading}</Text>
+          {candidates.length ? (
+            <Text style={styles.sectionCaption}>Places & establishments</Text>
+          ) : null}
+          {candidates.map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              style={styles.resultRow}
+              onPress={() =>
+                navigation.navigate('AboutEstablishment' as never, { place: item } as never)
+              }
+              accessibilityRole="button"
+              accessibilityLabel={`${item.name}, ${item.address}`}
+            >
+              <JamIcon ionicon="location" size={22} color={Colors.primary} />
+              <View style={styles.resultTextCol}>
+                <Text style={styles.resultName} numberOfLines={2}>
+                  {item.name}
+                </Text>
+                <Text style={styles.resultAddr} numberOfLines={2}>
+                  {item.address}
+                </Text>
+              </View>
+              <JamIcon ionicon="chevron-forward" size={20} color={Colors.text.light} />
+            </TouchableOpacity>
+          ))}
           {terminalCandidates.length ? (
             <Text style={styles.sectionCaption}>Terminals</Text>
           ) : null}
@@ -173,36 +202,7 @@ const PlaceDetailScreen: React.FC = () => {
               <JamIcon ionicon="chevron-forward" size={20} color={Colors.text.light} />
             </TouchableOpacity>
           ))}
-          {candidates.length ? (
-            <Text style={styles.sectionCaption}>Places & establishments</Text>
-          ) : null}
-          <FlatList
-            data={candidates}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.listContent}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.resultRow}
-                onPress={() =>
-                  navigation.navigate('AboutEstablishment' as never, { place: item } as never)
-                }
-                accessibilityRole="button"
-                accessibilityLabel={`${item.name}, ${item.address}`}
-              >
-                <JamIcon ionicon="location" size={22} color={Colors.primary} />
-                <View style={styles.resultTextCol}>
-                  <Text style={styles.resultName} numberOfLines={2}>
-                    {item.name}
-                  </Text>
-                  <Text style={styles.resultAddr} numberOfLines={2}>
-                    {item.address}
-                  </Text>
-                </View>
-                <JamIcon ionicon="chevron-forward" size={20} color={Colors.text.light} />
-              </TouchableOpacity>
-            )}
-          />
-        </View>
+        </ScrollView>
       ) : null}
     </SafeAreaView>
   );

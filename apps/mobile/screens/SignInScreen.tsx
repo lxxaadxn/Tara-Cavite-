@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
+  Modal,
   View,
   Text,
   StyleSheet,
@@ -28,6 +30,16 @@ import { getAdminReservedEmailMessage, isAdminReservedEmail } from '../lib/admin
 const TURQUOISE = '#54C0CC';
 const MUTED = '#7A7878';
 const LINE = 'rgba(122, 120, 120, 0.45)';
+const AUTH_POPUP_MS = 1200;
+
+function toFriendlyLoginError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  const normalized = message.toLowerCase();
+  if (normalized.includes('invalid login credentials')) {
+    return 'Email or password is incorrect. If this account was created with Google, use Google sign in or reset your password.';
+  }
+  return message || 'Sign in failed.';
+}
 
 const SignInScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
@@ -35,6 +47,7 @@ const SignInScreen: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleAuthInProgress, setGoogleAuthInProgress] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   const handleSignIn = async () => {
@@ -67,9 +80,7 @@ const SignInScreen: React.FC = () => {
     } catch (error: unknown) {
       const message = isNetworkErrorMsg(error)
         ? NETWORK_ERROR_USER_MESSAGE
-        : error instanceof Error
-          ? error.message
-          : String(error);
+        : toFriendlyLoginError(error);
       setFormError(message);
     } finally {
       setLoading(false);
@@ -83,6 +94,8 @@ const SignInScreen: React.FC = () => {
       return;
     }
     setLoading(true);
+    setGoogleAuthInProgress(true);
+    const startedAt = Date.now();
     try {
       await signInWithGoogleMobile();
       await AsyncStorage.setItem('isAuthenticated', 'true');
@@ -93,12 +106,28 @@ const SignInScreen: React.FC = () => {
           : 'Google sign in failed. Please try again.';
       setFormError(message);
     } finally {
+      const elapsed = Date.now() - startedAt;
+      const remaining = Math.max(0, AUTH_POPUP_MS - elapsed);
+      if (remaining > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remaining));
+      }
       setLoading(false);
+      setGoogleAuthInProgress(false);
     }
   };
 
   return (
     <View style={styles.root}>
+      <Modal visible={googleAuthInProgress} transparent animationType="fade" statusBarTranslucent>
+        <View style={styles.authOverlay}>
+          <View style={styles.authCard}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text style={styles.authTitle}>Authenticating with Google</Text>
+            <Text style={styles.authSubtitle}>Please continue in the Google sign-in window.</Text>
+          </View>
+        </View>
+      </Modal>
+
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.flex}
@@ -433,6 +462,36 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_700Bold',
     fontSize: 14,
     color: Colors.primary,
+  },
+  authOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  authCard: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: Colors.white,
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  authTitle: {
+    marginTop: 12,
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 16,
+    color: Colors.text.primary,
+    textAlign: 'center',
+  },
+  authSubtitle: {
+    marginTop: 6,
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 13,
+    color: MUTED,
+    textAlign: 'center',
   },
 });
 

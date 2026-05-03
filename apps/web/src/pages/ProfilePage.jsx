@@ -6,6 +6,7 @@ import { fetchAllPlacesFromSupabase } from '../lib/placesFromSupabase';
 import { readSavedLists, SAVED_LISTS_UPDATED_EVENT } from '../lib/savedPlaces';
 
 const PLACEHOLDER_IMG = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=900&q=80';
+const DEFAULT_PROFILE_LOGO = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='%23eaf5cf'/><circle cx='32' cy='32' r='19' fill='%237ea00e'/><text x='32' y='38' text-anchor='middle' font-family='Arial,sans-serif' font-size='18' font-weight='700' fill='white'>CT</text></svg>";
 
 function deriveProfile(user) {
     const meta = user?.user_metadata ?? {};
@@ -22,7 +23,7 @@ function deriveProfile(user) {
         email: user?.email || 'No email on account',
         location: meta.location || meta.city || 'Cavite, Philippines',
         organization: meta.organization || meta.company || 'CaviTour Member',
-        avatarUrl: meta.avatar_url || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=240&q=80',
+        avatarUrl: meta.avatar_url || meta.picture || DEFAULT_PROFILE_LOGO,
     };
 }
 

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { fetchAllPlacesFromSupabase, searchPlacesByText } from '../lib/placesFromSupabase';
+import { placePassesAppliedFilters, sortPlacesByModeWeb } from '../lib/placeFilterHelpers';
 import { AppHeader } from '../components/AppHeader';
 import { FilterModal } from '../components/FilterModal';
 import { PlacesLeafletMap } from '../components/PlacesLeafletMap';
@@ -116,6 +117,8 @@ export function SearchPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  /** @type {import('../components/FilterModal').AppliedPlaceFilters | null} */
+  const [appliedFilters, setAppliedFilters] = useState(null);
   const [displayPlaces, setDisplayPlaces] = useState([]);
   const [allPlaces, setAllPlaces] = useState([]);
   const [selectedPlaceId, setSelectedPlaceId] = useState(null);
@@ -204,14 +207,23 @@ export function SearchPage() {
     return () => clearTimeout(t);
   }, [search, dataSource]);
 
+  const modalFilteredPlaces = useMemo(
+    () => displayPlaces.filter((p) => placePassesAppliedFilters(p, appliedFilters)),
+    [displayPlaces, appliedFilters]
+  );
+
   const filteredPlaces = useMemo(() => {
-    if (!userCoords) return displayPlaces;
-    return [...displayPlaces].sort((a, b) => {
-      const aDistance = haversineDistanceKm(userCoords.lat, userCoords.lng, a.lat, a.lng);
-      const bDistance = haversineDistanceKm(userCoords.lat, userCoords.lng, b.lat, b.lng);
-      return aDistance - bDistance;
-    });
-  }, [displayPlaces, userCoords]);
+    const sortMode = appliedFilters?.sortMode ?? '';
+    let list = sortPlacesByModeWeb(modalFilteredPlaces, sortMode);
+    if (!sortMode && userCoords) {
+      list = [...list].sort((a, b) => {
+        const aDistance = haversineDistanceKm(userCoords.lat, userCoords.lng, a.lat, a.lng);
+        const bDistance = haversineDistanceKm(userCoords.lat, userCoords.lng, b.lat, b.lng);
+        return aDistance - bDistance;
+      });
+    }
+    return list;
+  }, [modalFilteredPlaces, appliedFilters?.sortMode, userCoords]);
 
   const mapPlaces = useMemo(
     () => filteredPlaces.filter((p) => p.lat != null && p.lng != null),
@@ -499,7 +511,12 @@ export function SearchPage() {
         )}
       </div>
 
-      <FilterModal open={filtersOpen} onClose={() => setFiltersOpen(false)} places={allPlaces} />
+      <FilterModal
+        open={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        places={allPlaces}
+        onApply={(f) => setAppliedFilters(f)}
+      />
     </div>
   );
 }

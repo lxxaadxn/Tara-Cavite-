@@ -86,6 +86,7 @@ export const DIRECTIONS_LEAFLET_HTML = `<!DOCTYPE html>
           var dLat = payload.destLat;
           var dLng = payload.destLng;
           var geo = payload.routeGeoJson;
+          var multi = payload.routeSegmentsGeoJson;
 
           if (dLat == null || dLng == null || isNaN(dLat) || isNaN(dLng)) return;
 
@@ -104,14 +105,31 @@ export const DIRECTIONS_LEAFLET_HTML = `<!DOCTYPE html>
           var boundsPoints = [[dLat, dLng]];
           if (uLat != null && uLng != null) boundsPoints.push([uLat, uLng]);
 
-          if (geo && geo.type === 'LineString' && geo.coordinates && geo.coordinates.length > 1) {
+          var drewRoad = false;
+          if (multi && multi.length) {
+            for (var si = 0; si < multi.length; si++) {
+              var seg = multi[si];
+              if (seg && seg.type === 'LineString' && seg.coordinates && seg.coordinates.length > 1) {
+                L.geoJSON(seg, {
+                  style: { color: '#1d4ed8', weight: 5, opacity: 0.88 }
+                }).addTo(routeLayer);
+                drewRoad = true;
+                seg.coordinates.forEach(function (c) {
+                  if (c && c.length >= 2) boundsPoints.push([c[1], c[0]]);
+                });
+              }
+            }
+          }
+          if (!drewRoad && geo && geo.type === 'LineString' && geo.coordinates && geo.coordinates.length > 1) {
             L.geoJSON(geo, {
               style: { color: '#1d4ed8', weight: 5, opacity: 0.88 }
             }).addTo(routeLayer);
+            drewRoad = true;
             geo.coordinates.forEach(function (c) {
               if (c && c.length >= 2) boundsPoints.push([c[1], c[0]]);
             });
-          } else if (uLat != null && uLng != null) {
+          }
+          if (!drewRoad && uLat != null && uLng != null) {
             L.polyline([[uLat, uLng], [dLat, dLng]], {
               color: '#64748b',
               weight: 3,

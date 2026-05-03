@@ -1,9 +1,15 @@
 /**
  * Cavite terminal-to-terminal transit planning (aligned with apps/mobile/lib/terminalTransitPlanner.ts).
- * Builds a graph from cavitour_terminal_routes + cavitour_routes + cavitour_transport_types, then BFS.
+ * - Omits unrealistic Trece↔Tagaytay direct edges (through-traffic uses Dasma / Silang corridor).
+ * - Dijkstra on distance-weighted edges + multi-candidate origin/destination terminals near user/place.
  */
 import { haversineDistanceKm } from './placesFromSupabase';
 import { fetchTerminalsFromSupabase } from './terminalsFromSupabase';
+
+const TRANSFER_BASE_KM = 5;
+const ORIGIN_CANDIDATES = 10;
+const DEST_CANDIDATES = 6;
+const ACCESS_WEIGHT = 1.35;
 
 function fold(v) {
   return String(v ?? '')
@@ -18,6 +24,10 @@ function fold(v) {
 function extractOne(v) {
   if (!v) return null;
   return Array.isArray(v) ? v[0] ?? null : v;
+}
+
+function isExcludedTransferRoute(routeName) {
+  return fold(routeName) === fold('Trece Martires - Tagaytay');
 }
 
 function nearestTerminal(terminals, lat, lng) {
@@ -35,33 +45,65 @@ function nearestTerminal(terminals, lat, lng) {
   return best;
 }
 
-function bfsPath(graph, startId, goalId) {
-  if (startId === goalId) return [];
-  const queue = [startId];
-  const visited = new Set([startId]);
-  const prev = new Map();
+function topNearestTerminals(terminals, lat, lng, k) {
+  return [...terminals]
+    .map((t) => ({ t, km: haversineDistanceKm(lat, lng, t.latitude, t.longitude) }))
+    .sort((a, b) => a.km - b.km)
+    .slice(0, Math.max(1, k))
+    .map((x) => x.t);
+}
 
-  while (queue.length) {
-    const cur = queue.shift();
-    for (const edge of graph.get(cur) ?? []) {
-      if (visited.has(edge.toId)) continue;
-      visited.add(edge.toId);
-      prev.set(edge.toId, { from: cur, edge });
-      if (edge.toId === goalId) {
-        const rev = [];
-        let walk = goalId;
-        while (walk !== startId) {
-          const p = prev.get(walk);
-          if (!p) break;
-          rev.push({ toId: walk, edge: p.edge });
-          walk = p.from;
-        }
-        return rev.reverse();
+function dijkstraPath(graph, startId, goalId, terminalById) {
+  if (startId === goalId) return [];
+
+  const nodes = new Set(terminalById.keys());
+  for (const k of graph.keys()) nodes.add(k);
+  for (const edges of graph.values()) {
+    for (const e of edges) nodes.add(e.toId);
+  }
+
+  const dist = new Map();
+  const prev = new Map();
+  for (const id of nodes) dist.set(id, Infinity);
+  dist.set(startId, 0);
+  const visited = new Set();
+
+  while (visited.size < nodes.size) {
+    let u = null;
+    let bestD = Infinity;
+    for (const id of nodes) {
+      if (visited.has(id)) continue;
+      const d = dist.get(id);
+      if (d < bestD) {
+        bestD = d;
+        u = id;
       }
-      queue.push(edge.toId);
+    }
+    if (u == null || bestD === Infinity) break;
+    visited.add(u);
+    if (u === goalId) break;
+
+    for (const edge of graph.get(u) ?? []) {
+      const v = edge.toId;
+      const nd = bestD + edge.weight;
+      if (nd < (dist.get(v) ?? Infinity)) {
+        dist.set(v, nd);
+        prev.set(v, { from: u, edge });
+      }
     }
   }
-  return null;
+
+  if ((dist.get(goalId) ?? Infinity) === Infinity) return null;
+
+  const rev = [];
+  let walk = goalId;
+  while (walk !== startId) {
+    const p = prev.get(walk);
+    if (!p) return null;
+    rev.push({ toId: walk, edge: p.edge });
+    walk = p.from;
+  }
+  return rev.reverse();
 }
 
 function cardToNode(t) {
@@ -96,6 +138,8 @@ async function buildGraphAndNodes(client) {
     const route = extractOne(row.cavitour_routes);
     const transport = extractOne(row.cavitour_transport_types);
     if (!route) continue;
+    if (isExcludedTransferRoute(route.route_name)) continue;
+
     const terminalId = String(row.terminal_id);
     const terminal = terminalById.get(terminalId);
     if (!terminal) continue;
@@ -116,9 +160,16 @@ async function buildGraphAndNodes(client) {
   }
 
   const graph = new Map();
-  const pushEdge = (from, to, routeName, transportName) => {
-    if (!graph.has(from)) graph.set(from, []);
-    graph.get(from).push({ toId: to, routeName, transportName });
+  const pushEdge = (fromN, toN, routeName, transportName) => {
+    const weight =
+      haversineDistanceKm(fromN.latitude, fromN.longitude, toN.latitude, toN.longitude) + TRANSFER_BASE_KM;
+    if (!graph.has(fromN.id)) graph.set(fromN.id, []);
+    graph.get(fromN.id).push({
+      toId: toN.id,
+      routeName,
+      transportName,
+      weight,
+    });
   };
 
   for (const group of byRoute.values()) {
@@ -133,8 +184,11 @@ async function buildGraphAndNodes(client) {
     for (const a of left) {
       for (const b of right) {
         if (a.terminalId === b.terminalId) continue;
-        pushEdge(a.terminalId, b.terminalId, group.routeName, a.transportName);
-        pushEdge(b.terminalId, a.terminalId, group.routeName, b.transportName);
+        const nodeA = terminalById.get(a.terminalId);
+        const nodeB = terminalById.get(b.terminalId);
+        if (!nodeA || !nodeB) continue;
+        pushEdge(nodeA, nodeB, group.routeName, a.transportName);
+        pushEdge(nodeB, nodeA, group.routeName, b.transportName);
       }
     }
   }
@@ -142,13 +196,23 @@ async function buildGraphAndNodes(client) {
   return { terminals, terminalById, graph };
 }
 
-function legsFromPath(originTerminal, rawPath) {
+function legsFromPath(originTerminal, rawPath, terminalById) {
   const legs = [];
   let fromId = originTerminal.id;
   for (const step of rawPath) {
+    const fromTerminal = terminalById.get(fromId);
+    const toTerminal = terminalById.get(step.toId);
     legs.push({
       fromTerminalId: fromId,
       toTerminalId: step.toId,
+      fromTerminalName: fromTerminal?.name ?? fromId,
+      toTerminalName: toTerminal?.name ?? step.toId,
+      fromMunicipality: fromTerminal?.municipality ?? '',
+      toMunicipality: toTerminal?.municipality ?? '',
+      fromLatitude: fromTerminal?.latitude ?? 0,
+      fromLongitude: fromTerminal?.longitude ?? 0,
+      toLatitude: toTerminal?.latitude ?? 0,
+      toLongitude: toTerminal?.longitude ?? 0,
       routeName: step.edge.routeName,
       transportName: step.edge.transportName,
     });
@@ -158,37 +222,70 @@ function legsFromPath(originTerminal, rawPath) {
 }
 
 /**
- * Same as mobile: nearest terminal to user vs nearest to destination, then BFS path.
  * @param {import('@supabase/supabase-js').SupabaseClient} client
  * @param {{ lat: number; lng: number }} userPt
  * @param {{ lat: number; lng: number }} destPt
  */
 export async function planTerminalTransit(client, userPt, destPt) {
-  const { terminals, graph } = await buildGraphAndNodes(client);
+  const { terminals, graph, terminalById } = await buildGraphAndNodes(client);
   if (!terminals.length) return null;
 
-  const originTerminal = nearestTerminal(terminals, userPt.lat, userPt.lng);
-  const destinationTerminal = nearestTerminal(terminals, destPt.lat, destPt.lng);
-  if (!originTerminal || !destinationTerminal) return null;
+  const originOptions = topNearestTerminals(terminals, userPt.lat, userPt.lng, ORIGIN_CANDIDATES);
+  const destOptions = topNearestTerminals(terminals, destPt.lat, destPt.lng, DEST_CANDIDATES);
 
-  const rawPath = bfsPath(graph, originTerminal.id, destinationTerminal.id);
-  if (!rawPath) return null;
+  let bestScore = Infinity;
+  let bestOrigin = null;
+  let bestDest = null;
+  let bestPath = null;
+
+  for (const o of originOptions) {
+    for (const d of destOptions) {
+      const rawPath = dijkstraPath(graph, o.id, d.id, terminalById);
+      if (!rawPath) continue;
+      const walkO = haversineDistanceKm(userPt.lat, userPt.lng, o.latitude, o.longitude);
+      const walkD = haversineDistanceKm(destPt.lat, destPt.lng, d.latitude, d.longitude);
+      const pathKm = rawPath.reduce((s, step) => s + step.edge.weight, 0);
+      const score = walkO * ACCESS_WEIGHT + walkD * ACCESS_WEIGHT + pathKm;
+      if (score < bestScore) {
+        bestScore = score;
+        bestOrigin = o;
+        bestDest = d;
+        bestPath = rawPath;
+      }
+    }
+  }
+
+  const fallbackOrigin = nearestTerminal(terminals, userPt.lat, userPt.lng);
+  const fallbackDest = nearestTerminal(terminals, destPt.lat, destPt.lng);
+  if (!fallbackOrigin || !fallbackDest) return null;
+
+  if (!bestOrigin || !bestDest || bestPath == null) {
+    const rawPath = dijkstraPath(graph, fallbackOrigin.id, fallbackDest.id, terminalById);
+    if (!rawPath) {
+      return { originTerminal: fallbackOrigin, destinationTerminal: fallbackDest, legs: [] };
+    }
+    return {
+      originTerminal: fallbackOrigin,
+      destinationTerminal: fallbackDest,
+      legs: legsFromPath(fallbackOrigin, rawPath, terminalById),
+    };
+  }
 
   return {
-    originTerminal,
-    destinationTerminal,
-    legs: legsFromPath(originTerminal, rawPath),
+    originTerminal: bestOrigin,
+    destinationTerminal: bestDest,
+    legs: legsFromPath(bestOrigin, bestPath, terminalById),
   };
 }
 
 /**
- * Explicit terminal A → B (same graph + BFS as mobile).
+ * Explicit terminal A → B (same graph + Dijkstra as mobile).
  * @param {import('@supabase/supabase-js').SupabaseClient} client
  * @param {string} fromTerminalId
  * @param {string} toTerminalId
  */
 export async function planTerminalTransitBetween(client, fromTerminalId, toTerminalId) {
-  const { terminals, graph } = await buildGraphAndNodes(client);
+  const { terminals, graph, terminalById } = await buildGraphAndNodes(client);
   if (!terminals.length) return null;
 
   const fromId = String(fromTerminalId);
@@ -197,12 +294,12 @@ export async function planTerminalTransitBetween(client, fromTerminalId, toTermi
   const destinationTerminal = terminals.find((t) => t.id === toId);
   if (!originTerminal || !destinationTerminal) return null;
 
-  const rawPath = bfsPath(graph, fromId, toId);
+  const rawPath = dijkstraPath(graph, fromId, toId, terminalById);
   if (!rawPath) return null;
 
   return {
     originTerminal,
     destinationTerminal,
-    legs: legsFromPath(originTerminal, rawPath),
+    legs: legsFromPath(originTerminal, rawPath, terminalById),
   };
 }
