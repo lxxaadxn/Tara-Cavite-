@@ -100,9 +100,9 @@ export default function MapCommuteDetailScreen() {
           style={styles.primaryBtn}
           onPress={() => navigation.goBack()}
           accessibilityRole="button"
-          accessibilityLabel="Destination reached"
+          accessibilityLabel="Back to directions"
         >
-          <Text style={styles.primaryBtnLabel}>Destination reached</Text>
+          <Text style={styles.primaryBtnLabel}>Back to directions</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>

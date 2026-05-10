@@ -7,6 +7,7 @@ import { AppHeader } from '../components/AppHeader';
 import { FilterModal } from '../components/FilterModal';
 import { PlacesLeafletMap } from '../components/PlacesLeafletMap';
 import { spots } from '../data/spots';
+import { formatNtdpCategoryTagLabel, getEstablishmentAboutBody } from '../lib/ntdpDisplayLabels';
 
 const PLACEHOLDER_IMG = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80';
 
@@ -59,6 +60,12 @@ function buildPlaceTags(place) {
     .map((tag) => tag.replace(/^sta\.?\s*/i, '').replace(/^brgy\.?\s*/i, '').trim())
     .filter((tag) => tag.length > 0);
   return Array.from(new Set(tags));
+}
+
+function displayHomeTagLabel(place, tag) {
+  const ntdp = extractNtdpTag(place);
+  if (ntdp && tag === ntdp) return formatNtdpCategoryTagLabel(tag);
+  return tag;
 }
 
 function sanitizeDescription(description) {
@@ -249,15 +256,28 @@ export function SearchPage() {
     [filteredPlaces, effectiveSelectedPlaceId]
   );
   const selectedPlaceTags = useMemo(() => buildPlaceTags(selectedPlace), [selectedPlace]);
-  const selectedPlaceDescription = useMemo(
-    () => sanitizeDescription(selectedPlace?.description ?? ''),
-    [selectedPlace]
+  const selectedPlaceAboutBody = useMemo(() => {
+    if (!selectedPlace) return '';
+    return getEstablishmentAboutBody({
+      description: sanitizeDescription(selectedPlace.description ?? ''),
+      ntdp_category: selectedPlace.ntdp_category,
+      name: selectedPlace.name,
+      address: selectedPlace.address,
+    });
+  }, [selectedPlace]);
+  const selectedPlaceCardBlurb = useMemo(
+    () => (selectedPlaceAboutBody ? selectedPlaceAboutBody.replace(/\s+/g, ' ').trim() : ''),
+    [selectedPlaceAboutBody]
   );
   const selectedPlaceDistance = selectedPlace ? distanceByPlaceId.get(selectedPlace.id) : null;
 
   return (
     <div className="min-h-screen bg-[#efefec] font-['Inter',sans-serif] text-neutral-900">
       <AppHeader />
+
+      <div className="w-full px-3 pb-1 pt-3 sm:px-4 lg:px-8">
+        <h1 className="font-['Poppins',sans-serif] text-2xl font-bold text-neutral-900">Home</h1>
+      </div>
 
       <div className="w-full px-3 pb-2 pt-2.5 sm:px-4 lg:px-8">
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.45fr_1fr]">
@@ -350,16 +370,16 @@ export function SearchPage() {
                         key={tag}
                         className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-medium text-neutral-700"
                       >
-                        {tag}
+                        {displayHomeTagLabel(selectedPlace, tag)}
                       </span>
                     ))}
                   </div>
                 )}
-                {selectedPlaceDescription && (
+                {selectedPlaceCardBlurb ? (
                   <div className="mt-1.5 rounded-xl bg-neutral-50 px-2 py-1.5">
-                    <p className="text-xs leading-relaxed text-neutral-600 line-clamp-2">{selectedPlaceDescription}</p>
+                    <p className="text-xs leading-relaxed text-neutral-600 line-clamp-4">{selectedPlaceCardBlurb}</p>
                   </div>
-                )}
+                ) : null}
                 <div className="mt-2 flex items-center justify-end gap-2">
                   <button
                     type="button"

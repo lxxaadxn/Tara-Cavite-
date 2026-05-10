@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BottomTabBarHeightContext } from '@react-navigation/bottom-tabs';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { User } from '@supabase/supabase-js';
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, useEffect, useCallback } from 'react';
 import {
   Alert,
   Image,
@@ -12,12 +12,17 @@ import {
   Text,
   TouchableOpacity,
   View,
+  DeviceEventEmitter,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { JamIcon } from '../components/JamIcon';
 import type { JamIconName } from '../lib/jamSvgMap';
 import { Colors } from '../constants/theme';
 import { supabase } from '../lib/supabase';
+import {
+  DESTINATION_REACHED_UPDATED_EVENT,
+  getThisMonthDestinationReachedCount,
+} from '../lib/destinationReachedActivity';
 
 const HEADER_GREEN = '#7EA00E';
 const MENU_TEXT = '#241D13';
@@ -66,11 +71,10 @@ const ProfileScreen: React.FC = () => {
   const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
   const [user, setUser] = useState<User | null>(null);
   const [displayName, setDisplayName] = useState('Username');
-  const [savedCount, setSavedCount] = useState(0);
-  const [listsCount, setListsCount] = useState(0);
-  const [terminalsCount, setTerminalsCount] = useState(0);
+  const [phoneDisplay, setPhoneDisplay] = useState('');
+  const [activityMonthCount, setActivityMonthCount] = useState(0);
 
-  const loadUserAndStats = async () => {
+  const loadUserAndStats = useCallback(async () => {
     const {
       data: { user: u },
     } = await supabase.auth.getUser();
@@ -79,7 +83,7 @@ const ProfileScreen: React.FC = () => {
     if (u) {
       const { data: profile } = await supabase
         .from('user_profiles')
-        .select('username')
+        .select('username, phone')
         .eq('id', u.id)
         .single();
 
@@ -89,61 +93,30 @@ const ProfileScreen: React.FC = () => {
         u.email?.split('@')[0] ||
         'Username';
       setDisplayName(name);
+      const metaPhone = (u.user_metadata?.phone as string) || '';
+      setPhoneDisplay(profile?.phone || metaPhone || '');
 
-      // Per-user list stats.
-      const { data: userLists, error: listsError } = await supabase
-        .from('saved_lists')
-        .select('id')
-        .eq('user_id', u.id);
-      if (listsError) {
-        console.error('Failed to load saved lists count:', listsError);
-        setListsCount(0);
-        setSavedCount(0);
-      } else {
-        const listIds = (userLists ?? []).map((r) => r.id as string);
-        setListsCount(listIds.length);
-        if (listIds.length === 0) {
-          setSavedCount(0);
-        } else {
-          const [placeItems, terminalItems, itineraryItems] = await Promise.all([
-            supabase.from('saved_list_items').select('list_id', { count: 'exact', head: true }).in('list_id', listIds),
-            supabase
-              .from('saved_list_terminal_items')
-              .select('list_id', { count: 'exact', head: true })
-              .in('list_id', listIds),
-            supabase
-              .from('saved_list_itinerary_items')
-              .select('list_id', { count: 'exact', head: true })
-              .in('list_id', listIds),
-          ]);
-          const totalSaved =
-            (placeItems.count ?? 0) + (terminalItems.count ?? 0) + (itineraryItems.count ?? 0);
-          setSavedCount(totalSaved);
-        }
-      }
+      const visitCount = await getThisMonthDestinationReachedCount(u.id);
+      setActivityMonthCount(visitCount);
     } else {
       setDisplayName('Username');
-      setSavedCount(0);
-      setListsCount(0);
+      setPhoneDisplay('');
+      setActivityMonthCount(0);
     }
-
-    // Global terminals count from Cavite terminals dataset.
-    const { count: tCount, error: terminalsError } = await supabase
-      .from('cavitour_terminals')
-      .select('terminal_id', { count: 'exact', head: true });
-    if (terminalsError) {
-      console.error('Failed to load terminals count:', terminalsError);
-      setTerminalsCount(0);
-    } else {
-      setTerminalsCount(tCount ?? 0);
-    }
-  };
+  }, []);
 
   useFocusEffect(
     React.useCallback(() => {
       loadUserAndStats();
-    }, [])
+    }, [loadUserAndStats])
   );
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener(DESTINATION_REACHED_UPDATED_EVENT, () => {
+      void loadUserAndStats();
+    });
+    return () => sub.remove();
+  }, [loadUserAndStats]);
 
   const handleLogout = async () => {
     Alert.alert('Log Out', 'Are you sure you want to log out?', [
@@ -210,19 +183,28 @@ const ProfileScreen: React.FC = () => {
         <View style={styles.identityBlock}>
           <Text style={styles.username}>{displayName}</Text>
           <Text style={styles.email}>{user?.email ?? 'username@gmail.com'}</Text>
+          {phoneDisplay ? <Text style={styles.phoneLine}>{phoneDisplay}</Text> : null}
         </View>
 
-        <View style={styles.statsRow}>
-          {[
-            { value: String(savedCount), label: 'Saved' },
-            { value: String(listsCount), label: 'Lists' },
-            { value: String(terminalsCount), label: 'Terminals' },
-          ].map((s) => (
-            <View key={s.label} style={styles.statCell}>
-              <Text style={styles.statValue}>{s.value}</Text>
-              <Text style={styles.statLabel}>{s.label}</Text>
-            </View>
-          ))}
+        <TouchableOpacity
+          style={styles.editProfileBtn}
+          onPress={() => navigation.navigate('UserDetails' as never)}
+          accessibilityRole="button"
+          accessibilityLabel="Edit profile"
+        >
+          <Text style={styles.editProfileBtnText}>Edit profile</Text>
+        </TouchableOpacity>
+
+        <View style={styles.activityCard}>
+          <Text style={styles.activityTitle}>Activity this month</Text>
+          <Text style={styles.activityCount}>{activityMonthCount}</Text>
+          <Text style={styles.activityCaption}>destinations reached (this month)</Text>
+          {activityMonthCount === 0 ? (
+            <Text style={styles.activityHint}>
+              After a trip, open a place → Directions → tap “Destination Reached” (above See full map). Opening the map
+              alone does not count.
+            </Text>
+          ) : null}
         </View>
 
         <View style={styles.menuList}>
@@ -311,35 +293,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     gap: 8,
   },
-  statsRow: {
-    flexDirection: 'row',
-    marginHorizontal: 16,
-    marginBottom: 20,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-    backgroundColor: '#f4f6ec',
-    borderWidth: 1,
-    borderColor: 'rgba(31, 79, 89, 0.08)',
-    justifyContent: 'space-around',
-  },
-  statCell: {
-    alignItems: 'center',
-    minWidth: 72,
-  },
-  statValue: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 20,
-    lineHeight: 24,
-    color: ICON_TEAL,
-  },
-  statLabel: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 11,
-    lineHeight: 16,
-    color: EMAIL_MUTED,
-    marginTop: 2,
-  },
   username: {
     fontFamily: 'Poppins_700Bold',
     fontSize: 24,
@@ -353,6 +306,64 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: EMAIL_MUTED,
     textAlign: 'center',
+  },
+  phoneLine: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    color: ICON_TEAL,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  editProfileBtn: {
+    alignSelf: 'center',
+    marginTop: 14,
+    marginBottom: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    borderRadius: 999,
+    backgroundColor: HEADER_GREEN,
+  },
+  editProfileBtnText: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 14,
+    color: Colors.white,
+  },
+  activityCard: {
+    marginHorizontal: 16,
+    marginBottom: 20,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: '#f4f6ec',
+    borderWidth: 1,
+    borderColor: 'rgba(31, 79, 89, 0.1)',
+  },
+  activityTitle: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 16,
+    color: ICON_TEAL,
+    marginBottom: 4,
+  },
+  activityCount: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 40,
+    lineHeight: 44,
+    color: HEADER_GREEN,
+    marginTop: 4,
+  },
+  activityCaption: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: EMAIL_MUTED,
+    marginTop: 4,
+  },
+  activityHint: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 18,
+    color: ICON_TEAL,
+    marginTop: 10,
+    opacity: 0.9,
   },
   menuList: {
     paddingHorizontal: 16,

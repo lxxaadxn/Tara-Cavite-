@@ -11,10 +11,12 @@ import {
   Pressable,
   Dimensions,
 } from 'react-native';
+import * as Location from 'expo-location';
 import { BottomTabBarHeightContext } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { JamIcon } from '../components/JamIcon';
+import { LeafletMapView, type LeafletMarker } from '../components/LeafletMapView';
 import {
   DashboardFiltersPanel,
   FILTER_OPTION_LABEL_BY_KEY,
@@ -23,6 +25,7 @@ import {
 import { mockTerminals, Terminal } from '../data/mockData';
 import { terminalAddressLine } from '../lib/terminalHelpers';
 import { supabase } from '../lib/supabase';
+import { haversineDistanceKm } from '../lib/placesFromSupabase';
 import { fetchTerminalsFromSupabase } from '../lib/terminalsFromSupabase';
 
 const TITLE_DARK = '#241D13';
@@ -33,8 +36,9 @@ const PAGE_BG = '#F4F6EC';
 const WHITE = '#FFFFFF';
 const MUTED = '#7A7878';
 const H_PAD = 16;
-const { height: SCREEN_H } = Dimensions.get('window');
+const { height: SCREEN_H, width: SCREEN_W } = Dimensions.get('window');
 const FILTER_SHEET_MAX_HEIGHT = Math.round(SCREEN_H * 0.5);
+const MAP_BLOCK_H = Math.min(320, Math.round(SCREEN_W * 0.68));
 
 const TERMINAL_FILTER_SECTION_IDS: DashboardFilterSectionId[] = ['cities', 'municipalities'];
 
@@ -55,15 +59,6 @@ function terminalMatchesLocationToggles(t: Terminal, toggles: Record<string, boo
   });
 }
 
-const TERMINAL_DISPLAY_ORDER = [
-  'Anytown, NY 12345',
-  'Pleasantville, NY 12345',
-  'Greenville, NY 12345',
-  'Springfield, IL 67890',
-  'Lakeside, IL 67890',
-  'Mountain View, IL 67890',
-];
-
 type TransitMode = 'all' | 'modern-jeepney' | 'jeepney' | 'van' | 'bus';
 
 const TRANSIT_CHIPS: {
@@ -78,39 +73,35 @@ const TRANSIT_CHIPS: {
   { mode: 'modern-jeepney', label: 'Modern PUV', icon: { ionicon: 'bus' } },
 ];
 
-const EXTRA_SCROLL_BOTTOM = 48;
+const EXTRA_SCROLL_BOTTOM = 56;
 
-function sortTerminals(list: Terminal[]): Terminal[] {
-  return [...list].sort((a, b) => {
-    const ia = TERMINAL_DISPLAY_ORDER.indexOf(a.name);
-    const ib = TERMINAL_DISPLAY_ORDER.indexOf(b.name);
-    if (ia === -1 && ib === -1) return a.name.localeCompare(b.name);
-    if (ia === -1) return 1;
-    if (ib === -1) return -1;
-    return ia - ib;
-  });
+function sortTerminalsByName(list: Terminal[]): Terminal[] {
+  return [...list].sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** Normalize transport labels from Supabase (e.g. Jeepney, UV Express) for chip filters. */
 function terminalMatchesTransit(t: Terminal, mode: TransitMode): boolean {
   if (mode === 'all') return true;
   const types = t.transportTypes.map((x) => x.toLowerCase());
   switch (mode) {
     case 'modern-jeepney':
-      return types.some((x) => x.includes('modern'));
+      return types.some((s) => {
+        if (/\bmodern\b|\bmpuv\b|e-jeep|electric|class\s*2|\bpuv\b/.test(s)) return true;
+        if (s.includes('jeepney')) return true;
+        if (s.includes('uv express') || s.includes('uv-express')) return true;
+        if (s.includes('shuttle')) return true;
+        if (s.includes('multicab')) return true;
+        return false;
+      });
     case 'jeepney':
       return types.some((x) => x.includes('jeepney'));
     case 'van':
-      return types.some((x) => x.includes('van'));
+      return types.some((x) => x.includes('van') || x.includes('uv express'));
     case 'bus':
       return types.some((x) => x.includes('bus'));
     default:
       return true;
   }
-}
-
-function corridorStepIndex(t: Terminal): number {
-  const i = TERMINAL_DISPLAY_ORDER.indexOf(t.name);
-  return i >= 0 ? i + 1 : 0;
 }
 
 function statusStyle(status: Terminal['status']) {
@@ -131,6 +122,8 @@ const TerminalsScreen: React.FC = () => {
   const [filtersVisible, setFiltersVisible] = useState(false);
   const [locationToggles, setLocationToggles] = useState<Record<string, boolean>>({});
   const [terminals, setTerminals] = useState<Terminal[]>(mockTerminals);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [mapSelectedId, setMapSelectedId] = useState<string | null>(null);
 
   const filterSheetPadBottom = Math.max(insets.bottom, 10);
   const filterScrollMaxHeight = FILTER_SHEET_MAX_HEIGHT - filterSheetPadBottom;
@@ -154,6 +147,25 @@ const TerminalsScreen: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (cancelled || status !== 'granted') return;
+      try {
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        if (!cancelled) {
+          setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const scrollBottomPadding = tabBarHeight + Math.max(insets.bottom, 8) + EXTRA_SCROLL_BOTTOM;
 
   const filtered = useMemo(() => {
@@ -168,61 +180,88 @@ const TerminalsScreen: React.FC = () => {
           t.municipality.toLowerCase().includes(q)
       );
     }
-    return sortTerminals(list);
-  }, [searchQuery, transitMode, locationToggles, terminals]);
+    let ordered = sortTerminalsByName(list);
+    if (userLocation) {
+      ordered = [...ordered].sort(
+        (a, b) =>
+          haversineDistanceKm(userLocation.lat, userLocation.lng, a.latitude, a.longitude) -
+          haversineDistanceKm(userLocation.lat, userLocation.lng, b.latitude, b.longitude)
+      );
+    }
+    return ordered;
+  }, [searchQuery, transitMode, locationToggles, terminals, userLocation]);
 
-  const renderTerminalItem = (terminal: Terminal, listIndex: number) => {
-    const step = corridorStepIndex(terminal);
+  const toMarker = (t: Terminal): LeafletMarker | null => {
+    if (!Number.isFinite(t.latitude) || !Number.isFinite(t.longitude)) return null;
+    return { id: String(t.id), name: t.name, lat: t.latitude, lng: t.longitude };
+  };
+
+  const { pinMarkers, dotTerminals } = useMemo(() => {
+    const all = filtered.map(toMarker).filter(Boolean) as LeafletMarker[];
+    const sel = mapSelectedId ? String(mapSelectedId) : null;
+    if (!sel) {
+      return { pinMarkers: [] as LeafletMarker[], dotTerminals: all };
+    }
+    return {
+      pinMarkers: all.filter((m) => m.id === sel),
+      dotTerminals: all.filter((m) => m.id !== sel),
+    };
+  }, [filtered, mapSelectedId]);
+
+  const renderTerminalItem = (terminal: Terminal) => {
     const st = statusStyle(terminal.status);
-    const isLast = listIndex === filtered.length - 1;
+    const selected = mapSelectedId != null && String(mapSelectedId) === String(terminal.id);
+    const distKm =
+      userLocation && Number.isFinite(terminal.latitude) && Number.isFinite(terminal.longitude)
+        ? haversineDistanceKm(userLocation.lat, userLocation.lng, terminal.latitude, terminal.longitude)
+        : null;
     return (
-      <View key={terminal.id} style={styles.timelineRow}>
-        <View style={styles.timelineRail}>
-          <View style={[styles.timelineDot, step > 0 ? styles.timelineDotFilled : styles.timelineDotMuted]}>
-            {step > 0 ? (
-              <Text style={styles.timelineDotText}>{step}</Text>
-            ) : (
-              <View style={styles.timelineDotPing} />
-            )}
-          </View>
-          {!isLast ? <View style={styles.timelineLine} /> : null}
-        </View>
-        <TouchableOpacity
-          style={styles.terminalCard}
-          onPress={() => navigation.navigate('TerminalDetail' as never, { terminal } as never)}
-          activeOpacity={0.88}
-          accessibilityRole="button"
-          accessibilityLabel={`${terminal.name}, ${terminalAddressLine(terminal)}`}
-        >
-          <View style={styles.cardAccent} />
-          <View style={styles.cardInner}>
-            <View style={styles.cardTopRow}>
-              <View style={[styles.statusPill, { backgroundColor: st.bg }]}>
-                <Text style={[styles.statusPillText, { color: st.text }]}>{st.label}</Text>
-              </View>
-              <JamIcon ionicon="chevron-forward" size={20} color={TEAL} />
+      <TouchableOpacity
+        key={terminal.id}
+        style={[styles.terminalCard, selected && styles.terminalCardSelected]}
+        onPress={() => setMapSelectedId(String(terminal.id))}
+        activeOpacity={0.88}
+        accessibilityRole="button"
+        accessibilityLabel={`Select ${terminal.name} on map`}
+      >
+        <View style={styles.cardAccent} />
+        <View style={styles.cardInner}>
+          <View style={styles.cardTopRow}>
+            <View style={[styles.statusPill, { backgroundColor: st.bg }]}>
+              <Text style={[styles.statusPillText, { color: st.text }]}>{st.label}</Text>
             </View>
-            <Text style={styles.terminalName} numberOfLines={2}>
-              {terminal.name}
-            </Text>
-            <Text style={styles.terminalMuni} numberOfLines={1}>
-              {terminal.municipality}
-            </Text>
-            <Text style={styles.terminalAddress} numberOfLines={2}>
-              {terminalAddressLine(terminal)}
-            </Text>
-            {terminal.transportTypes?.length ? (
-              <View style={styles.tagRow}>
-                {terminal.transportTypes.slice(0, 3).map((mode) => (
-                  <View key={mode} style={styles.tagChip}>
-                    <Text style={styles.tagChipText}>{mode}</Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
+            <TouchableOpacity
+              onPress={() => navigation.navigate('TerminalDetail' as never, { terminal } as never)}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${terminal.name} details`}
+            >
+              <Text style={styles.openDetailsText}>Details</Text>
+            </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-      </View>
+          <Text style={styles.terminalName} numberOfLines={2}>
+            {terminal.name}
+          </Text>
+          <Text style={styles.terminalMuni} numberOfLines={1}>
+            {terminal.municipality}
+          </Text>
+          <Text style={styles.terminalAddress} numberOfLines={2}>
+            {terminalAddressLine(terminal)}
+          </Text>
+          {distKm != null ? (
+            <Text style={styles.distanceHint}>~{distKm.toFixed(1)} km from you</Text>
+          ) : null}
+          {terminal.transportTypes?.length ? (
+            <View style={styles.tagRow}>
+              {terminal.transportTypes.slice(0, 4).map((mode) => (
+                <View key={mode} style={styles.tagChip}>
+                  <Text style={styles.tagChipText}>{mode}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+        </View>
+      </TouchableOpacity>
     );
   };
 
@@ -241,7 +280,9 @@ const TerminalsScreen: React.FC = () => {
           <View style={styles.headerTitleBlock}>
             <Text style={styles.headerTitle}>Terminals</Text>
             <Text style={styles.headerSubtitle} pointerEvents="none">
-              {terminals.length} terminals in Cavite
+              {userLocation
+                ? 'Tap a terminal to highlight it on the map · location sorts by distance'
+                : `${terminals.length} terminals · allow location to sort by distance`}
             </Text>
           </View>
           <View style={styles.headerIconBtn} />
@@ -256,6 +297,16 @@ const TerminalsScreen: React.FC = () => {
         keyboardDismissMode="on-drag"
         nestedScrollEnabled
       >
+        <View style={[styles.mapBlock, { height: MAP_BLOCK_H, marginBottom: 18 }]}>
+          <LeafletMapView
+            style={StyleSheet.absoluteFill}
+            markers={pinMarkers}
+            terminals={dotTerminals}
+            userLocation={userLocation}
+            onMarkerPress={(id) => setMapSelectedId(String(id))}
+          />
+        </View>
+
         <View style={styles.searchRow}>
           <View style={styles.searchPill}>
             <JamIcon name="search" size={18} color={TEAL} />
@@ -283,7 +334,7 @@ const TerminalsScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.sectionLabel}>Transit type</Text>
+        <Text style={[styles.sectionLabel, { marginBottom: 12 }]}>Transit type</Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -311,17 +362,7 @@ const TerminalsScreen: React.FC = () => {
           })}
         </ScrollView>
 
-        <View style={styles.routeIntro}>
-          <JamIcon name="shuffle" size={22} color={TEAL} />
-          <View style={styles.routeIntroText}>
-            <Text style={styles.routeIntroTitle}>Corridor order</Text>
-            <Text style={styles.routeIntroBody}>
-              Stops are numbered along the sample NY → IL route. Filters only hide cards — order stays the same.
-            </Text>
-          </View>
-        </View>
-
-        <Text style={styles.sectionLabel}>Waypoints</Text>
+        <Text style={[styles.sectionLabel, { marginBottom: 12, marginTop: 4 }]}>Terminals</Text>
         {filtered.length === 0 ? (
           <View style={styles.emptyCard}>
             <JamIcon name="bus" size={40} color={PLACEHOLDER} />
@@ -329,7 +370,7 @@ const TerminalsScreen: React.FC = () => {
             <Text style={styles.emptyHint}>Try another search, transit type, or area filter.</Text>
           </View>
         ) : (
-          <View style={styles.timelineBlock}>{filtered.map((t, i) => renderTerminalItem(t, i))}</View>
+          <View style={styles.terminalList}>{filtered.map((t) => renderTerminalItem(t))}</View>
         )}
       </ScrollView>
 
@@ -422,13 +463,13 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: H_PAD,
-    paddingTop: 16,
+    paddingTop: 20,
   },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginBottom: 18,
+    marginBottom: 20,
   },
   searchPill: {
     flex: 1,
@@ -472,7 +513,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   chipsScrollView: {
-    marginBottom: 18,
+    marginBottom: 22,
     marginHorizontal: -H_PAD,
   },
   chipsScroll: {
@@ -504,83 +545,12 @@ const styles = StyleSheet.create({
   chipLabelActive: {
     color: WHITE,
   },
-  routeIntro: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: 'rgba(31,79,89,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(31,79,89,0.08)',
-    marginBottom: 22,
-  },
-  routeIntroText: {
-    flex: 1,
-  },
-  routeIntroTitle: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 14,
-    color: TITLE_DARK,
-    marginBottom: 4,
-  },
-  routeIntroBody: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    lineHeight: 19,
-    color: MUTED,
-  },
-  timelineBlock: {
-    paddingBottom: 8,
-  },
-  timelineRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-  },
-  timelineRail: {
-    width: 36,
-    alignItems: 'center',
-    marginRight: 4,
-  },
-  timelineDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-  },
-  timelineDotFilled: {
-    backgroundColor: HEADER_GREEN,
-    borderColor: HEADER_GREEN,
-  },
-  timelineDotMuted: {
-    backgroundColor: PAGE_BG,
-    borderColor: 'rgba(31,79,89,0.2)',
-  },
-  timelineDotText: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 13,
-    color: WHITE,
-  },
-  timelineDotPing: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: MUTED,
-  },
-  timelineLine: {
-    flex: 1,
-    width: 2,
-    marginTop: 4,
-    marginBottom: -4,
-    minHeight: 12,
-    backgroundColor: 'rgba(31,79,89,0.12)',
-    borderRadius: 1,
+  terminalList: {
+    gap: 16,
+    paddingBottom: 12,
   },
   terminalCard: {
-    flex: 1,
-    marginBottom: 14,
+    marginBottom: 0,
     backgroundColor: WHITE,
     borderRadius: 18,
     overflow: 'hidden',
@@ -589,15 +559,38 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(31,79,89,0.08)',
   },
+  terminalCardSelected: {
+    borderColor: HEADER_GREEN,
+    borderWidth: 2,
+  },
+  openDetailsText: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 12,
+    color: TEAL,
+  },
+  distanceHint: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 12,
+    color: TEAL,
+    marginTop: 6,
+  },
+  mapBlock: {
+    marginHorizontal: H_PAD,
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(31,79,89,0.12)',
+    backgroundColor: '#e8ebe6',
+  },
   cardAccent: {
     width: 5,
     backgroundColor: HEADER_GREEN,
   },
   cardInner: {
     flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    paddingLeft: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    paddingLeft: 14,
   },
   cardTopRow: {
     flexDirection: 'row',

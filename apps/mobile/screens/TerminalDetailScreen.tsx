@@ -251,6 +251,7 @@ const TerminalDetailScreen: React.FC = () => {
       if (res.ok) {
         setSaveModalVisible(false);
         setSaved(true);
+        Alert.alert('Saved', `Added to “${list.name}”.`);
         return;
       }
       if (res.duplicate) {
@@ -491,7 +492,7 @@ const TerminalDetailScreen: React.FC = () => {
             )}
           </View>
         ) : (
-          <ReviewCardsList />
+          <ReviewCardsList placeName={terminal.name} />
         )}
       </ScrollView>
 

@@ -175,7 +175,7 @@ function MainTabs() {
     left: 16,
     right: 16,
     bottom: bottomPad,
-    height: 56 + Math.min(insets.bottom, 8),
+    height: 64 + Math.min(insets.bottom, 8),
     paddingTop: 8,
     paddingBottom: Math.min(insets.bottom, 12) || 8,
     borderRadius: 30,
@@ -206,10 +206,15 @@ function MainTabs() {
         tabBarActiveTintColor: Colors.accent,
         tabBarInactiveTintColor: Colors.primary,
         headerShown: false,
-        tabBarShowLabel: false,
+        tabBarShowLabel: true,
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontFamily: 'Poppins_500Medium',
+          marginBottom: 2,
+        },
         tabBarStyle: mainTabBarStyle,
         tabBarItemStyle: {
-          height: 40,
+          height: 44,
         },
       })}
     >
@@ -223,6 +228,7 @@ function MainTabs() {
             focused === 'TerminalDetail' ||
             focused === 'Directions';
           return {
+            tabBarLabel: 'Home',
             tabBarStyle: hideTab ? { display: 'none' } : mainTabBarStyle,
           };
         }}
@@ -239,6 +245,7 @@ function MainTabs() {
             focused === 'NewList' ||
             focused === 'CreateItinerary';
           return {
+            tabBarLabel: 'Itineraries',
             tabBarStyle: hideTab ? { display: 'none' } : mainTabBarStyle,
           };
         }}
@@ -254,6 +261,7 @@ function MainTabs() {
             focused === 'Directions' ||
             focused === 'TerminalDetail';
           return {
+            tabBarLabel: 'Map',
             tabBarStyle: hideTab ? { display: 'none' } : mainTabBarStyle,
           };
         }}
@@ -265,6 +273,7 @@ function MainTabs() {
           const focused = getFocusedRouteNameFromRoute(route) ?? 'TerminalsMain';
           const hideTab = focused === 'TerminalDetail' || focused === 'Directions';
           return {
+            tabBarLabel: 'Terminals',
             tabBarStyle: hideTab ? { display: 'none' } : mainTabBarStyle,
           };
         }}
@@ -275,6 +284,7 @@ function MainTabs() {
         options={({ route }) => {
           const focused = getFocusedRouteNameFromRoute(route) ?? 'ProfileMain';
           return {
+            tabBarLabel: 'Profile',
             tabBarStyle: focused === 'Notifications' ? { display: 'none' } : mainTabBarStyle,
           };
         }}

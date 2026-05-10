@@ -11,6 +11,7 @@ import {
   Dimensions,
   Modal,
   FlatList,
+  ScrollView,
   RefreshControl,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,7 +21,7 @@ import {
   DashboardFiltersPanel,
   type DashboardFilterSectionId,
 } from '../components/DashboardFiltersPanel';
-import { getBrowseEstablishmentsForItineraries, type Place } from '../data/mockData';
+import { getBrowseEstablishmentsForItineraries, mockItineraries, type Place } from '../data/mockData';
 import {
   placeMatchesDashboardFilters,
   sortPlacesByDashboardSort,
@@ -208,6 +209,42 @@ const ItinerariesScreen: React.FC = () => {
         ]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={HEADER_GREEN} />}
+        ListHeaderComponent={
+          <View style={styles.curatedBlock}>
+            <Text style={styles.curatedTitle}>CaviTour curated</Text>
+            <Text style={styles.curatedSub}>Itineraries made by the system — tap to open the full route.</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.curatedScroll}
+            >
+              {mockItineraries.map((it) => (
+                <TouchableOpacity
+                  key={it.id}
+                  style={styles.curatedCard}
+                  activeOpacity={0.9}
+                  onPress={() =>
+                    (navigation as { navigate: (n: string, p: object) => void }).navigate('ItineraryDetail', {
+                      itineraryId: it.id,
+                    })
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open curated itinerary ${it.title}`}
+                >
+                  <Image source={it.image} style={styles.curatedImg} resizeMode="cover" />
+                  <View style={styles.curatedTextCol}>
+                    <Text style={styles.curatedCardTitle} numberOfLines={2}>
+                      {it.title}
+                    </Text>
+                    <Text style={styles.curatedCardSub} numberOfLines={2}>
+                      {it.subtitle}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        }
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
             <JamIcon ionicon="map-outline" size={48} color={MUTED} />
@@ -357,6 +394,55 @@ const styles = StyleSheet.create({
     paddingHorizontal: H_PAD,
     paddingTop: 4,
     gap: 12,
+  },
+  curatedBlock: {
+    marginBottom: 16,
+  },
+  curatedTitle: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 16,
+    color: TEAL,
+    marginBottom: 4,
+  },
+  curatedSub: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: MUTED,
+    marginBottom: 10,
+  },
+  curatedScroll: {
+    gap: 12,
+    paddingRight: H_PAD,
+  },
+  curatedCard: {
+    width: 260,
+    flexDirection: 'row',
+    backgroundColor: WHITE,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(31, 79, 89, 0.1)',
+  },
+  curatedImg: {
+    width: 88,
+    height: 88,
+    backgroundColor: '#e8ebe6',
+  },
+  curatedTextCol: {
+    flex: 1,
+    padding: 10,
+    justifyContent: 'center',
+  },
+  curatedCardTitle: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 14,
+    color: TITLE,
+  },
+  curatedCardSub: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: MUTED,
+    marginTop: 4,
   },
   card: {
     backgroundColor: WHITE,

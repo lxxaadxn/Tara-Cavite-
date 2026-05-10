@@ -297,6 +297,53 @@ async function buildGraph(client: SupabaseClient): Promise<BuiltGraph | null> {
   return { terminals, terminalById, graph };
 }
 
+/**
+ * For trips to an establishment or itinerary: nearest terminal to the user (boarding) and nearest
+ * terminal to the destination (typical alight / transfer area). Does not run terminal-to-terminal
+ * graph routing — OSRM already covers user → place on the map.
+ */
+export async function planNearestTerminalsForPlaceCommute(
+  client: SupabaseClient,
+  userPt: { lat: number; lng: number },
+  destPt: { lat: number; lng: number }
+): Promise<TerminalTransitPlan | null> {
+  const terminalsRaw = await fetchTerminalsFromSupabase(client);
+  const terminals: TerminalNode[] = terminalsRaw.map((t) => ({
+    id: t.id,
+    name: t.name,
+    municipality: t.municipality,
+    latitude: t.latitude,
+    longitude: t.longitude,
+  }));
+  if (!terminals.length) return null;
+  const originTerminal = nearestTerminal(terminals, userPt.lat, userPt.lng);
+  const destinationTerminal = nearestTerminal(terminals, destPt.lat, destPt.lng);
+  if (!originTerminal || !destinationTerminal) return null;
+  return {
+    originTerminal,
+    destinationTerminal,
+    legs: [],
+  };
+}
+
+/** Nearest public terminal to the user (e.g. when heading home or to a specific terminal). */
+export async function fetchNearestTerminalForUser(
+  client: SupabaseClient,
+  userPt: { lat: number; lng: number }
+): Promise<TerminalNode | null> {
+  const terminalsRaw = await fetchTerminalsFromSupabase(client);
+  const terminals: TerminalNode[] = terminalsRaw.map((t) => ({
+    id: t.id,
+    name: t.name,
+    municipality: t.municipality,
+    latitude: t.latitude,
+    longitude: t.longitude,
+  }));
+  if (!terminals.length) return null;
+  return nearestTerminal(terminals, userPt.lat, userPt.lng);
+}
+
+/** Full terminal-to-terminal path planning (graph). Prefer {@link planNearestTerminalsForPlaceCommute} on place detail / directions to establishments. */
 export async function planTerminalTransit(
   client: SupabaseClient,
   userPt: { lat: number; lng: number },

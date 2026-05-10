@@ -25,6 +25,7 @@ export function LoginPage() {
   const [remember, setRemember] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleAuthInProgress, setGoogleAuthInProgress] = useState(false);
+  const [showGoogleConsent, setShowGoogleConsent] = useState(false);
   const [error, setError] = useState('');
 
   const handleGoogleAuth = async () => {
@@ -72,6 +73,45 @@ export function LoginPage() {
 
   return (
     <div className="min-h-screen px-4 py-6 font-['Inter',sans-serif] sm:px-8 sm:py-8" style={{ backgroundColor: cream }}>
+      {showGoogleConsent ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="google-consent-title"
+          aria-describedby="google-consent-desc"
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-[0_24px_60px_rgba(0,0,0,0.18)]">
+            <p id="google-consent-title" className="text-base font-semibold text-neutral-900">
+              Sign in with Google
+            </p>
+            <p id="google-consent-desc" className="mt-2 text-sm text-neutral-600">
+              Allow CaviTour to sign you in with Google? You will be redirected to Google to continue.
+            </p>
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                className="h-10 flex-1 rounded-full border border-neutral-200 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50"
+                onClick={() => setShowGoogleConsent(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="h-10 flex-1 rounded-full text-sm font-semibold text-white transition"
+                style={{ backgroundColor: teal }}
+                onClick={() => {
+                  setShowGoogleConsent(false);
+                  void handleGoogleAuth();
+                }}
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {googleAuthInProgress ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4">
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 text-center shadow-[0_24px_60px_rgba(0,0,0,0.18)]">
@@ -168,7 +208,7 @@ export function LoginPage() {
             <div className="space-y-3">
               <button
                 type="button"
-                onClick={handleGoogleAuth}
+                onClick={() => setShowGoogleConsent(true)}
                 disabled={loading}
                 className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-neutral-100 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-200/70 disabled:opacity-60"
               >

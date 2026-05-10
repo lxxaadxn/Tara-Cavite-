@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Alert,
   View,
   Text,
   StyleSheet,
@@ -107,12 +108,7 @@ const SignUpScreen: React.FC = () => {
     }
   };
 
-  const handleGoogleSignUp = async () => {
-    setFormError(null);
-    if (!isSupabaseConfigured) {
-      setFormError(SUPABASE_ENV_MISSING_MESSAGE);
-      return;
-    }
+  const runGoogleSignUp = async () => {
     setLoading(true);
     try {
       await signInWithGoogleMobile();
@@ -126,6 +122,22 @@ const SignUpScreen: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleGoogleSignUp = () => {
+    setFormError(null);
+    if (!isSupabaseConfigured) {
+      setFormError(SUPABASE_ENV_MISSING_MESSAGE);
+      return;
+    }
+    Alert.alert(
+      'Sign up with Google',
+      'Allow CaviTour to create or link your account with Google? You will continue in the Google sign-in window.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Continue', onPress: () => void runGoogleSignUp() },
+      ]
+    );
   };
 
   return (

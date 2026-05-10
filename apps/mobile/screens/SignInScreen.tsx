@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   View,
   Text,
@@ -87,12 +88,7 @@ const SignInScreen: React.FC = () => {
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    setFormError(null);
-    if (!isSupabaseConfigured) {
-      setFormError(SUPABASE_ENV_MISSING_MESSAGE);
-      return;
-    }
+  const runGoogleSignIn = async () => {
     setLoading(true);
     setGoogleAuthInProgress(true);
     const startedAt = Date.now();
@@ -114,6 +110,22 @@ const SignInScreen: React.FC = () => {
       setLoading(false);
       setGoogleAuthInProgress(false);
     }
+  };
+
+  const handleGoogleSignIn = () => {
+    setFormError(null);
+    if (!isSupabaseConfigured) {
+      setFormError(SUPABASE_ENV_MISSING_MESSAGE);
+      return;
+    }
+    Alert.alert(
+      'Sign in with Google',
+      'Allow CaviTour to sign you in with Google? You will continue in the Google sign-in window.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Continue', onPress: () => void runGoogleSignIn() },
+      ]
+    );
   };
 
   return (
