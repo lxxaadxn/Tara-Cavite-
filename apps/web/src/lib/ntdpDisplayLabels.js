@@ -1,15 +1,12 @@
 /**
- * NTDP inventory text sometimes used the typo "Leasure" (source PDFs). Normalize for UI.
+ * Mirrors apps/mobile/lib/ntdpDisplayLabels.ts for web place copy (NTDP “about” text).
  */
-export function normalizeNtdpCopy(text: string): string {
+
+export function normalizeNtdpCopy(text) {
   return text.replace(/\bLeasure\b/g, 'Leisure');
 }
 
-/**
- * Tag label on About Establishment: correct spelling and show "Leisure and Entertainment"
- * without truncating (drops trailing " Tourism" for this category only).
- */
-export function formatNtdpCategoryTagLabel(raw: string): string {
+export function formatNtdpCategoryTagLabel(raw) {
   const s = normalizeNtdpCopy(raw.trim());
   if (/^Leisure and Entertainment Tourism$/i.test(s)) {
     return 'Leisure and Entertainment';
@@ -17,7 +14,7 @@ export function formatNtdpCategoryTagLabel(raw: string): string {
   return s;
 }
 
-const NTDP_ABOUT: Record<string, string> = {
+const NTDP_ABOUT = {
   'cultural tourism':
     'These sites emphasize history, heritage, faith, arts, and local identity. Plan visits respectfully, confirm hours with the venue, and support community guides and cultural programs where offered.',
   'nature tourism':
@@ -47,7 +44,7 @@ const NTDP_ABOUT: Record<string, string> = {
 const NTDP_ABOUT_DEFAULT =
   'Cavite’s NTDP inventory classifies tourism assets so planners and visitors can match expectations to the right type of experience. Check with the establishment and LGU for current hours, fees, and advisories.';
 
-function normalizeCategoryKey(raw: string | null | undefined): string {
+function normalizeCategoryKey(raw) {
   if (!raw?.trim()) return '';
   let s = normalizeNtdpCopy(raw).trim().toLowerCase();
   s = s.replace(/\//g, ' ').replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
@@ -57,7 +54,7 @@ function normalizeCategoryKey(raw: string | null | undefined): string {
   return s;
 }
 
-function resolveNtdpParagraph(ntdpCategory: string | null | undefined): string {
+function resolveNtdpParagraph(ntdpCategory) {
   const key = normalizeCategoryKey(ntdpCategory);
   if (!key) {
     return NTDP_ABOUT_DEFAULT;
@@ -97,21 +94,12 @@ function resolveNtdpParagraph(ntdpCategory: string | null | undefined): string {
   return NTDP_ABOUT_DEFAULT;
 }
 
-/** True when the string is empty or looks like filler (e.g. lorem ipsum). */
-export function isLikelyPlaceholderDescription(text: string | undefined | null): boolean {
+export function isLikelyPlaceholderDescription(text) {
   if (!text?.trim()) return true;
   return /lorem\s+ipsum/i.test(text);
 }
 
-/**
- * Visitor-facing “about” copy when the database description is missing or placeholder:
- * explains the establishment’s NTDP category in plain language.
- */
-export function getNtdpCategoryAboutText(
-  ntdpCategory: string | null | undefined,
-  placeName: string,
-  address?: string
-): string {
+export function getNtdpCategoryAboutText(ntdpCategory, placeName, address) {
   const label = ntdpCategory?.trim()
     ? formatNtdpCategoryTagLabel(ntdpCategory)
     : 'Cavite tourism establishment';
@@ -121,29 +109,22 @@ export function getNtdpCategoryAboutText(
   return `${placeName} is classified under “${label}” in the National Tourism Development Plan (NTDP) inventory for Cavite.\n\n${paragraph}${addrSuffix}`;
 }
 
-export function getEstablishmentAboutBody(place: {
-  description?: string | null;
-  ntdp_category?: string | null;
-  name: string;
-  address?: string | null;
-}): string {
+export function getEstablishmentAboutBody(place) {
   const raw = place.description?.trim();
   if (raw && !isLikelyPlaceholderDescription(raw)) return raw;
-  return getNtdpCategoryAboutText(place.ntdp_category, place.name, place.address ?? undefined);
+  return getNtdpCategoryAboutText(place.ntdp_category, place.name, place.address);
 }
 
-/** Preview review rows (not real users) — same copy as web `getPreviewReviewEntries`. */
-export type PreviewReviewEntry = {
-  name: string;
-  text: string;
-  rating: number;
-};
+/** Neutral avatar for “preview” review rows (not real users). */
+const PREVIEW_REVIEW_IMAGE =
+  'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=120&q=80';
 
-export function getPreviewReviewEntries(
-  placeName: string,
-  ntdpCategory?: string | null
-): PreviewReviewEntry[] {
-  const label = placeName?.trim() || 'This place';
+/**
+ * Review-tab placeholders aligned with mobile ReviewCardsList (NTDP-aware, no lorem).
+ * @returns {{ name: string, image: string, text: string, rating: number }[]}
+ */
+export function getPreviewReviewEntries(placeName, ntdpCategory) {
+  const name = placeName?.trim() || 'This place';
   const cat = ntdpCategory?.trim();
   const catBit = cat
     ? ` This stop is under ${formatNtdpCategoryTagLabel(cat)} in Cavite’s NTDP inventory.`
@@ -151,12 +132,14 @@ export function getPreviewReviewEntries(
   return [
     {
       name: 'Preview',
-      text: `Preview only — ${label} does not have public reviews in the app yet.${catBit} When reviews open, guest feedback will appear here.`,
+      image: PREVIEW_REVIEW_IMAGE,
+      text: `Preview only — ${name} does not have public reviews in the app yet.${catBit} When reviews open, guest feedback will appear here.`,
       rating: 4,
     },
     {
       name: 'Preview',
-      text: `Sample card — ratings and comments for ${label} are not live yet.${catBit} Check back after reviews are enabled.`,
+      image: PREVIEW_REVIEW_IMAGE,
+      text: `Sample card — ratings and comments for ${name} are not live yet.${catBit} Check back after reviews are enabled.`,
       rating: 5,
     },
   ];

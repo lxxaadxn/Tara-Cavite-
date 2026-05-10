@@ -25,7 +25,16 @@ export function AppHeader() {
                 setAvatarUrl(photo);
         };
         loadAvatar();
-        const { data: { subscription }, } = supabase.auth.onAuthStateChange((_event, session) => {
+        const onAvatarBump = () => {
+            void loadAvatar();
+        };
+        window.addEventListener('cavitour:avatar-updated', onAvatarBump);
+        const { data: { subscription }, } = supabase.auth.onAuthStateChange((event, session) => {
+            if (event === 'SIGNED_OUT') {
+                if (!cancelled)
+                    setAvatarUrl(DEFAULT_PROFILE_LOGO);
+                return;
+            }
             const metadata = session?.user?.user_metadata ?? {};
             const photo = metadata.avatar_url || metadata.picture || DEFAULT_PROFILE_LOGO;
             if (!cancelled)
@@ -33,12 +42,13 @@ export function AppHeader() {
         });
         return () => {
             cancelled = true;
+            window.removeEventListener('cavitour:avatar-updated', onAvatarBump);
             subscription.unsubscribe();
         };
     }, []);
 
     const nav = [
-        { to: '/search', label: 'Search' },
+        { to: '/search', label: 'Home' },
         { to: '/saved', label: 'Saved' },
         { to: '/itinerary', label: 'Itinerary' },
         { to: '/terminals', label: 'Terminals' },

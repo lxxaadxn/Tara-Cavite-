@@ -16,8 +16,6 @@ import * as ImagePicker from 'expo-image-picker';
 import { JamIcon } from '../components/JamIcon';
 import { Colors, Theme } from '../constants/theme';
 import { Header } from '../components/Header';
-import { Button } from '../components/Button';
-import { Card } from '../components/Card';
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 
@@ -28,16 +26,19 @@ const UserDetailsScreen: React.FC = () => {
   const [email, setEmail] = useState('');
   const [city, setCity] = useState('');
   const [street, setStreet] = useState('');
+  const [phone, setPhone] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [editingUsername, setEditingUsername] = useState(false);
   const [editingEmail, setEditingEmail] = useState(false);
+  const [editingPhone, setEditingPhone] = useState(false);
   const [editingCity, setEditingCity] = useState(false);
   const [editingStreet, setEditingStreet] = useState(false);
   
   // Store original values for cancel functionality
   const [originalUsername, setOriginalUsername] = useState('');
   const [originalEmail, setOriginalEmail] = useState('');
+  const [originalPhone, setOriginalPhone] = useState('');
   const [originalCity, setOriginalCity] = useState('');
   const [originalStreet, setOriginalStreet] = useState('');
 
@@ -49,7 +50,7 @@ const UserDetailsScreen: React.FC = () => {
         // Load from user_profiles table first, fallback to user_metadata
         const { data: profile } = await supabase
           .from('user_profiles')
-          .select('username, city, street, avatar_url')
+          .select('username, city, street, avatar_url, phone')
           .eq('id', u.id)
           .single();
         
@@ -57,16 +58,19 @@ const UserDetailsScreen: React.FC = () => {
         const cityValue = profile?.city || (u.user_metadata?.city as string) || '';
         const streetValue = profile?.street || (u.user_metadata?.street as string) || '';
         const avatarValue = profile?.avatar_url || (u.user_metadata?.avatar_url as string | null);
+        const phoneValue = profile?.phone || (u.user_metadata?.phone as string) || '';
         
         setUsername(usernameValue);
         setEmail(u.email || '');
         setAvatarUrl(avatarValue);
         setCity(cityValue);
         setStreet(streetValue);
+        setPhone(phoneValue);
         
         // Store original values
         setOriginalUsername(usernameValue);
         setOriginalEmail(u.email || '');
+        setOriginalPhone(phoneValue);
         setOriginalCity(cityValue);
         setOriginalStreet(streetValue);
       }
@@ -76,7 +80,7 @@ const UserDetailsScreen: React.FC = () => {
 
   const handleSaveUsername = async () => {
     if (!user || !username.trim()) {
-      Alert.alert('Error', 'Username cannot be empty.');
+      Alert.alert('Error', 'Nickname cannot be empty.');
       return;
     }
     setSaving(true);
@@ -117,7 +121,34 @@ const UserDetailsScreen: React.FC = () => {
         setUser(updatedUser);
       }
       
-      Alert.alert('Saved', 'Username updated successfully.');
+      Alert.alert('Saved', 'Nickname updated successfully.');
+    } catch (e) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to save.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSavePhone = async () => {
+    if (!user) return;
+    setSaving(true);
+    try {
+      const trimmed = phone.trim();
+      const { error: profileError } = await supabase.from('user_profiles').upsert(
+        {
+          id: user.id,
+          phone: trimmed || null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'id' }
+      );
+      if (profileError) throw profileError;
+      await supabase.auth.updateUser({
+        data: { ...user.user_metadata, phone: trimmed || undefined },
+      });
+      setOriginalPhone(trimmed);
+      setEditingPhone(false);
+      Alert.alert('Saved', 'Phone number updated.');
     } catch (e) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Failed to save.');
     } finally {
@@ -381,19 +412,19 @@ const UserDetailsScreen: React.FC = () => {
           <Text style={styles.emailDisplay}>{user?.email ?? 'username@gmail.com'}</Text>
         </View>
 
-        {/* Username Field */}
+        {/* Nickname */}
         <View style={styles.fieldContainer}>
-          <Text style={styles.fieldLabel}>Username</Text>
+          <Text style={styles.fieldLabel}>Nickname</Text>
           <View style={[styles.inputRow, editingUsername && styles.inputRowEditing]}>
             <TextInput
               style={[styles.input, !editingUsername && styles.inputReadOnly]}
               value={username}
               onChangeText={setUsername}
-              placeholder="Enter username"
+              placeholder="Nickname shown in the app"
               placeholderTextColor={Colors.text.light}
               editable={editingUsername}
               autoFocus={editingUsername}
-              accessibilityLabel="Username input"
+              accessibilityLabel="Nickname input"
             />
             {editingUsername ? (
               <View style={styles.editActions}>
@@ -404,7 +435,7 @@ const UserDetailsScreen: React.FC = () => {
                     setEditingUsername(false);
                   }}
                   disabled={saving}
-                  accessibilityLabel="Cancel editing username"
+                  accessibilityLabel="Cancel editing nickname"
                   accessibilityRole="button"
                 >
                   <JamIcon ionicon="close-circle" size={24} color={Colors.text.secondary} />
@@ -413,7 +444,7 @@ const UserDetailsScreen: React.FC = () => {
                   style={styles.saveButton}
                   onPress={handleSaveUsername}
                   disabled={saving}
-                  accessibilityLabel="Save username"
+                  accessibilityLabel="Save nickname"
                   accessibilityRole="button"
                 >
                   {saving ? (
@@ -431,7 +462,67 @@ const UserDetailsScreen: React.FC = () => {
                   setEditingUsername(true);
                 }}
                 disabled={saving}
-                accessibilityLabel="Edit username"
+                accessibilityLabel="Edit nickname"
+                accessibilityRole="button"
+              >
+                <JamIcon ionicon="create-outline" size={24} color={Colors.primary} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {/* Phone */}
+        <View style={styles.fieldContainer}>
+          <Text style={styles.fieldLabel}>Phone</Text>
+          <View style={[styles.inputRow, editingPhone && styles.inputRowEditing]}>
+            <TextInput
+              style={[styles.input, !editingPhone && styles.inputReadOnly]}
+              value={phone}
+              onChangeText={setPhone}
+              placeholder="Mobile or contact number"
+              placeholderTextColor={Colors.text.light}
+              keyboardType="phone-pad"
+              editable={editingPhone}
+              autoFocus={editingPhone}
+              accessibilityLabel="Phone input"
+            />
+            {editingPhone ? (
+              <View style={styles.editActions}>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => {
+                    setPhone(originalPhone);
+                    setEditingPhone(false);
+                  }}
+                  disabled={saving}
+                  accessibilityLabel="Cancel editing phone"
+                  accessibilityRole="button"
+                >
+                  <JamIcon ionicon="close-circle" size={24} color={Colors.text.secondary} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.saveButton}
+                  onPress={handleSavePhone}
+                  disabled={saving}
+                  accessibilityLabel="Save phone"
+                  accessibilityRole="button"
+                >
+                  {saving ? (
+                    <ActivityIndicator size="small" color={Colors.primary} />
+                  ) : (
+                    <JamIcon ionicon="checkmark-circle" size={24} color={Colors.accent} />
+                  )}
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.editButton}
+                onPress={() => {
+                  setOriginalPhone(phone);
+                  setEditingPhone(true);
+                }}
+                disabled={saving}
+                accessibilityLabel="Edit phone"
                 accessibilityRole="button"
               >
                 <JamIcon ionicon="create-outline" size={24} color={Colors.primary} />

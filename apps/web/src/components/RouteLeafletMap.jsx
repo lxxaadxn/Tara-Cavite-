@@ -60,8 +60,9 @@ function drawSegmentPolylines(map, points, lineColor) {
  * @param {string} [props.routeId]
  * @param {string} [props.lineColor] — markers / accent; road line uses OSRM blue for multi-segment
  * @param {Array<Array<[number, number]>>} [props.externalSegments] — precomputed [lat,lng][] per OSRM leg (terminal chain)
+ * @param {string} [props.className] — tailwind height/width (default h-[350px] w-full)
  */
-export function RouteLeafletMap({ start, end, routeId = 'fastest', lineColor = '#0ea5e9', externalSegments }) {
+export function RouteLeafletMap({ start, end, routeId = 'fastest', lineColor = '#0ea5e9', externalSegments, className }) {
   const containerRef = useRef(null);
 
   useEffect(() => {
@@ -195,5 +196,5 @@ export function RouteLeafletMap({ start, end, routeId = 'fastest', lineColor = '
     };
   }, [start, end, routeId, lineColor, externalSegments]);
 
-  return <div ref={containerRef} className="h-[350px] w-full" />;
+  return <div ref={containerRef} className={className ?? 'h-[350px] w-full'} />;
 }

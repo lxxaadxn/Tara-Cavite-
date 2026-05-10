@@ -1,13 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AppHeader } from '../components/AppHeader';
 import { pitxGallery } from '../data/terminalPitx';
 import { supabase } from '../lib/supabase';
 import { fetchRouteRowsForTerminal, fetchTerminalsFromSupabase } from '../lib/terminalsFromSupabase';
-import { planTerminalTransitBetween } from '../lib/terminalTransitPlanner';
+import { getPreviewReviewEntries } from '../lib/ntdpDisplayLabels';
 
 const teal = '#1f4f59';
-const olive = '#7ea00e';
 
 function haversineDistanceKm(lat1, lng1, lat2, lng2) {
   const toRadians = (deg) => (deg * Math.PI) / 180;
@@ -46,11 +45,6 @@ export function TerminalDetailPage() {
   const [terminal, setTerminal] = useState(null);
   const [routeRows, setRouteRows] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [planTo, setPlanTo] = useState('');
-  const [allTerminals, setAllTerminals] = useState([]);
-  const [transitPlan, setTransitPlan] = useState(null);
-  const [transitError, setTransitError] = useState('');
-  const [transitLoading, setTransitLoading] = useState(false);
   const [userCoords, setUserCoords] = useState(null);
 
   useEffect(() => {
@@ -62,14 +56,11 @@ export function TerminalDetailPage() {
       try {
         const list = await fetchTerminalsFromSupabase(supabase);
         if (cancelled) return;
-        setAllTerminals(list);
         const found = list.find((t) => String(t.id) === String(id));
         if (found) {
           setTerminal(found);
           const rows = await fetchRouteRowsForTerminal(supabase, id);
           if (!cancelled) setRouteRows(rows);
-          const other = list.find((t) => String(t.id) !== String(id));
-          if (other) setPlanTo(other.id);
         } else {
           const fb = FALLBACK_BY_ID[id];
           if (fb) setTerminal(fb);
@@ -107,23 +98,10 @@ export function TerminalDetailPage() {
     };
   }, []);
 
-  const handlePlanTo = async () => {
-    if (!planTo || String(planTo) === String(id)) return;
-    setTransitLoading(true);
-    setTransitError('');
-    setTransitPlan(null);
-    try {
-      const plan = await planTerminalTransitBetween(supabase, id, planTo);
-      if (!plan) setTransitError('No route in the Cavite graph between these terminals.');
-      else setTransitPlan(plan);
-    } catch (e) {
-      setTransitError(e?.message ?? 'Could not plan route.');
-    } finally {
-      setTransitLoading(false);
-    }
-  };
-
-  const terminalName = (tid) => allTerminals.find((t) => String(t.id) === String(tid))?.name ?? tid;
+  const previewReviews = useMemo(() => {
+    if (!terminal?.name) return [];
+    return getPreviewReviewEntries(terminal.name, null);
+  }, [terminal?.name]);
 
   if (loading) {
     return (
@@ -187,57 +165,6 @@ export function TerminalDetailPage() {
               </div>
             ) : null}
 
-            <div className="mt-4 rounded-xl border border-[#cddcab] bg-[#f7faef] p-3">
-              <p className="text-xs font-semibold text-[#5d7211]">Route graph (aligned with mobile)</p>
-              <p className="mt-1 text-[11px] text-neutral-600">
-                Plan transfers to another Cavite terminal using <code className="rounded bg-white/80 px-1 text-[10px]">cavitour_terminal_routes</code> and the same BFS as the app.
-              </p>
-              {allTerminals.length > 1 && (
-                <>
-                  <div className="mt-2 flex flex-wrap items-end gap-2">
-                    <label className="text-[11px] font-medium text-neutral-600">
-                      Connect to
-                      <select
-                        value={planTo}
-                        onChange={(e) => setPlanTo(e.target.value)}
-                        className="ml-2 rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-sm"
-                      >
-                        {allTerminals
-                          .filter((t) => String(t.id) !== String(id))
-                          .map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.name}
-                            </option>
-                          ))}
-                      </select>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={handlePlanTo}
-                      disabled={transitLoading || !planTo}
-                      className="rounded-lg px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
-                      style={{ backgroundColor: olive }}
-                    >
-                      {transitLoading ? '…' : 'Plan'}
-                    </button>
-                  </div>
-                  {transitError ? <p className="mt-2 text-xs text-red-600">{transitError}</p> : null}
-                  {transitPlan?.legs?.length > 0 ? (
-                    <ol className="mt-3 list-decimal space-y-2 pl-4 text-xs text-neutral-800">
-                      {transitPlan.legs.map((leg, i) => (
-                        <li key={`${leg.fromTerminalId}-${i}`}>
-                          {terminalName(leg.fromTerminalId)} → {terminalName(leg.toTerminalId)}
-                          <span className="mt-0.5 block text-[11px] text-neutral-500">
-                            {leg.routeName} · {leg.transportName}
-                          </span>
-                        </li>
-                      ))}
-                    </ol>
-                  ) : null}
-                </>
-              )}
-            </div>
-
             <div className="mt-4">
               <h2 className="font-['Poppins',sans-serif] text-lg font-semibold text-neutral-900">Routes touching this terminal</h2>
               {routeRows.length === 0 ? (
@@ -261,6 +188,27 @@ export function TerminalDetailPage() {
                   })}
                 </ul>
               )}
+            </div>
+
+            <div className="mt-6 rounded-2xl border border-neutral-200 bg-white p-4">
+              <h2 className="font-['Poppins',sans-serif] text-lg font-semibold text-neutral-900">Reviews</h2>
+              <p className="mt-1 text-xs text-neutral-500">Preview only — guest reviews are not live yet (same as the mobile app).</p>
+              <div className="mt-3 space-y-3">
+                {previewReviews.map((rev, idx) => (
+                  <article
+                    key={`${rev.name}-${idx}`}
+                    className="rounded-xl border border-neutral-200 bg-[#fafafa] p-3"
+                  >
+                    <div className="flex items-start gap-3">
+                      <img src={rev.image} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-neutral-900">{rev.name}</p>
+                        <p className="mt-1 text-xs leading-relaxed text-neutral-600">{rev.text}</p>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
             </div>
           </section>
 

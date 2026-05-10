@@ -10,6 +10,8 @@ export type RouteStepUi = {
   durationS: number;
   /** Street/highway name when OSRM provides it; used only as optional hint in commuter copy. */
   roadName: string | null;
+  /** OSRM maneuver type, e.g. `new name`, `turn`, `continue` — used to fix jargon in UI copy. */
+  maneuverType: string | null;
 };
 
 export type OsrmRouteResult = {
@@ -74,6 +76,7 @@ export async function fetchOsrmRoute(
         distanceM: s.distance ?? 0,
         durationS: s.duration ?? 0,
         roadName: rn && rn.length >= 2 ? rn : null,
+        maneuverType: s.maneuver?.type?.trim() ? String(s.maneuver.type) : null,
       });
     }
   }

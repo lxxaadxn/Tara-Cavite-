@@ -1,6 +1,10 @@
-import { formatDistanceM, type RouteStepUi } from './fetchOsrmRoute';
+/**
+ * Mirrors apps/mobile/lib/commuterRouteNarration.ts
+ */
 
-function useRoadHint(roadName: string | null | undefined): string | null {
+import { formatDistanceM } from './fetchOsrmRoute';
+
+function useRoadHint(roadName) {
   if (!roadName?.trim()) return null;
   const n = roadName.trim();
   if (n.length < 3) return null;
@@ -9,19 +13,12 @@ function useRoadHint(roadName: string | null | undefined): string | null {
   return n;
 }
 
-function isUnnamedInstruction(ins: string): boolean {
+function isUnnamedInstruction(ins) {
   const lower = ins.trim().toLowerCase();
   return !lower || /unnamed|^null$|^way$/.test(lower) || /^continue[, ]*$/i.test(lower);
 }
 
-/**
- * Turn OSRM phrasing into plain language (e.g. "new name on …" → "continue onto …").
- */
-export function humanizeOsrmInstructionPhrase(
-  raw: string,
-  road: string | null,
-  maneuverType: string | null
-): string {
+export function humanizeOsrmInstructionPhrase(raw, road, maneuverType) {
   const t = raw.trim();
   const m = maneuverType?.toLowerCase() ?? '';
 
@@ -40,15 +37,7 @@ export function humanizeOsrmInstructionPhrase(
   return t.replace(/\.$/, '');
 }
 
-/**
- * Short, maps-style step: "In 500 m, turn left onto …" using OSRM text when usable.
- */
-export function commuterDirectStepInstruction(
-  step: RouteStepUi,
-  index: number,
-  total: number,
-  destinationLabel: string
-): string {
+export function commuterDirectStepInstruction(step, index, total, destinationLabel) {
   const distStr = formatDistanceM(step.distanceM);
   const road = useRoadHint(step.roadName);
   const raw = step.instruction.trim();
@@ -79,7 +68,7 @@ export function commuterDirectStepInstruction(
   return `In ${distStr}, continue toward ${destinationLabel}.`;
 }
 
-export function buildCommuterNarrativeFromOsrmSteps(steps: RouteStepUi[], destinationLabel: string): string {
+export function buildCommuterNarrativeFromOsrmSteps(steps, destinationLabel) {
   if (!steps.length) {
     return `Turn on location to build steps from where you are.\n\nOpen the full map to find ${destinationLabel}.`;
   }
@@ -88,4 +77,12 @@ export function buildCommuterNarrativeFromOsrmSteps(steps: RouteStepUi[], destin
     .map((s, i) => `${i + 1}. ${commuterDirectStepInstruction(s, i, steps.length, destinationLabel)}`)
     .join('\n\n');
   return `${head}\n\n${body}`;
+}
+
+export function commuterStepHint(index, total, stepDistanceM) {
+  if (total <= 0 || stepDistanceM < 200) return '';
+  if (index === total - 1) {
+    return 'PUVs may stop before narrow streets — ask to alight at a main corner if needed.';
+  }
+  return 'If your ride leaves this road, transfer at a crossing or terminal.';
 }

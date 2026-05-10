@@ -222,6 +222,37 @@ function legsFromPath(originTerminal, rawPath, terminalById) {
 }
 
 /**
+ * Nearest terminal to user + nearest to destination — no T2T graph (map route is user → place).
+ * @param {import('@supabase/supabase-js').SupabaseClient} client
+ * @param {{ lat: number; lng: number }} userPt
+ * @param {{ lat: number; lng: number }} destPt
+ */
+export async function planNearestTerminalsForPlaceCommute(client, userPt, destPt) {
+  const terminalsRaw = await fetchTerminalsFromSupabase(client);
+  const terminals = terminalsRaw.map(cardToNode);
+  if (!terminals.length) return null;
+  const originTerminal = nearestTerminal(terminals, userPt.lat, userPt.lng);
+  const destinationTerminal = nearestTerminal(terminals, destPt.lat, destPt.lng);
+  if (!originTerminal || !destinationTerminal) return null;
+  return {
+    originTerminal,
+    destinationTerminal,
+    legs: [],
+  };
+}
+
+/**
+ * @param {import('@supabase/supabase-js').SupabaseClient} client
+ * @param {{ lat: number; lng: number }} userPt
+ */
+export async function fetchNearestTerminalForUser(client, userPt) {
+  const terminalsRaw = await fetchTerminalsFromSupabase(client);
+  const terminals = terminalsRaw.map(cardToNode);
+  if (!terminals.length) return null;
+  return nearestTerminal(terminals, userPt.lat, userPt.lng);
+}
+
+/**
  * @param {import('@supabase/supabase-js').SupabaseClient} client
  * @param {{ lat: number; lng: number }} userPt
  * @param {{ lat: number; lng: number }} destPt

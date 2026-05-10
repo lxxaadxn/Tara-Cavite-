@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AppHeader } from '../components/AppHeader';
+import { publishedItineraries } from '../data/mockItineraries';
 import { FilterModal } from '../components/FilterModal';
 import { supabase } from '../lib/supabase';
 import { fetchAllPlacesFromSupabase } from '../lib/placesFromSupabase';
@@ -90,6 +91,32 @@ export function ItineraryPage() {
 
       <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="min-w-0">
+          <section className="mb-8 rounded-2xl border border-[#dfe8d3] bg-[#f7faef] p-4 sm:p-5">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-[#5d7211]">CaviTour curated</p>
+                <h2 className="font-['Poppins',sans-serif] text-xl font-bold text-neutral-900">Itineraries by the system</h2>
+                <p className="mt-1 text-sm text-neutral-600">Ready-made routes you can save and follow.</p>
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {publishedItineraries.map((it) => (
+                <Link
+                  key={it.id}
+                  to={`/itinerary/${it.id}`}
+                  className="flex gap-3 rounded-xl border border-[#cddcab] bg-white p-3 transition hover:shadow-md"
+                >
+                  <img src={it.image} alt="" className="h-20 w-24 shrink-0 rounded-lg object-cover" />
+                  <div className="min-w-0">
+                    <p className="font-['Poppins',sans-serif] text-sm font-semibold text-neutral-900 line-clamp-2">{it.title}</p>
+                    <p className="mt-0.5 text-xs text-neutral-500 line-clamp-2">{it.subtitle}</p>
+                    <p className="mt-2 text-xs font-semibold text-[#1f4f59]">Open route →</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="font-['Poppins',sans-serif] font-bold text-2xl text-neutral-900">

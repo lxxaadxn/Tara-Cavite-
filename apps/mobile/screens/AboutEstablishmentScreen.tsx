@@ -19,7 +19,7 @@ import { SaveToListSheet, type SaveToListRow } from '../components/SaveToListShe
 import { ReviewCardsList } from '../components/ReviewCardsList';
 import { Place, getItineraryEstablishments } from '../data/mockData';
 import { parsePlaceCoords } from '../lib/placeCoords';
-import { formatNtdpCategoryTagLabel } from '../lib/ntdpDisplayLabels';
+import { formatNtdpCategoryTagLabel, getEstablishmentAboutBody } from '../lib/ntdpDisplayLabels';
 import { supabase } from '../lib/supabase';
 import {
   isSupabasePlaceId,
@@ -31,7 +31,6 @@ import {
   placeRowExists,
   fetchUserListsForPicker,
 } from '../lib/savedListItems';
-
 const GREEN = '#7EA00E';
 const TEAL = '#1F4F59';
 const OLIVE = '#213502';
@@ -52,9 +51,6 @@ type PillVariant = keyof typeof PILL_STYLES;
 export type AboutEstablishmentParams = {
   place: Place;
 };
-
-const PLACEHOLDER_DESCRIPTION =
-  'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed non risus. Suspendisse lectus tortor, dignissim sit amet, adipiscing nec, ultricies sed, dolor. Cras elementum ultrices diam. Maecenas ligula massa, varius a, semper congue, euismod non, mi. Proin porttitor, orci nec nonummy molestie, enim est eleifend mi, non fermentum diam nisl sit amet erat. Duis semper.';
 
 function buildTags(place: Place): { label: string; variant: PillVariant }[] {
   const out: { label: string; variant: PillVariant }[] = [];
@@ -83,7 +79,7 @@ export default function AboutEstablishmentScreen() {
   const [checkingSaved, setCheckingSaved] = useState(false);
 
   const tags = useMemo(() => buildTags(place), [place]);
-  const bodyText = (place.description?.trim() ? place.description : PLACEHOLDER_DESCRIPTION).trim();
+  const bodyText = useMemo(() => getEstablishmentAboutBody(place).trim(), [place]);
 
   const onShare = async () => {
     try {
@@ -101,6 +97,19 @@ export default function AboutEstablishmentScreen() {
     const placeForNav: Place = c ? { ...place, latitude: c.lat, longitude: c.lng } : place;
     (navigation as { navigate: (name: string, params: object) => void }).navigate('Directions', {
       place: placeForNav,
+    });
+  };
+
+  const openStartCaviTrip = () => {
+    const c = parsePlaceCoords(place);
+    if (!c) {
+      Alert.alert('Can’t start trip', 'This place does not have map coordinates yet.');
+      return;
+    }
+    const placeForNav: Place = { ...place, latitude: c.lat, longitude: c.lng };
+    (navigation as { navigate: (name: string, params: object) => void }).navigate('Directions', {
+      place: placeForNav,
+      caviTrip: true,
     });
   };
 
@@ -239,6 +248,7 @@ export default function AboutEstablishmentScreen() {
         if (res.ok) {
           setSaveModalVisible(false);
           setSaved(true);
+          Alert.alert('Saved', `Added to “${list.name}”.`);
           return;
         }
         if (res.duplicate) {
@@ -255,6 +265,7 @@ export default function AboutEstablishmentScreen() {
       if (res.ok) {
         setSaveModalVisible(false);
         setSaved(true);
+        Alert.alert('Saved', `Added to “${list.name}”.`);
         return;
       }
       if (res.duplicate) {
@@ -450,9 +461,18 @@ export default function AboutEstablishmentScreen() {
             >
               <Text style={styles.directionsButtonLabel}>Get directions</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              onPress={openStartCaviTrip}
+              style={styles.caviTripButton}
+              activeOpacity={0.92}
+              accessibilityRole="button"
+              accessibilityLabel="Start CaviTrip"
+            >
+              <Text style={styles.caviTripButtonLabel}>START CAVITRIP</Text>
+            </TouchableOpacity>
           </>
         ) : (
-          <ReviewCardsList />
+          <ReviewCardsList placeName={place.name} ntdpCategory={place.ntdp_category} />
         )}
       </ScrollView>
 
@@ -648,6 +668,25 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     color: TITLE,
     letterSpacing: 0.15,
+  },
+  caviTripButton: {
+    marginTop: 12,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 28,
+    minHeight: 54,
+    borderRadius: 14,
+    backgroundColor: TEAL,
+    borderWidth: 2,
+    borderColor: TEAL,
+  },
+  caviTripButtonLabel: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 15,
+    letterSpacing: 0.8,
+    color: WHITE,
   },
   directionsButton: {
     marginTop: 20,

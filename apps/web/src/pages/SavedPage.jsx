@@ -33,9 +33,8 @@ export function SavedPage() {
   }, []);
 
   const visibleFolders = useMemo(() => {
-    const sourceLists = activeTab === 'Saved' ? savedLists : [];
     const q = search.trim().toLowerCase();
-    return sourceLists
+    return savedLists
       .map((list) => {
         const items = list.items
           .map((item) => ({
@@ -43,11 +42,15 @@ export function SavedPage() {
             image: item.image || PLACEHOLDER_IMG,
             subtitle: item.subtitle || 'Cavite, Philippines',
           }))
-          .filter(
-            (item) =>
+          .filter((item) => {
+            const isItin = item.kind === 'itinerary' || String(item.id || '').startsWith('itinerary-');
+            if (activeTab === 'Saved' && isItin) return false;
+            if (activeTab === 'Itineraries' && !isItin) return false;
+            return (
               !q ||
               `${item.name} ${item.subtitle} ${item.establishmentTag || ''} ${list.name}`.toLowerCase().includes(q)
-          );
+            );
+          });
         return {
           ...list,
           items,
@@ -98,7 +101,6 @@ export function SavedPage() {
           </div>
 
           <div className="mt-4 flex items-end gap-3">
-            <h2 className="font-['Poppins',sans-serif] text-3xl font-bold leading-none text-neutral-900">{activeTab}</h2>
             <p className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-medium text-neutral-500">
               {totalSavedResults} results
             </p>
@@ -118,7 +120,7 @@ export function SavedPage() {
                 type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search saved places"
+                placeholder={activeTab === 'Itineraries' ? 'Search saved itineraries' : 'Search saved places'}
                 className="w-full bg-transparent text-sm text-neutral-700 outline-none placeholder:text-neutral-400"
               />
             </div>
@@ -179,7 +181,14 @@ export function SavedPage() {
                             <h3 className="line-clamp-2 font-['Poppins',sans-serif] text-[18px]/[1.15] font-semibold text-neutral-900">{card.name}</h3>
                             <button
                               type="button"
-                              onClick={() => navigate(`/place/${card.id}`)}
+                              onClick={() => {
+                                const itinId = card.itineraryId || String(card.id || '').replace(/^itinerary-/, '');
+                                if (card.kind === 'itinerary' || String(card.id || '').startsWith('itinerary-')) {
+                                  navigate(`/itinerary/${itinId}`);
+                                } else {
+                                  navigate(`/place/${card.id}`);
+                                }
+                              }}
                               className="shrink-0 rounded-full bg-neutral-900 px-3 py-1 text-[11px] font-semibold text-white"
                             >
                               Explore
@@ -213,7 +222,7 @@ export function SavedPage() {
           {visibleFolders.length === 0 && (
             <p className="py-10 text-center text-sm text-neutral-500">
               {activeTab === 'Itineraries'
-                ? 'No itineraries available yet.'
+                ? 'No saved itineraries yet. Save a curated route from an itinerary page.'
                 : 'No saved places yet. Save a place into a list from the place page.'}
             </p>
           )}
