@@ -41,34 +41,28 @@ const SECTIONS: FilterSection[] = [
     title: 'Cities',
     options: [
       { key: 'city-bacoor', label: 'Bacoor City' },
-      { key: 'city-cavite-city', label: 'Cavite City' },
-      { key: 'city-dasmarinas', label: 'Dasmariñas City' },
-      { key: 'city-general-trias', label: 'General Trias City' },
+      { key: 'city-carmona', label: 'Carmona City' },
+      { key: 'city-cavite', label: 'Cavite City' },
+      { key: 'city-dasma', label: 'Dasmariñas City' },
+      { key: 'city-gma', label: 'General Mariano Alvarez' },
+      { key: 'city-trias', label: 'General Trias City' },
       { key: 'city-imus', label: 'Imus City' },
       { key: 'city-tagaytay', label: 'Tagaytay City' },
-      { key: 'city-trece-martires', label: 'Trece Martires City' },
+      { key: 'city-trece', label: 'Trece Martires City' },
     ],
   },
   {
     id: 'municipalities',
     title: 'Municipalities',
     options: [
-      { key: 'mun-alfonso', label: 'Alfonso' },
       { key: 'mun-amadeo', label: 'Amadeo' },
-      { key: 'mun-carmona', label: 'Carmona' },
-      { key: 'mun-gen-emilio-aguinaldo', label: 'Gen. Emilio Aguinaldo' },
-      { key: 'mun-gen-mariano-alvarez', label: 'Gen. Mariano Alvarez' },
+      { key: 'mun-alfonso', label: 'Alfonso' },
       { key: 'mun-indang', label: 'Indang' },
-      { key: 'mun-kawit', label: 'Kawit' },
       { key: 'mun-magallanes', label: 'Magallanes' },
-      { key: 'mun-maragondon', label: 'Maragondon' },
-      { key: 'mun-mendez', label: 'Mendez' },
-      { key: 'mun-naic', label: 'Naic' },
+      { key: 'mun-mendez', label: 'Mendez - Nuñez' },
       { key: 'mun-noveleta', label: 'Noveleta' },
-      { key: 'mun-rosario', label: 'Rosario' },
       { key: 'mun-silang', label: 'Silang' },
       { key: 'mun-tanza', label: 'Tanza' },
-      { key: 'mun-ternate', label: 'Ternate' },
     ],
   },
   {
@@ -161,7 +155,7 @@ type DashboardFiltersPanelProps = {
    * Omit or empty → all sections (dashboard default).
    */
   sectionIds?: DashboardFilterSectionId[];
-  /** Fires whenever toggle state changes (mount, flip, reset, section set change). */
+  /** Fired whenever toggle map changes (e.g. parent applies filters). */
   onTogglesChange?: (toggles: Record<string, boolean>) => void;
 };
 

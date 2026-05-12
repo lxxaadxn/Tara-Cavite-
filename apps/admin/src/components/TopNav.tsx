@@ -1,7 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminPlatform } from '../hooks/useAdminPlatform';
+import { useAuth } from '../contexts/AuthContext';
 import styles from './TopNav.module.css';
+
+function navInitials(email: string | undefined): string {
+  if (!email) return 'AD';
+  const local = email.split('@')[0] ?? '';
+  const parts = local.split(/[._-]+/).filter(Boolean);
+  if (parts.length >= 2) {
+    const a = parts[0]?.charAt(0);
+    const b = parts[1]?.charAt(0);
+    if (a && b) return (a + b).toUpperCase();
+  }
+  return local.slice(0, 2).toUpperCase() || 'AD';
+}
 
 export function TopNav() {
   const [profileOpen, setProfileOpen] = useState(false);
@@ -9,6 +22,8 @@ export function TopNav() {
   const profileRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { path, platform } = useAdminPlatform();
+  const { signOut, session } = useAuth();
+  const avatarLabel = navInitials(session?.user?.email);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -47,7 +62,7 @@ export function TopNav() {
         </button>
         <div className={styles.profileWrap} ref={profileRef}>
           <button className={styles.profile} onClick={() => setProfileOpen(!profileOpen)}>
-            <div className={styles.avatar}>AD</div>
+            <div className={styles.avatar}>{avatarLabel}</div>
             <span>Admin</span>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="m6 9 6 6 6-6" />
@@ -57,7 +72,16 @@ export function TopNav() {
             <div className={styles.dropdown}>
               <button onClick={() => { setProfileOpen(false); navigate(path('profile')); }}>Profile</button>
               <button onClick={() => { setProfileOpen(false); navigate(path('settings')); }}>Settings</button>
-              <button onClick={() => setProfileOpen(false)}>Logout</button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setProfileOpen(false);
+                  await signOut();
+                  navigate('/login', { replace: true });
+                }}
+              >
+                Logout
+              </button>
             </div>
           )}
         </div>

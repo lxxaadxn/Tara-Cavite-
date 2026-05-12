@@ -1,5 +1,8 @@
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { AppHeader } from '../components/AppHeader';
 import { publishedItineraries } from '../data/mockItineraries';
+import { readSavedLists, saveItineraryToList, saveItineraryToListId } from '../lib/savedPlaces';
 
 const HEADER_GREEN = '#7EA00E';
 const TEAL = '#1F4F59';
@@ -7,6 +10,49 @@ const TEAL = '#1F4F59';
 export function ItineraryDetailPage() {
   const { id } = useParams();
   const detail = publishedItineraries.find((itinerary) => itinerary.id === id);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [listNameDraft, setListNameDraft] = useState('');
+  const [existingLists, setExistingLists] = useState([]);
+  const [saveStatus, setSaveStatus] = useState('');
+
+  const openSave = () => {
+    setListNameDraft(detail?.tags?.[0] || 'My list');
+    setExistingLists(readSavedLists());
+    setSaveOpen(true);
+  };
+
+  const confirmSave = () => {
+    if (!detail) return;
+    const trimmed = String(listNameDraft ?? '').trim();
+    if (!trimmed) return;
+    const result = saveItineraryToList(trimmed, {
+      id: detail.id,
+      title: detail.title,
+      image: detail.image,
+      subtitle: detail.subtitle,
+    });
+    if (result.ok) {
+      setSaveStatus(`Saved to “${trimmed}”`);
+      window.setTimeout(() => setSaveStatus(''), 2800);
+      setSaveOpen(false);
+    }
+  };
+
+  const saveToExistingList = (listId) => {
+    if (!detail) return;
+    const result = saveItineraryToListId(listId, {
+      id: detail.id,
+      title: detail.title,
+      image: detail.image,
+      subtitle: detail.subtitle,
+    });
+    if (result.ok) {
+      const label = result.listName || 'list';
+      setSaveStatus(`Saved to “${label}”`);
+      window.setTimeout(() => setSaveStatus(''), 2800);
+      setSaveOpen(false);
+    }
+  };
 
   if (!detail) {
     return (
@@ -29,11 +75,22 @@ export function ItineraryDetailPage() {
 
   return (
     <div className="min-h-screen bg-[#f4f6ec] font-['Inter',sans-serif] text-neutral-900">
+      <AppHeader />
       <main className="mx-auto max-w-5xl px-4 py-3 sm:px-6">
-        <div className="mb-2 flex items-center">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <Link to="/itinerary" className="rounded-full p-2 text-neutral-700 transition hover:bg-white" aria-label="Go back to itineraries">
             <span aria-hidden>←</span>
           </Link>
+          <div className="flex items-center gap-2">
+            {saveStatus ? <span className="text-xs font-medium text-emerald-700">{saveStatus}</span> : null}
+            <button
+              type="button"
+              onClick={openSave}
+              className="rounded-full border border-neutral-300 bg-white px-4 py-2 text-xs font-semibold text-neutral-800 transition hover:bg-neutral-50"
+            >
+              Save to list
+            </button>
+          </div>
         </div>
         <section className="overflow-hidden rounded-[20px] border border-[rgba(31,79,89,0.08)] bg-white shadow-[0_8px_24px_rgba(31,79,89,0.10)]">
           <div className="relative h-[240px] sm:h-[280px]">
@@ -152,6 +209,62 @@ export function ItineraryDetailPage() {
           </section>
         )}
       </main>
+
+      {saveOpen ? (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 p-4">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-neutral-200 bg-white p-5 shadow-xl">
+            <p className="font-['Poppins',sans-serif] text-lg font-semibold text-neutral-900">Save itinerary to list</p>
+            <p className="mt-1 text-sm text-neutral-600">Pick an existing list or create a new one.</p>
+            {existingLists.length > 0 ? (
+              <div className="mt-3">
+                <p className="text-xs font-semibold text-neutral-600">Your lists</p>
+                <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-lg border border-neutral-100 bg-neutral-50 p-2">
+                  {existingLists.map((l) => (
+                    <li key={l.id || l.name}>
+                      <button
+                        type="button"
+                        onClick={() => saveToExistingList(l.id)}
+                        className="w-full rounded-md px-2 py-2 text-left text-sm font-medium text-neutral-800 transition hover:bg-white"
+                      >
+                        {l.name}
+                        <span className="ml-2 text-xs font-normal text-neutral-500">
+                          ({Array.isArray(l.items) ? l.items.length : 0} items)
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            <label className="mt-4 block text-xs font-semibold text-neutral-600" htmlFor="itin-list-name">
+              New list name
+            </label>
+            <input
+              id="itin-list-name"
+              value={listNameDraft}
+              onChange={(e) => setListNameDraft(e.target.value)}
+              className="mt-1.5 h-11 w-full rounded-xl border border-neutral-200 px-3 text-sm outline-none focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(126,160,14,0.22)]"
+            />
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setSaveOpen(false)}
+                className="rounded-xl border border-neutral-200 px-4 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmSave}
+                className="rounded-xl px-4 py-2 text-sm font-semibold text-white"
+                style={{ backgroundColor: TEAL }}
+              >
+                Save to new list
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

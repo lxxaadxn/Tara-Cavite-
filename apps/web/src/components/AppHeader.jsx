@@ -1,6 +1,9 @@
+import { useEffect, useState } from 'react';
 import { NavLink, Link, useLocation } from 'react-router-dom';
 import { LogoWordmark } from './LogoWordmark';
+import { supabase } from '../lib/supabase';
 const olive = '#7ea00e';
+const DEFAULT_PROFILE_LOGO = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='%23eaf5cf'/><circle cx='32' cy='32' r='19' fill='%237ea00e'/><text x='32' y='38' text-anchor='middle' font-family='Arial,sans-serif' font-size='18' font-weight='700' fill='white'>CT</text></svg>";
 function navMatch(pathname, to) {
     if (to === '/search')
         return pathname === '/search' || pathname.startsWith('/place/');
@@ -10,8 +13,42 @@ function navMatch(pathname, to) {
 }
 export function AppHeader() {
     const { pathname } = useLocation();
+    const [avatarUrl, setAvatarUrl] = useState(DEFAULT_PROFILE_LOGO);
+
+    useEffect(() => {
+        let cancelled = false;
+        const loadAvatar = async () => {
+            const { data } = await supabase.auth.getUser();
+            const metadata = data?.user?.user_metadata ?? {};
+            const photo = metadata.avatar_url || metadata.picture || DEFAULT_PROFILE_LOGO;
+            if (!cancelled)
+                setAvatarUrl(photo);
+        };
+        loadAvatar();
+        const onAvatarBump = () => {
+            void loadAvatar();
+        };
+        window.addEventListener('cavitour:avatar-updated', onAvatarBump);
+        const { data: { subscription }, } = supabase.auth.onAuthStateChange((event, session) => {
+            if (event === 'SIGNED_OUT') {
+                if (!cancelled)
+                    setAvatarUrl(DEFAULT_PROFILE_LOGO);
+                return;
+            }
+            const metadata = session?.user?.user_metadata ?? {};
+            const photo = metadata.avatar_url || metadata.picture || DEFAULT_PROFILE_LOGO;
+            if (!cancelled)
+                setAvatarUrl(photo);
+        });
+        return () => {
+            cancelled = true;
+            window.removeEventListener('cavitour:avatar-updated', onAvatarBump);
+            subscription.unsubscribe();
+        };
+    }, []);
+
     const nav = [
-        { to: '/search', label: 'Search' },
+        { to: '/search', label: 'Home' },
         { to: '/saved', label: 'Saved' },
         { to: '/itinerary', label: 'Itinerary' },
         { to: '/terminals', label: 'Terminals' },
@@ -46,7 +83,7 @@ export function AppHeader() {
             </svg>
           </Link>
           <Link to="/profile" className="relative rounded-full ring-2 ring-white shadow-md overflow-hidden w-10 h-10 block" aria-label="Profile">
-            <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=128&q=80" alt="" className="w-full h-full object-cover"/>
+            <img src={avatarUrl} alt="" className="w-full h-full object-cover"/>
             <span className="absolute bottom-0.5 right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white" style={{ backgroundColor: olive }} aria-hidden/>
           </Link>
         </div>

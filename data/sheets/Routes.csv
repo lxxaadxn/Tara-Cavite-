@@ -1,0 +1,47 @@
+Route_Id,Route_Name,Origin,Destination
+1,Kawit - Bacoor,Kawit,Bacoor
+2,Kawit - Imus,Kawit,Imus
+3,Noveleta - Bacoor,Noveleta,Bacoor
+4,Bacoor - Imus,Bacoor,Imus
+5,Bacoor - Dasmarinas,Bacoor,Dasmarinas
+6,Imus - Dasmarinas,Imus,Dasmarinas
+7,Imus - General Trias,Imus,General Trias
+8,Dasmarinas - General Trias,Dasmarinas,General Trias
+9,Dasmarinas - Trece Martires,Dasmarinas,Trece Martires
+10,Dasmarinas - Tagaytay,Dasmarinas,Tagaytay
+11,Dasmarinas - Silang,Dasmarinas,Silang
+12,General Trias - Trece Martires,General Trias,Trece Martires
+13,General Trias - Dasmarinas,General Trias,Dasmarinas
+14,Trece Martires - Indang,Trece Martires,Indang
+15,Trece Martires - Naic,Trece Martires,Naic
+16,Rosario - Dasmarinas,Rosario,Dasmarinas
+17,Rosario - Bacoor,Rosario,Bacoor
+18,Tanza - Rosario,Tanza,Rosario
+19,Tanza - Naic,Tanza,Naic
+20,Naic - Ternate,Naic,Ternate
+21,Naic - Maragondon,Naic,Maragondon
+22,Silang - Tagaytay,Silang,Tagaytay
+23,Carmona - Silang,Carmona,Silang
+24,Carmona - Dasmarinas,Carmona,Dasmarinas
+25,Tagaytay - Mendez,Tagaytay,Mendez
+26,Tagaytay - Alfonso,Tagaytay,Alfonso
+27,Cavite City - Kawit,Cavite City,Kawit
+28,Cavite City - Bacoor,Cavite City,Bacoor
+29,General Mariano Alvarez - Dasmarinas,General Mariano Alvarez,Dasmarinas
+30,General Mariano Alvarez - General Trias,General Mariano Alvarez,General Trias
+31,Maragondon - Ternate,Maragondon,Ternate
+32,Magallanes - Maragondon,Magallanes,Maragondon
+33,Indang - Dasmarinas,Indang,Dasmarinas
+34,Amadeo - Tagaytay,Amadeo,Tagaytay
+35,Mendez - Tagaytay,Mendez,Tagaytay
+36,Alfonso - Tagaytay,Alfonso,Tagaytay
+37,General Emilio Aguinaldo - Indang,General Emilio Aguinaldo,Indang
+38,Bacoor - Rosario,Bacoor,Rosario
+39,Imus - Tagaytay,Imus,Tagaytay
+40,Trece Martires - Tagaytay,Trece Martires,Tagaytay
+41,Dasmarinas - Naic,Dasmarinas,Naic
+42,Kawit - Dasmarinas,Kawit,Dasmarinas
+43,Bacoor - Tagaytay,Bacoor,Tagaytay
+44,Rosario - Tagaytay,Rosario,Tagaytay
+45,Tanza - Dasmarinas,Tanza,Dasmarinas
+46,Silang - Dasmarinas,Silang,Dasmarinas

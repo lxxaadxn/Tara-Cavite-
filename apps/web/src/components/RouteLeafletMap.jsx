@@ -9,6 +9,8 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
+const ROAD_BLUE = '#1d4ed8';
+
 function buildRoutePoints(start, end, curve = 0.18) {
   const midLat = (start.lat + end.lat) / 2;
   const midLng = (start.lng + end.lng) / 2;
@@ -26,7 +28,41 @@ function buildRoutePoints(start, end, curve = 0.18) {
   ];
 }
 
-export function RouteLeafletMap({ start, end, routeId = 'fastest', lineColor = '#0ea5e9' }) {
+function drawSegmentPolylines(map, points, lineColor) {
+  if (!points || points.length < 2) return;
+  L.polyline(points, {
+    color: lineColor,
+    weight: 11,
+    opacity: 0.18,
+    lineCap: 'round',
+    lineJoin: 'round',
+  }).addTo(map);
+  L.polyline(points, {
+    color: '#ffffff',
+    weight: 8,
+    opacity: 0.96,
+    lineCap: 'round',
+    lineJoin: 'round',
+  }).addTo(map);
+  L.polyline(points, {
+    color: lineColor,
+    weight: 5,
+    opacity: 0.95,
+    lineCap: 'round',
+    lineJoin: 'round',
+  }).addTo(map);
+}
+
+/**
+ * @param {Object} props
+ * @param {{ lat: number; lng: number } | null} [props.start]
+ * @param {{ lat: number; lng: number }} props.end
+ * @param {string} [props.routeId]
+ * @param {string} [props.lineColor] — markers / accent; road line uses OSRM blue for multi-segment
+ * @param {Array<Array<[number, number]>>} [props.externalSegments] — precomputed [lat,lng][] per OSRM leg (terminal chain)
+ * @param {string} [props.className] — tailwind height/width (default h-[350px] w-full)
+ */
+export function RouteLeafletMap({ start, end, routeId = 'fastest', lineColor = '#0ea5e9', externalSegments, className }) {
   const containerRef = useRef(null);
 
   useEffect(() => {
@@ -44,7 +80,7 @@ export function RouteLeafletMap({ start, end, routeId = 'fastest', lineColor = '
       maxZoom: 19,
     }).addTo(map);
 
-    const drawRoute = (points, durationSec = null) => {
+    const drawEndpoints = () => {
       L.circleMarker([from.lat, from.lng], {
         radius: 7,
         color: '#ffffff',
@@ -64,30 +100,11 @@ export function RouteLeafletMap({ start, end, routeId = 'fastest', lineColor = '
       })
         .addTo(map)
         .bindPopup('Destination');
+    };
 
-      L.polyline(points, {
-        color: lineColor,
-        weight: 11,
-        opacity: 0.18,
-        lineCap: 'round',
-        lineJoin: 'round',
-      }).addTo(map);
-
-      L.polyline(points, {
-        color: '#ffffff',
-        weight: 8,
-        opacity: 0.96,
-        lineCap: 'round',
-        lineJoin: 'round',
-      }).addTo(map);
-
-      L.polyline(points, {
-        color: lineColor,
-        weight: 5,
-        opacity: 0.95,
-        lineCap: 'round',
-        lineJoin: 'round',
-      }).addTo(map);
+    const drawRoute = (points, durationSec = null) => {
+      drawEndpoints();
+      drawSegmentPolylines(map, points, ROAD_BLUE);
 
       if (Number.isFinite(durationSec) && points.length > 2) {
         const midpoint = points[Math.floor(points.length / 2)];
@@ -105,6 +122,26 @@ export function RouteLeafletMap({ start, end, routeId = 'fastest', lineColor = '
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
     };
 
+    const drawMultiFromSegments = (segmentArrays) => {
+      drawEndpoints();
+      const flat = [];
+      for (const seg of segmentArrays) {
+        if (!seg || seg.length < 2) continue;
+        drawSegmentPolylines(map, seg, ROAD_BLUE);
+        for (const p of seg) flat.push(p);
+      }
+      if (flat.length > 1) {
+        map.fitBounds(L.latLngBounds(flat), { padding: [40, 40], maxZoom: 14 });
+      } else {
+        map.fitBounds(L.latLngBounds([[from.lat, from.lng], [end.lat, end.lng]]), { padding: [40, 40], maxZoom: 14 });
+      }
+    };
+
+    const useExternal =
+      Array.isArray(externalSegments) &&
+      externalSegments.length > 0 &&
+      externalSegments.some((seg) => seg && seg.length > 1);
+
     const curveByRoute = {
       'main-road': 0.06,
       fastest: 0.08,
@@ -114,22 +151,39 @@ export function RouteLeafletMap({ start, end, routeId = 'fastest', lineColor = '
     const fallbackPoints = buildRoutePoints(from, end, curveByRoute[routeId] ?? 0.12);
 
     let cancelled = false;
+
+    if (useExternal) {
+      drawMultiFromSegments(externalSegments);
+      return () => {
+        cancelled = true;
+        map.remove();
+      };
+    }
+
     (async () => {
       try {
-        // OSRM returns a road-following geometry, so the polyline follows actual roads.
         const fromPair = `${from.lng},${from.lat}`;
         const endPair = `${end.lng},${end.lat}`;
-        const url = `https://router.project-osrm.org/route/v1/driving/${fromPair};${endPair}?alternatives=false&overview=full&steps=false&geometries=geojson`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error('Route request failed');
-        const payload = await res.json();
-        const route = payload?.routes?.[0];
-        const coords = route?.geometry?.coordinates;
-        if (!Array.isArray(coords) || coords.length < 2) throw new Error('No route geometry');
+        const base = `https://router.project-osrm.org/route/v1`;
+        const tryProfile = async (profile) => {
+          const url = `${base}/${profile}/${fromPair};${endPair}?alternatives=false&overview=full&steps=false&geometries=geojson`;
+          const res = await fetch(url);
+          if (!res.ok) throw new Error('Route request failed');
+          const payload = await res.json();
+          const route = payload?.routes?.[0];
+          const coords = route?.geometry?.coordinates;
+          if (!Array.isArray(coords) || coords.length < 2) throw new Error('No route geometry');
+          return { roadPoints: coords.map(([lng, lat]) => [lat, lng]), duration: route?.duration ?? null };
+        };
 
-        const roadPoints = coords.map(([lng, lat]) => [lat, lng]);
+        let result;
+        try {
+          result = await tryProfile('driving');
+        } catch {
+          result = await tryProfile('foot');
+        }
         if (cancelled) return;
-        drawRoute(roadPoints, route?.duration ?? null);
+        drawRoute(result.roadPoints, result.duration);
       } catch {
         if (cancelled) return;
         drawRoute(fallbackPoints);
@@ -140,7 +194,7 @@ export function RouteLeafletMap({ start, end, routeId = 'fastest', lineColor = '
       cancelled = true;
       map.remove();
     };
-  }, [start, end, routeId, lineColor]);
+  }, [start, end, routeId, lineColor, externalSegments]);
 
-  return <div ref={containerRef} className="h-[350px] w-full" />;
+  return <div ref={containerRef} className={className ?? 'h-[350px] w-full'} />;
 }

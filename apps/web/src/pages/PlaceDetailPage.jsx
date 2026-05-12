@@ -4,10 +4,30 @@ import { supabase } from '../lib/supabase';
 import { fetchAllPlacesFromSupabase, fetchPlaceById } from '../lib/placesFromSupabase';
 import { AppHeader } from '../components/AppHeader';
 import { RouteLeafletMap } from '../components/RouteLeafletMap';
-import { savePlaceToList } from '../lib/savedPlaces';
+import { readSavedLists, savePlaceToList, savePlaceToListId } from '../lib/savedPlaces';
+import { planNearestTerminalsForPlaceCommute } from '../lib/terminalTransitPlanner';
+import { recordDestinationReached } from '../lib/destinationReachedActivity';
+import {
+  formatNtdpCategoryTagLabel,
+  getEstablishmentAboutBody,
+  getPreviewReviewEntries,
+} from '../lib/ntdpDisplayLabels';
+import {
+  fetchDrivingRoute,
+  fetchFootRoute,
+  formatDistanceM,
+  formatDurationS,
+} from '../lib/fetchOsrmRoute';
+import {
+  buildCommuterNarrativeFromOsrmSteps,
+  commuterDirectStepInstruction,
+  commuterStepHint,
+} from '../lib/commuterRouteNarration';
 
 const olive = '#7ea00e';
-const teal = '#1f4f59';
+const COMMUTER_DISCLAIMER =
+  'Steps follow the mapped road (OSRM / OpenStreetMap), not live transit schedules. Confirm signs, fares, and stops with operators.';
+const COMMUTER_FOOTNOTE = 'Roads and stops change — double-check locally, especially if you drive.';
 const PLACEHOLDER_IMG =
   'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80';
 const DEFAULT_FALLBACK_SPOT = {
@@ -22,6 +42,7 @@ const DEFAULT_FALLBACK_SPOT = {
   subtitle: 'Tourist Spot',
   hours: 'Open daily',
   fromSupabase: false,
+  ntdp_category: null,
 };
 
 function isUuid(s) {
@@ -73,9 +94,12 @@ function createFallbackSpot(sourcePlace) {
     image: sourcePlace.imageUrl || DEFAULT_FALLBACK_SPOT.image,
     tags: [sourcePlace.ntdp_category].filter(Boolean).slice(0, 6),
     description: sourcePlace.description || `${sourcePlace.name} — ${sourcePlace.address}.`,
-    subtitle: sourcePlace.ntdp_category ? `${sourcePlace.type ?? 'Place'} · ${sourcePlace.ntdp_category}` : sourcePlace.type || DEFAULT_FALLBACK_SPOT.subtitle,
+    subtitle: sourcePlace.ntdp_category
+      ? `${sourcePlace.type ?? 'Place'} · ${formatNtdpCategoryTagLabel(sourcePlace.ntdp_category)}`
+      : sourcePlace.type || DEFAULT_FALLBACK_SPOT.subtitle,
     hours: sourcePlace.hours || DEFAULT_FALLBACK_SPOT.hours,
     fromSupabase: false,
+    ntdp_category: sourcePlace.ntdp_category ?? null,
   };
 }
 
@@ -135,6 +159,16 @@ export function PlaceDetailPage() {
   const [saveStatus, setSaveStatus] = useState('');
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [listNameDraft, setListNameDraft] = useState('');
+  const [existingLists, setExistingLists] = useState([]);
+  const [terminalTransitPlan, setTerminalTransitPlan] = useState(null);
+  const [terminalTransitLoading, setTerminalTransitLoading] = useState(false);
+  const [destinationReachedBusy, setDestinationReachedBusy] = useState(false);
+  const [routeSubTab, setRouteSubTab] = useState('routeSteps');
+  const [osrmDriving, setOsrmDriving] = useState(null);
+  const [osrmFoot, setOsrmFoot] = useState(null);
+  const [osrmLoading, setOsrmLoading] = useState(false);
+  const [osrmError, setOsrmError] = useState(null);
+  const [fullMapOpen, setFullMapOpen] = useState(false);
 
   useEffect(() => {
     const q = searchParams.get('tab');
@@ -166,6 +200,69 @@ export function PlaceDetailPage() {
   }, []);
 
   useEffect(() => {
+    if (!userCoords || spot?.lat == null || spot?.lng == null) {
+      setTerminalTransitPlan(null);
+      setTerminalTransitLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setTerminalTransitLoading(true);
+    (async () => {
+      try {
+        const plan = await planNearestTerminalsForPlaceCommute(supabase, userCoords, {
+          lat: spot.lat,
+          lng: spot.lng,
+        });
+        if (!cancelled) setTerminalTransitPlan(plan);
+      } catch {
+        if (!cancelled) setTerminalTransitPlan(null);
+      } finally {
+        if (!cancelled) setTerminalTransitLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userCoords, spot?.lat, spot?.lng]);
+
+  useEffect(() => {
+    if (tab !== 'route') {
+      setRouteSubTab('routeSteps');
+    }
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab !== 'route' || spot?.lat == null || spot?.lng == null || !userCoords) {
+      return;
+    }
+    let cancelled = false;
+    setOsrmLoading(true);
+    setOsrmError(null);
+    (async () => {
+      try {
+        const from = { lat: userCoords.lat, lng: userCoords.lng };
+        const to = { lat: spot.lat, lng: spot.lng };
+        const [d, f] = await Promise.all([fetchDrivingRoute(from, to), fetchFootRoute(from, to)]);
+        if (!cancelled) {
+          setOsrmDriving(d);
+          setOsrmFoot(f);
+        }
+      } catch {
+        if (!cancelled) {
+          setOsrmError('Could not load road route.');
+          setOsrmDriving(null);
+          setOsrmFoot(null);
+        }
+      } finally {
+        if (!cancelled) setOsrmLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, spot?.lat, spot?.lng, userCoords?.lat, userCoords?.lng]);
+
+  useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -187,9 +284,12 @@ export function PlaceDetailPage() {
             galleryUrls: p.galleryUrls,
             tags: [p.ntdp_category].filter(Boolean).slice(0, 6),
             description: p.description || `${p.name} — ${p.address}.`,
-            subtitle: p.ntdp_category ? `${p.type ?? 'Place'} · ${p.ntdp_category}` : p.type,
+            subtitle: p.ntdp_category
+              ? `${p.type ?? 'Place'} · ${formatNtdpCategoryTagLabel(p.ntdp_category)}`
+              : p.type,
             hours: p.hours,
             fromSupabase: true,
+            ntdp_category: p.ntdp_category ?? null,
           });
         } else {
           setSpot(createFallbackSpot(relatedPlacesRaw[0]));
@@ -244,26 +344,10 @@ export function PlaceDetailPage() {
     { label: 'Two', pct: 7, count: '16' },
     { label: 'One', pct: 4, count: '8' },
   ];
-  const recentReviews = [
-    {
-      name: 'Robert Karmazov',
-      image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&q=80',
-      text: 'Great ambiance, practical parking, and smooth check-in. Perfect place for quick Cavite stopovers.',
-      rating: 4,
-    },
-    {
-      name: 'Alyssa M.',
-      image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120&q=80',
-      text: 'Clean area and easy to find. Staff were approachable and gave helpful local recommendations.',
-      rating: 5,
-    },
-    {
-      name: 'Marco D.',
-      image: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=120&q=80',
-      text: 'Solid destination for family day tours. Better to arrive early for less crowd.',
-      rating: 4,
-    },
-  ];
+  const recentReviews = useMemo(() => {
+    if (!spot) return [];
+    return getPreviewReviewEntries(spot.name, spot.ntdp_category ?? null);
+  }, [spot]);
   const relatedPlaces = useMemo(
     () =>
       relatedPlacesRaw
@@ -282,7 +366,7 @@ export function PlaceDetailPage() {
           image: s.imageUrl || PLACEHOLDER_IMG,
           price: estimatePrice(s.id),
         })),
-    [relatedPlacesRaw, spot?.id]
+    [relatedPlacesRaw, spot]
   );
   const routeOptions = useMemo(() => {
     if (!spot) return [];
@@ -302,25 +386,70 @@ export function PlaceDetailPage() {
       },
     ];
   }, [spot]);
-  const selectedRoute = routeOptions[0] ?? null;
+
+  const displayRoute = useMemo(() => {
+    if (osrmDriving) {
+      return {
+        id: 'main-road',
+        label: 'Main road',
+        mode: 'OSRM driving corridor',
+        distanceKm: Number((osrmDriving.distanceM / 1000).toFixed(1)),
+        durationMin: Math.max(1, Math.round(osrmDriving.durationS / 60)),
+        traffic: 'Moderate',
+        accent: 'bg-sky-500',
+        color: '#0ea5e9',
+      };
+    }
+    return routeOptions[0] ?? null;
+  }, [osrmDriving, routeOptions]);
 
   const routeTimeline = useMemo(() => {
-    if (!selectedRoute) return [];
+    if (!displayRoute || !spot) return [];
+    const destAddr = cleanPlaceAddress(spot.name, spot.address);
+
     return [
       {
         title: userCoords ? 'Your location' : 'Starting point',
         meta: userCoords ? 'Detected via GPS' : 'Set your current location',
       },
       {
-        title: 'Main junction',
-        meta: selectedRoute.mode,
+        title: `Commute toward ${spot.name}`,
+        meta:
+          'Prefer jeepneys, buses, or UV Express on main roads (many trips pass through Dasmariñas / major Cavite terminals). Ask drivers if they go toward your destination.',
       },
       {
         title: spot.name,
-        meta: cleanPlaceAddress(spot.name, spot.address),
+        meta: destAddr,
       },
     ];
-  }, [selectedRoute, spot, userCoords]);
+  }, [displayRoute, spot, userCoords]);
+
+  const handleDestinationReached = async () => {
+    if (!spot?.id || !isUuid(spot.id)) {
+      window.alert('Only catalog places can be added to your trip activity.');
+      return;
+    }
+    setDestinationReachedBusy(true);
+    try {
+      const { data } = await supabase.auth.getUser();
+      if (!data?.user) {
+        window.alert('Sign in to record a completed trip.');
+        return;
+      }
+      recordDestinationReached(data.user.id, spot.id, {
+        name: spot.name,
+        image: spot.image || undefined,
+      });
+      window.alert('Thank You and Enjoy your trip');
+    } finally {
+      setDestinationReachedBusy(false);
+    }
+  };
+
+  const openSeeFullMap = () => {
+    if (spot?.lat == null || spot?.lng == null) return;
+    setFullMapOpen(true);
+  };
 
   if (loading || !spot) {
     return (
@@ -341,8 +470,9 @@ export function PlaceDetailPage() {
   };
 
   const handleSaveToList = () => {
-    const suggestedName = spot?.ntdp_category || 'My list';
+    const suggestedName = spot?.ntdp_category ? formatNtdpCategoryTagLabel(spot.ntdp_category) : 'My list';
     setListNameDraft(suggestedName);
+    setExistingLists(readSavedLists());
     setSaveModalOpen(true);
   };
 
@@ -354,10 +484,30 @@ export function PlaceDetailPage() {
       name: spot.name,
       image: spot.image,
       subtitle: cleanPlaceAddress(spot.name, spot.address),
-      establishmentTag: spot.tags?.[0] ?? '',
+      establishmentTag: spot.ntdp_category
+        ? formatNtdpCategoryTagLabel(spot.ntdp_category)
+        : spot.tags?.[0] ?? '',
     });
     if (result.ok) {
       setSaveStatus(`Saved to "${trimmed}"`);
+      window.setTimeout(() => setSaveStatus(''), 2200);
+      setSaveModalOpen(false);
+    }
+  };
+
+  const handleSaveToExistingList = (listId) => {
+    const result = savePlaceToListId(listId, {
+      id: spot.id,
+      name: spot.name,
+      image: spot.image,
+      subtitle: cleanPlaceAddress(spot.name, spot.address),
+      establishmentTag: spot.ntdp_category
+        ? formatNtdpCategoryTagLabel(spot.ntdp_category)
+        : spot.tags?.[0] ?? '',
+    });
+    if (result.ok) {
+      const label = result.listName || 'list';
+      setSaveStatus(`Saved to "${label}"`);
       window.setTimeout(() => setSaveStatus(''), 2200);
       setSaveModalOpen(false);
     }
@@ -399,7 +549,7 @@ export function PlaceDetailPage() {
                     key={tag}
                     className="rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[11px] font-medium text-neutral-600"
                   >
-                    {tag}
+                    {formatNtdpCategoryTagLabel(tag)}
                   </span>
                 ))}
                 </div>
@@ -441,7 +591,14 @@ export function PlaceDetailPage() {
             {tab === 'description' && (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_240px]">
                 <div className="rounded-xl bg-white p-3 text-sm leading-relaxed text-neutral-600">
-                  <p>{sanitizeDescription(spot.description) || 'No additional description available yet.'}</p>
+                  <p className="whitespace-pre-line">
+                    {getEstablishmentAboutBody({
+                      description: sanitizeDescription(spot.description),
+                      ntdp_category: spot.ntdp_category,
+                      name: spot.name,
+                      address: spot.address,
+                    })}
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Map location</p>
@@ -461,7 +618,7 @@ export function PlaceDetailPage() {
               <div className="space-y-4">
                 <div className="grid grid-cols-1 gap-4 rounded-2xl border border-neutral-200 bg-white p-4 shadow-[0_8px_28px_rgba(0,0,0,0.04)] sm:grid-cols-[1.2fr_320px]">
                   <div className="space-y-2.5">
-                    {reviewBreakdown.map((row, i) => (
+                    {reviewBreakdown.map((row) => (
                       <div key={row.label} className="grid grid-cols-[52px_18px_minmax(0,1fr)_44px] items-center gap-2.5">
                         <p className="text-[11px] font-semibold uppercase text-neutral-600">{row.label}</p>
                         <ReviewStars value={1} size="h-3.5 w-3.5" />
@@ -547,7 +704,344 @@ export function PlaceDetailPage() {
             )}
 
             {tab === 'route' && (
-              <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
+              <div className="space-y-3">
+                <div className="rounded-2xl border border-[rgba(126,160,14,0.35)] bg-[rgba(126,160,14,0.06)] p-4">
+                  <p className="text-sm font-bold text-[#1f4f59]">Route on the map</p>
+                  <p className="mt-1 text-xs leading-relaxed text-neutral-600">
+                    The map draws a <span className="font-semibold text-[#1d4ed8]">blue line</span> on real roads (OSRM)
+                    from your location to {spot.name}. <span className="font-semibold">Commute steps</span> and{' '}
+                    <span className="font-semibold">Commuter guide</span> use the same OSRM turn data as the mobile app.
+                    Boarding hubs are under <span className="font-semibold">Via Terminals</span>.
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-[rgba(31,79,89,0.2)] bg-white p-4 shadow-sm">
+                  <p className="text-sm font-semibold text-neutral-900">Finished your trip?</p>
+                  <p className="mt-1 text-xs text-neutral-600">
+                    Tap below only after you arrive. Your profile “Activity this month” updates only when you confirm
+                    destination reached — not when you open the map.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={destinationReachedBusy || !isUuid(spot.id)}
+                    onClick={handleDestinationReached}
+                    className="mt-3 w-full rounded-xl px-4 py-3 text-sm font-bold text-white transition disabled:opacity-50"
+                    style={{ backgroundColor: olive }}
+                  >
+                    {destinationReachedBusy ? 'Saving…' : 'Destination Reached'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openSeeFullMap}
+                    className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50"
+                  >
+                    See full map
+                  </button>
+                  <p className="mt-2 text-[11px] text-neutral-500">
+                    Opens a full-screen OSRM / OpenStreetMap view (same routing as here — not Google Maps).
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2 border-b border-neutral-200 pb-2">
+                  {[
+                    { id: 'routeSteps', label: 'Commute steps' },
+                    { id: 'stepGuide', label: 'Commuter guide' },
+                    { id: 'viaTerminals', label: 'Via Terminals' },
+                  ].map(({ id, label }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setRouteSubTab(id)}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                        routeSubTab === id
+                          ? 'text-white'
+                          : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                      }`}
+                      style={routeSubTab === id ? { backgroundColor: olive } : undefined}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {routeSubTab === 'routeSteps' && (
+                  <div className="rounded-2xl border border-[rgba(31,79,89,0.12)] bg-white p-4 shadow-sm">
+                    <span className="inline-block rounded-md bg-[#f4f6ec] px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-[#1f4f59]">
+                      Commuter-first
+                    </span>
+                    <p className="mt-3 text-xs leading-relaxed text-neutral-600">{COMMUTER_DISCLAIMER}</p>
+                    <p className="mt-2 text-xs text-neutral-500">{COMMUTER_FOOTNOTE}</p>
+                    <div className="mt-3 rounded-xl border border-neutral-200 bg-[#f8faf7] px-3 py-2">
+                      <p className="text-[11px] font-semibold text-neutral-700">
+                        {userCoords ? 'Your current location' : 'Current location'}
+                      </p>
+                      <p className="text-[11px] text-neutral-600">→ {spot.name}</p>
+                    </div>
+                    {osrmLoading ? <p className="mt-3 text-sm text-neutral-500">Calculating road route…</p> : null}
+                    {osrmError ? <p className="mt-3 text-sm text-red-600">{osrmError}</p> : null}
+                    {!userCoords ? (
+                      <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                        Location is off — turn it on to load segments from where you are. You can still open the full map
+                        to plan transfers and walking.
+                      </p>
+                    ) : null}
+                    {osrmDriving && osrmDriving.steps?.length > 0 ? (
+                      <>
+                        <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                          Whole corridor (road length)
+                        </p>
+                        <p className="mt-1 text-sm text-neutral-800">
+                          {formatDistanceM(osrmDriving.distanceM)} · {formatDurationS(osrmDriving.durationS)} if driven
+                          end-to-end — commute time depends on waits and transfers
+                        </p>
+                        {osrmFoot ? (
+                          <p className="mt-2 text-xs text-neutral-600">
+                            Walking-only reference (same endpoints): {formatDistanceM(osrmFoot.distanceM)} ·{' '}
+                            {formatDurationS(osrmFoot.durationS)} — use for short links between rides, not as a full
+                            commute time
+                          </p>
+                        ) : null}
+                        <div className="mt-4 space-y-4 border-t border-neutral-100 pt-4">
+                          {osrmDriving.steps.map((step, index) => {
+                            const hint = commuterStepHint(index, osrmDriving.steps.length, step.distanceM);
+                            return (
+                              <div
+                                key={`osrm-step-${index}-${Math.round(step.distanceM)}`}
+                                className="flex gap-3 border-b border-neutral-50 pb-4 last:border-b-0 last:pb-0"
+                              >
+                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ backgroundColor: olive }}>
+                                  {index + 1}
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-medium text-neutral-900">
+                                    {commuterDirectStepInstruction(step, index, osrmDriving.steps.length, spot.name)}
+                                  </p>
+                                  <p className="mt-1 text-xs text-neutral-500">
+                                    {formatDistanceM(step.distanceM)} · ~{formatDurationS(step.durationS)} driving
+                                    reference
+                                  </p>
+                                    {hint ? <p className="mt-1 text-xs text-[#1f4f59]">{hint}</p> : null}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    ) : null}
+                    {!osrmLoading && userCoords && (!osrmDriving?.steps?.length || !osrmDriving) ? (
+                      <p className="mt-3 text-sm text-neutral-600">
+                        No segments returned for this corridor — try the map or another nearby road.
+                      </p>
+                    ) : null}
+                  </div>
+                )}
+
+                {routeSubTab === 'stepGuide' && (
+                  <div className="rounded-2xl border border-[rgba(31,79,89,0.12)] bg-white p-4 shadow-sm">
+                    <span className="inline-block rounded-md bg-[#f4f6ec] px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-[#1f4f59]">
+                      Commuter-first
+                    </span>
+                    <p className="mt-3 text-xs leading-relaxed text-neutral-600">{COMMUTER_DISCLAIMER}</p>
+                    <p className="mt-2 text-xs text-neutral-500">{COMMUTER_FOOTNOTE}</p>
+                    <div className="mt-4 whitespace-pre-wrap rounded-xl bg-[#fafafa] p-3 text-sm leading-relaxed text-neutral-800">
+                      {buildCommuterNarrativeFromOsrmSteps(osrmDriving?.steps ?? [], spot.name)}
+                    </div>
+                  </div>
+                )}
+
+                {routeSubTab === 'viaTerminals' && (
+                  <div className="space-y-3">
+                    <div className="rounded-2xl border border-[rgba(31,79,89,0.12)] bg-white p-4 shadow-sm">
+                      <h3 className="font-['Poppins',sans-serif] text-base font-bold text-neutral-900">Via Terminals</h3>
+                      <p className="mt-2 text-xs leading-relaxed text-neutral-600">
+                        Nearest public terminals and how to use them with this trip. Always confirm routes, signboards,
+                        and fares at the terminal or with the driver.
+                      </p>
+                      {userCoords && terminalTransitPlan ? (
+                        <div className="mt-4 space-y-3 text-sm text-neutral-800">
+                          {terminalTransitPlan.originTerminal.id === terminalTransitPlan.destinationTerminal.id ? (
+                            <>
+                              <div className="flex gap-3">
+                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ backgroundColor: olive }}>
+                                  1
+                                </span>
+                                <p>
+                                  <span className="font-semibold">{terminalTransitPlan.originTerminal.name}</span> is
+                                  the closest major terminal to both your area and {spot.name}. Open it below for
+                                  routes, gates, and reminders.
+                                </p>
+                              </div>
+                              <div className="flex gap-3">
+                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ backgroundColor: olive }}>
+                                  2
+                                </span>
+                                <p>
+                                  Ride toward {spot.name} (or its municipality), then use{' '}
+                                  <span className="font-semibold">Commute steps</span> or a tricycle for the last leg.
+                                </p>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="flex gap-3">
+                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ backgroundColor: olive }}>
+                                  1
+                                </span>
+                                <p>
+                                  Go to{' '}
+                                  <span className="font-semibold">{terminalTransitPlan.originTerminal.name}</span>
+                                  {` (~${haversineDistanceKm(userCoords.lat, userCoords.lng, terminalTransitPlan.originTerminal.latitude, terminalTransitPlan.originTerminal.longitude).toFixed(1)} km from your start) `}
+                                  to board jeepneys, buses, or vans toward the general direction of {spot.name}.
+                                </p>
+                              </div>
+                              <div className="flex gap-3">
+                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ backgroundColor: olive }}>
+                                  2
+                                </span>
+                                <p>
+                                  Stay on lines that serve{' '}
+                                  <span className="font-semibold">
+                                    {terminalTransitPlan.destinationTerminal.municipality}
+                                  </span>{' '}
+                                  or corridors leading to {spot.name}. Ask the driver or konduktor before boarding.
+                                </p>
+                              </div>
+                              <div className="flex gap-3">
+                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ backgroundColor: olive }}>
+                                  3
+                                </span>
+                                <p>
+                                  Alight near{' '}
+                                  <span className="font-semibold">{terminalTransitPlan.destinationTerminal.name}</span>
+                                  {` (~${haversineDistanceKm(spot.lat, spot.lng, terminalTransitPlan.destinationTerminal.latitude, terminalTransitPlan.destinationTerminal.longitude).toFixed(1)} km from ${spot.name})`}
+                                  , then follow <span className="font-semibold">Commute steps</span> or local rides to
+                                  the exact spot.
+                                </p>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ) : !userCoords ? (
+                        <p className="mt-3 text-xs text-amber-900">Turn on location to load terminal suggestions for this trip.</p>
+                      ) : terminalTransitLoading ? (
+                        <p className="mt-3 text-xs text-neutral-500">Loading terminals…</p>
+                      ) : (
+                        <p className="mt-3 text-xs text-neutral-600">
+                          No terminal match is available yet for this area. Try the Terminals tab or ask locally for the
+                          nearest jeepney or bus stop.
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="rounded-2xl border border-[rgba(31,79,89,0.15)] bg-[#f5faf8] p-4">
+                      <p className="text-sm font-bold text-[#1f4f59]">Terminals for this trip</p>
+                      <p className="mt-1 text-xs leading-relaxed text-neutral-600">
+                        Nearest terminal to you and nearest to {spot.name}.
+                      </p>
+                      {!userCoords ? (
+                        <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                          Allow location access to load terminals matched to you and this establishment.
+                        </p>
+                      ) : terminalTransitLoading ? (
+                        <p className="mt-3 text-xs text-neutral-500">Finding nearest terminals…</p>
+                      ) : terminalTransitPlan ? (
+                        <div
+                          className={`mt-3 grid gap-3 ${
+                            terminalTransitPlan.originTerminal.id === terminalTransitPlan.destinationTerminal.id
+                              ? 'grid-cols-1'
+                              : 'sm:grid-cols-2'
+                          }`}
+                        >
+                          {terminalTransitPlan.originTerminal.id === terminalTransitPlan.destinationTerminal.id ? (
+                            <Link
+                              to={`/terminals/${terminalTransitPlan.originTerminal.id}`}
+                              className="block rounded-xl border border-neutral-200 bg-white p-3 transition hover:border-[#7ea00e] hover:shadow-sm"
+                            >
+                              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#7ea00e]">
+                                Nearest terminal (you & destination)
+                              </p>
+                              <p className="mt-1 text-sm font-semibold text-neutral-900">
+                                {terminalTransitPlan.originTerminal.name}
+                              </p>
+                              <p className="mt-1 text-[11px] text-neutral-600">
+                                {terminalTransitPlan.originTerminal.municipality}
+                                {' · ~'}
+                                {haversineDistanceKm(
+                                  userCoords.lat,
+                                  userCoords.lng,
+                                  terminalTransitPlan.originTerminal.latitude,
+                                  terminalTransitPlan.originTerminal.longitude
+                                ).toFixed(1)}
+                                {' km from you · ~'}
+                                {haversineDistanceKm(
+                                  spot.lat,
+                                  spot.lng,
+                                  terminalTransitPlan.originTerminal.latitude,
+                                  terminalTransitPlan.originTerminal.longitude
+                                ).toFixed(1)}
+                                {` km from ${spot.name}`}
+                              </p>
+                              <p className="mt-2 text-xs font-semibold text-[#1f4f59]">Open terminal →</p>
+                            </Link>
+                          ) : (
+                            <>
+                              <Link
+                                to={`/terminals/${terminalTransitPlan.originTerminal.id}`}
+                                className="block rounded-xl border border-neutral-200 bg-white p-3 transition hover:border-[#7ea00e] hover:shadow-sm"
+                              >
+                                <p className="text-[10px] font-semibold uppercase tracking-wide text-[#7ea00e]">
+                                  Board near you
+                                </p>
+                                <p className="mt-1 text-sm font-semibold text-neutral-900">
+                                  {terminalTransitPlan.originTerminal.name}
+                                </p>
+                                <p className="mt-1 text-[11px] text-neutral-600">
+                                  {terminalTransitPlan.originTerminal.municipality}
+                                  {' · ~'}
+                                  {haversineDistanceKm(
+                                    userCoords.lat,
+                                    userCoords.lng,
+                                    terminalTransitPlan.originTerminal.latitude,
+                                    terminalTransitPlan.originTerminal.longitude
+                                  ).toFixed(1)}
+                                  {' km away'}
+                                </p>
+                                <p className="mt-2 text-xs font-semibold text-[#1f4f59]">Open terminal →</p>
+                              </Link>
+                              <Link
+                                to={`/terminals/${terminalTransitPlan.destinationTerminal.id}`}
+                                className="block rounded-xl border border-neutral-200 bg-white p-3 transition hover:border-[#7ea00e] hover:shadow-sm"
+                              >
+                                <p className="text-[10px] font-semibold uppercase tracking-wide text-[#7ea00e]">
+                                  Near {spot.name}
+                                </p>
+                                <p className="mt-1 text-sm font-semibold text-neutral-900">
+                                  {terminalTransitPlan.destinationTerminal.name}
+                                </p>
+                                <p className="mt-1 text-[11px] text-neutral-600">
+                                  {terminalTransitPlan.destinationTerminal.municipality}
+                                  {' · ~'}
+                                  {haversineDistanceKm(
+                                    spot.lat,
+                                    spot.lng,
+                                    terminalTransitPlan.destinationTerminal.latitude,
+                                    terminalTransitPlan.destinationTerminal.longitude
+                                  ).toFixed(1)}
+                                  {' km from destination'}
+                                </p>
+                                <p className="mt-2 text-xs font-semibold text-[#1f4f59]">Open terminal →</p>
+                              </Link>
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="mt-3 text-xs text-neutral-500">No terminal data for this area.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
                 <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)]">
                   <aside className="border-b border-neutral-200 bg-[#f8faf7] p-3.5 lg:border-b-0 lg:border-r">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Route options</p>
@@ -559,34 +1053,31 @@ export function PlaceDetailPage() {
                     </div>
 
                     <div className="mt-3 space-y-2.5">
-                      {routeOptions.map((route) => (
-                        <article
-                          key={route.id}
-                          className="rounded-xl border border-neutral-200 bg-white p-3"
-                        >
+                      {displayRoute ? (
+                        <article className="rounded-xl border border-neutral-200 bg-white p-3">
                           <div className="flex items-start justify-between gap-2">
                             <div>
-                              <p className="text-sm font-semibold text-neutral-900">{route.label}</p>
-                              <p className="text-[11px] text-neutral-500">{route.mode}</p>
+                              <p className="text-sm font-semibold text-neutral-900">{displayRoute.label}</p>
+                              <p className="text-[11px] text-neutral-500">{displayRoute.mode}</p>
                             </div>
-                            <span className={`mt-0.5 inline-block h-2.5 w-2.5 rounded-full ${route.accent}`} />
+                            <span className={`mt-0.5 inline-block h-2.5 w-2.5 rounded-full ${displayRoute.accent}`} />
                           </div>
                           <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
                             <div className="rounded-lg bg-neutral-50 px-2 py-1.5">
                               <p className="text-neutral-400">ETA</p>
-                              <p className="font-semibold text-neutral-700">{formatDuration(route.durationMin)}</p>
+                              <p className="font-semibold text-neutral-700">{formatDuration(displayRoute.durationMin)}</p>
                             </div>
                             <div className="rounded-lg bg-neutral-50 px-2 py-1.5">
                               <p className="text-neutral-400">Distance</p>
-                              <p className="font-semibold text-neutral-700">{route.distanceKm} km</p>
+                              <p className="font-semibold text-neutral-700">{displayRoute.distanceKm} km</p>
                             </div>
                             <div className="rounded-lg bg-neutral-50 px-2 py-1.5">
                               <p className="text-neutral-400">Traffic</p>
-                              <p className="font-semibold text-neutral-700">{route.traffic}</p>
+                              <p className="font-semibold text-neutral-700">{displayRoute.traffic}</p>
                             </div>
                           </div>
                         </article>
-                      ))}
+                      ) : null}
                     </div>
                   </aside>
 
@@ -595,10 +1086,13 @@ export function PlaceDetailPage() {
                       <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
                         <div>
                           <p className="text-sm font-semibold text-neutral-900">Tracking route to {spot.name}</p>
-                          <p className="text-[11px] text-neutral-500">{selectedRoute?.distanceKm ?? '--'} km • {formatDuration(selectedRoute?.durationMin ?? 0)}</p>
+                          <p className="text-[11px] text-neutral-500">{displayRoute?.distanceKm ?? '--'} km • {formatDuration(displayRoute?.durationMin ?? 0)}</p>
+                          <p className="mt-1 text-[10px] text-[#1d4ed8]">
+                            Map: road path from your location (driving, then walking if needed).
+                          </p>
                         </div>
                         <div className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-1 text-[11px] font-semibold text-neutral-600">
-                          <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: selectedRoute?.color ?? '#10b981' }} />
+                          <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: displayRoute?.color ?? '#10b981' }} />
                           Route active
                         </div>
                       </div>
@@ -607,8 +1101,8 @@ export function PlaceDetailPage() {
                         <RouteLeafletMap
                           start={userCoords}
                           end={{ lat: spot.lat, lng: spot.lng }}
-                          routeId={selectedRoute?.id ?? 'main-road'}
-                          lineColor={selectedRoute?.color ?? '#0ea5e9'}
+                          routeId={displayRoute?.id ?? 'main-road'}
+                          lineColor={displayRoute?.color ?? '#0ea5e9'}
                         />
                       </div>
                     </div>
@@ -618,7 +1112,7 @@ export function PlaceDetailPage() {
                         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Route timeline</p>
                         <div className="space-y-2.5">
                           {routeTimeline.map((step, idx) => (
-                            <div key={step.title} className="grid grid-cols-[18px_minmax(0,1fr)] items-start gap-2">
+                            <div key={`route-tl-${idx}-${step.title}`} className="grid grid-cols-[18px_minmax(0,1fr)] items-start gap-2">
                               <div className="relative mt-0.5">
                                 <span className={`block h-2.5 w-2.5 rounded-full ${idx === routeTimeline.length - 1 ? 'bg-neutral-900' : 'bg-sky-500'}`} />
                                 {idx < routeTimeline.length - 1 && <span className="absolute left-[4px] top-3 block h-6 w-[1.5px] bg-neutral-200" />}
@@ -633,6 +1127,7 @@ export function PlaceDetailPage() {
                       </div>
                     </div>
                   </div>
+                </div>
                 </div>
               </div>
             )}
@@ -660,6 +1155,38 @@ export function PlaceDetailPage() {
         </div>
       </main>
 
+      {fullMapOpen && spot?.lat != null && spot?.lng != null ? (
+        <div
+          className="fixed inset-0 z-[2000] flex flex-col bg-neutral-950/90 p-4 sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Full route map"
+        >
+          <div className="mb-3 flex shrink-0 items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-white">OSRM route — {spot.name}</p>
+            <button
+              type="button"
+              onClick={() => setFullMapOpen(false)}
+              className="rounded-lg border border-white/30 bg-white/10 px-3 py-2 text-sm font-semibold text-white hover:bg-white/20"
+            >
+              Close
+            </button>
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/20 bg-white shadow-lg">
+            <RouteLeafletMap
+              className="h-full min-h-[280px] w-full flex-1 sm:min-h-[420px]"
+              start={userCoords}
+              end={{ lat: spot.lat, lng: spot.lng }}
+              routeId={displayRoute?.id ?? 'main-road'}
+              lineColor={displayRoute?.color ?? '#0ea5e9'}
+            />
+          </div>
+          <p className="mt-3 shrink-0 text-center text-[11px] text-white/80">
+            Project OSRM + OpenStreetMap — same in-app routing as mobile (not Google Maps).
+          </p>
+        </div>
+      ) : null}
+
       {saveModalOpen && (
         <div
           className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/40 p-4"
@@ -667,17 +1194,37 @@ export function PlaceDetailPage() {
           aria-modal="true"
           aria-label="Save to list"
         >
-          <div className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-neutral-200 bg-white p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
             <h3 className="text-base font-semibold text-neutral-900">Save establishment</h3>
-            <p className="mt-1 text-sm text-neutral-500">Create a list name and this place will be saved there.</p>
-            <label className="mt-3 block text-xs font-semibold uppercase tracking-wide text-neutral-400">List name</label>
+            <p className="mt-1 text-sm text-neutral-500">Pick a list you already created, or type a new list name.</p>
+            {existingLists.length > 0 ? (
+              <div className="mt-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Your lists</p>
+                <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-lg border border-neutral-100 bg-neutral-50 p-2">
+                  {existingLists.map((l) => (
+                    <li key={l.id || l.name}>
+                      <button
+                        type="button"
+                        onClick={() => handleSaveToExistingList(l.id)}
+                        className="w-full rounded-md px-2 py-2 text-left text-sm font-medium text-neutral-800 transition hover:bg-white"
+                      >
+                        {l.name}
+                        <span className="ml-2 text-xs font-normal text-neutral-500">
+                          ({Array.isArray(l.items) ? l.items.length : 0} items)
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            <label className="mt-3 block text-xs font-semibold uppercase tracking-wide text-neutral-400">New list name</label>
             <input
               type="text"
               value={listNameDraft}
               onChange={(e) => setListNameDraft(e.target.value)}
               placeholder="My list"
               className="mt-1 h-10 w-full rounded-lg border border-neutral-200 px-3 text-sm outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(126,160,14,0.22)]"
-              autoFocus
             />
             <div className="mt-4 flex items-center justify-end gap-2">
               <button
@@ -693,7 +1240,7 @@ export function PlaceDetailPage() {
                 className="rounded-lg px-3.5 py-2 text-sm font-semibold text-white"
                 style={{ backgroundColor: olive }}
               >
-                Save to list
+                Save to new list
               </button>
             </div>
           </div>

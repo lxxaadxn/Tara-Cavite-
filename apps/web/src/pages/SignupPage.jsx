@@ -2,11 +2,21 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { LogoWordmark } from '../components/LogoWordmark';
+import { getAdminReservedEmailMessage, isAdminReservedEmail } from '../lib/adminReservedEmail';
 
 const MIN_PASSWORD_LENGTH = 8;
 const teal = 'var(--ct-teal)';
 const ink = 'var(--ct-ink)';
 const cream = 'var(--ct-cream)';
+
+function toFriendlySignupError(err) {
+  const message = err instanceof Error ? err.message : String(err || '');
+  const normalized = message.toLowerCase();
+  if (normalized.includes('user already registered') || normalized.includes('already exists')) {
+    return 'This email is already registered. Please log in instead. If you previously used Google, choose "Sign in with Google".';
+  }
+  return message || 'Sign up failed';
+}
 
 export function SignupPage() {
   const navigate = useNavigate();
@@ -14,6 +24,7 @@ export function SignupPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showGoogleConsent, setShowGoogleConsent] = useState(false);
   const [error, setError] = useState('');
 
   const handleGoogleAuth = async () => {
@@ -21,7 +32,7 @@ export function SignupPage() {
     setLoading(true);
     const { error: err } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/search` },
+      options: { redirectTo: `${window.location.origin}/auth/google` },
     });
     if (err) {
       setError(err.message || 'Google sign up failed');
@@ -33,9 +44,13 @@ export function SignupPage() {
     e.preventDefault();
     setError('');
 
-    const trimmedEmail = email.trim();
+    const trimmedEmail = email.trim().toLowerCase();
     if (!trimmedEmail || !password) {
       setError('Please fill in all required fields.');
+      return;
+    }
+    if (isAdminReservedEmail(trimmedEmail)) {
+      setError(getAdminReservedEmailMessage());
       return;
     }
 
@@ -62,7 +77,7 @@ export function SignupPage() {
         navigate('/login', { replace: true });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign up failed');
+      setError(toFriendlySignupError(err));
     } finally {
       setLoading(false);
     }
@@ -70,6 +85,45 @@ export function SignupPage() {
 
   return (
     <div className="min-h-screen px-4 py-6 font-['Inter',sans-serif] sm:px-8 sm:py-8" style={{ backgroundColor: cream }}>
+      {showGoogleConsent ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="google-signup-consent-title"
+          aria-describedby="google-signup-consent-desc"
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-[0_24px_60px_rgba(0,0,0,0.18)]">
+            <p id="google-signup-consent-title" className="text-base font-semibold text-neutral-900">
+              Sign up with Google
+            </p>
+            <p id="google-signup-consent-desc" className="mt-2 text-sm text-neutral-600">
+              Allow CaviTour to create or link your account with Google? You will be redirected to Google to continue.
+            </p>
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                className="h-10 flex-1 rounded-full border border-neutral-200 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50"
+                onClick={() => setShowGoogleConsent(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="h-10 flex-1 rounded-full text-sm font-semibold text-white transition"
+                style={{ backgroundColor: teal }}
+                onClick={() => {
+                  setShowGoogleConsent(false);
+                  void handleGoogleAuth();
+                }}
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="mx-auto grid w-full max-w-5xl overflow-hidden rounded-[1.7rem] bg-white p-3 shadow-[0_24px_60px_rgba(0,0,0,0.10)] sm:p-4 lg:grid-cols-[1fr_1.05fr] lg:gap-6">
         <div className="hidden lg:block">
           <div className="relative h-full min-h-[620px] overflow-hidden rounded-[1.2rem] bg-neutral-100">
@@ -154,7 +208,7 @@ export function SignupPage() {
             <div className="space-y-3">
               <button
                 type="button"
-                onClick={handleGoogleAuth}
+                onClick={() => setShowGoogleConsent(true)}
                 disabled={loading}
                 className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-neutral-100 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-200/70 disabled:opacity-60"
               >

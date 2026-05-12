@@ -1,11 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import {
-  CommonActions,
-  createNavigationContainerRef,
-  getFocusedRouteNameFromRoute,
-  NavigationContainer,
-} from '@react-navigation/native';
+import { getFocusedRouteNameFromRoute, NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import {
   useFonts,
@@ -20,16 +15,18 @@ import {
   Poppins_700Bold,
 } from '@expo-google-fonts/poppins';
 import * as SplashScreen from 'expo-splash-screen';
-import React, { useEffect, useRef, useState } from 'react';
+import * as Linking from 'expo-linking';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { createNavigationContainerRef } from '@react-navigation/native';
 
 import { JamIcon } from './components/JamIcon';
+import { AuthRecoveryProvider } from './context/AuthRecoveryContext';
 import { Colors } from './constants/Colors';
-import { LaunchAuthContext } from './contexts/LaunchAuthContext';
+import { applyPasswordRecoveryFromUrl, isPasswordRecoveryUrl } from './lib/authRecoveryDeepLink';
 import { isStoredSessionInvalidError } from './lib/authHelpers';
-import { getMainFloatingTabBarStyle } from './lib/mainTabBarStyle';
-import { supabase } from './lib/supabase';
+import { isSupabaseConfigured, supabase } from './lib/supabase';
 
 // Keep native splash (CaviTour logo) visible until app is ready
 SplashScreen.preventAutoHideAsync();
@@ -45,11 +42,12 @@ import MapCommuteDetailScreen from './screens/MapCommuteDetailScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
 import PlaceDetailScreen from './screens/PlaceDetailScreen';
 import AboutEstablishmentScreen from './screens/AboutEstablishmentScreen';
-import FullRouteMapScreen from './screens/FullRouteMapScreen';
 import PreferencesScreen from './screens/PreferencesScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import SavedListScreen from './screens/SavedListScreen';
 import SavedListDetailScreen from './screens/SavedListDetailScreen';
+import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
+import ResetPasswordScreen from './screens/ResetPasswordScreen';
 import SignInScreen from './screens/SignInScreen';
 import SignUpScreen from './screens/SignUpScreen';
 import TerminalDetailScreen from './screens/TerminalDetailScreen';
@@ -57,12 +55,15 @@ import TerminalsScreen from './screens/TerminalsScreen';
 import UserDetailsScreen from './screens/UserDetailsScreen';
 import NewListScreen from './screens/NewListScreen';
 import CreateItineraryScreen from './screens/CreateItineraryScreen';
-import ItineraryDetailScreen from './screens/ItineraryDetailScreen';
 import CategoriesScreen from './screens/CategoriesScreen';
+import ItineraryDetailScreen from './screens/ItineraryDetailScreen';
+import FullRouteMapScreen from './screens/FullRouteMapScreen';
 
 const Stack = createStackNavigator();
-const navigationRef = createNavigationContainerRef();
 const Tab = createBottomTabNavigator();
+const REQUIRE_SIGN_IN_ON_EACH_LAUNCH = true;
+
+const navigationRef = createNavigationContainerRef();
 
 // Auth Stack
 const AuthStack = () => (
@@ -74,8 +75,27 @@ const AuthStack = () => (
   >
     <Stack.Screen name="SignIn" component={SignInScreen} />
     <Stack.Screen name="SignUp" component={SignUpScreen} />
+    <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+    <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
   </Stack.Navigator>
 );
+
+/**
+ * Post-bundle startup (landing) → then sign-in. `stackKey` remounts this navigator so we never
+ * resume straight on Auth after sign-out or a stale navigation state.
+ */
+function UnauthedFlow({ stackKey }: { stackKey: number }) {
+  return (
+    <Stack.Navigator
+      key={stackKey}
+      screenOptions={{ headerShown: false }}
+      initialRouteName="Landing"
+    >
+      <Stack.Screen name="Landing" component={OnboardingScreen} />
+      <Stack.Screen name="Auth" component={AuthStack} />
+    </Stack.Navigator>
+  );
+}
 
 // Home Stack
 const DashboardStack = () => (
@@ -96,6 +116,7 @@ const DashboardStack = () => (
 const ItinerariesStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="ItinerariesMain" component={ItinerariesScreen} />
+    <Stack.Screen name="ItineraryDetail" component={ItineraryDetailScreen} />
     <Stack.Screen name="History" component={HistoryScreen} />
     <Stack.Screen name="Notifications" component={NotificationsScreen} />
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
@@ -104,7 +125,6 @@ const ItinerariesStack = () => (
     <Stack.Screen name="FullRouteMap" component={FullRouteMapScreen} />
     <Stack.Screen name="NewList" component={NewListScreen} />
     <Stack.Screen name="CreateItinerary" component={CreateItineraryScreen} />
-    <Stack.Screen name="ItineraryDetail" component={ItineraryDetailScreen} />
   </Stack.Navigator>
 );
 
@@ -136,10 +156,11 @@ const TerminalsStack = () => (
 const MapStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="MapMain" component={MapScreen} />
-    <Stack.Screen name="MapCommuteDetail" component={MapCommuteDetailScreen} />
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
     <Stack.Screen name="AboutEstablishment" component={AboutEstablishmentScreen} />
+    <Stack.Screen name="TerminalDetail" component={TerminalDetailScreen} />
     <Stack.Screen name="Directions" component={DirectionsScreen} />
+    <Stack.Screen name="MapCommuteDetail" component={MapCommuteDetailScreen} />
     <Stack.Screen name="FullRouteMap" component={FullRouteMapScreen} />
     <Stack.Screen name="Notifications" component={NotificationsScreen} />
   </Stack.Navigator>
@@ -148,7 +169,23 @@ const MapStack = () => (
 // Main Tabs Navigator (Figma: white pill bar, green active / teal inactive icons)
 function MainTabs() {
   const insets = useSafeAreaInsets();
-  const mainTabBarStyle = getMainFloatingTabBarStyle(insets.bottom);
+  const bottomPad = Math.max(insets.bottom, 10);
+  const mainTabBarStyle = {
+    position: 'absolute' as const,
+    left: 16,
+    right: 16,
+    bottom: bottomPad,
+    height: 64 + Math.min(insets.bottom, 8),
+    paddingTop: 8,
+    paddingBottom: Math.min(insets.bottom, 12) || 8,
+    borderRadius: 30,
+    backgroundColor: Colors.white,
+    borderTopWidth: 0,
+    borderWidth: 1,
+    borderColor: 'rgba(122, 120, 120, 0.5)',
+    elevation: 0,
+    shadowOpacity: 0,
+  };
 
   return (
     <Tab.Navigator
@@ -169,10 +206,15 @@ function MainTabs() {
         tabBarActiveTintColor: Colors.accent,
         tabBarInactiveTintColor: Colors.primary,
         headerShown: false,
-        tabBarShowLabel: false,
+        tabBarShowLabel: true,
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontFamily: 'Poppins_500Medium',
+          marginBottom: 2,
+        },
         tabBarStyle: mainTabBarStyle,
         tabBarItemStyle: {
-          height: 40,
+          height: 44,
         },
       })}
     >
@@ -184,11 +226,9 @@ function MainTabs() {
           const hideTab =
             focused === 'Notifications' ||
             focused === 'TerminalDetail' ||
-            focused === 'PlaceDetail' ||
-            focused === 'AboutEstablishment' ||
-            focused === 'Directions' ||
-            focused === 'FullRouteMap';
+            focused === 'Directions';
           return {
+            tabBarLabel: 'Home',
             tabBarStyle: hideTab ? { display: 'none' } : mainTabBarStyle,
           };
         }}
@@ -201,13 +241,11 @@ function MainTabs() {
           const hideTab =
             focused === 'Notifications' ||
             focused === 'PlaceDetail' ||
-            focused === 'AboutEstablishment' ||
             focused === 'Directions' ||
             focused === 'NewList' ||
-            focused === 'CreateItinerary' ||
-            focused === 'ItineraryDetail' ||
-            focused === 'History';
+            focused === 'CreateItinerary';
           return {
+            tabBarLabel: 'Itineraries',
             tabBarStyle: hideTab ? { display: 'none' } : mainTabBarStyle,
           };
         }}
@@ -220,11 +258,10 @@ function MainTabs() {
           const hideTab =
             focused === 'Notifications' ||
             focused === 'PlaceDetail' ||
-            focused === 'AboutEstablishment' ||
             focused === 'Directions' ||
-            focused === 'FullRouteMap' ||
-            focused === 'MapCommuteDetail';
+            focused === 'TerminalDetail';
           return {
+            tabBarLabel: 'Map',
             tabBarStyle: hideTab ? { display: 'none' } : mainTabBarStyle,
           };
         }}
@@ -234,11 +271,9 @@ function MainTabs() {
         component={TerminalsStack}
         options={({ route }) => {
           const focused = getFocusedRouteNameFromRoute(route) ?? 'TerminalsMain';
-          const hideTab =
-            focused === 'TerminalDetail' ||
-            focused === 'Directions' ||
-            focused === 'FullRouteMap';
+          const hideTab = focused === 'TerminalDetail' || focused === 'Directions';
           return {
+            tabBarLabel: 'Terminals',
             tabBarStyle: hideTab ? { display: 'none' } : mainTabBarStyle,
           };
         }}
@@ -248,16 +283,9 @@ function MainTabs() {
         component={ProfileStack}
         options={({ route }) => {
           const focused = getFocusedRouteNameFromRoute(route) ?? 'ProfileMain';
-          const hideTab =
-            focused === 'Notifications' ||
-            focused === 'UserDetails' ||
-            focused === 'History' ||
-            focused === 'SavedList' ||
-            focused === 'SavedListDetail' ||
-            focused === 'NewList' ||
-            focused === 'Preferences';
           return {
-            tabBarStyle: hideTab ? { display: 'none' } : mainTabBarStyle,
+            tabBarLabel: 'Profile',
+            tabBarStyle: focused === 'Notifications' ? { display: 'none' } : mainTabBarStyle,
           };
         }}
       />
@@ -290,27 +318,66 @@ export default function App() {
     Pacifico_400Regular,
   });
   const [authHydrated, setAuthHydrated] = useState(false);
-  const [navigationReady, setNavigationReady] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [unauthedStackKey, setUnauthedStackKey] = useState(0);
+  const [blockMainForRecovery, setBlockMainForRecovery] = useState(false);
   const didClearAuthRef = useRef(false);
-  /** After Welcome timer, allow auth listener to reset to Main (avoids skipping landing when session hydrates). */
-  const landingGatePassedRef = useRef(false);
-  /** Skip first post-ready effect so initial route stays Welcome; later auth flips reset Main / Auth. */
-  const skipInitialAuthNavRef = useRef(true);
+  const pendingRecoveryNavRef = useRef(false);
+
+  const navigateToRecoveryScreen = useCallback(() => {
+    requestAnimationFrame(() => {
+      if (navigationRef.isReady()) {
+        navigationRef.navigate('Unauthed' as never, {
+          screen: 'Auth',
+          params: { screen: 'ResetPassword' },
+        } as never);
+      }
+    });
+  }, []);
+
+  const endPasswordRecoveryFlow = useCallback(() => {
+    setBlockMainForRecovery(false);
+  }, []);
 
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
+    let interval: ReturnType<typeof setInterval> | undefined;
 
     const init = async () => {
+      let skipStartupSignOut = false;
+      try {
+        const initialUrl = await Linking.getInitialURL();
+        if (initialUrl && isPasswordRecoveryUrl(initialUrl)) {
+          setBlockMainForRecovery(true);
+          const ok = await applyPasswordRecoveryFromUrl(supabase, initialUrl);
+          if (ok) {
+            skipStartupSignOut = true;
+            pendingRecoveryNavRef.current = true;
+          }
+        }
+      } catch {
+        // Ignore invalid recovery URLs on cold start.
+      }
+
+      if (REQUIRE_SIGN_IN_ON_EACH_LAUNCH && isSupabaseConfigured && !skipStartupSignOut) {
+        try {
+          await supabase.auth.signOut();
+        } catch {
+          // Ignore startup cleanup errors; app will still route to auth flow.
+        }
+        await AsyncStorage.setItem('isAuthenticated', 'false');
+        setIsAuthenticated(false);
+        setUnauthedStackKey((k) => k + 1);
+      }
       await checkAuthStatus();
       setAuthHydrated(true);
-      interval = setInterval(() => {
-        checkAuthStatus();
-      }, 500);
+      if (isSupabaseConfigured) {
+        interval = setInterval(() => {
+          checkAuthStatus();
+        }, 500);
+      }
     };
 
-    init();
+    void init();
 
     return () => {
       if (interval) {
@@ -319,8 +386,28 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const sub = Linking.addEventListener('url', ({ url }) => {
+      if (!isPasswordRecoveryUrl(url)) {
+        return;
+      }
+      void (async () => {
+        setBlockMainForRecovery(true);
+        const ok = await applyPasswordRecoveryFromUrl(supabase, url);
+        if (ok) {
+          navigateToRecoveryScreen();
+        }
+      })();
+    });
+    return () => sub.remove();
+  }, [navigateToRecoveryScreen]);
+
   // Sync auth state with Supabase session (persisted across app restarts)
   useEffect(() => {
+    if (!isSupabaseConfigured) {
+      return;
+    }
+
     const updateAuthFromSession = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
@@ -356,6 +443,10 @@ export default function App() {
     updateAuthFromSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setBlockMainForRecovery(true);
+        navigateToRecoveryScreen();
+      }
       const isSignedIn = !!session;
       await AsyncStorage.setItem('isAuthenticated', isSignedIn ? 'true' : 'false');
       setIsAuthenticated(isSignedIn);
@@ -367,9 +458,14 @@ export default function App() {
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [navigateToRecoveryScreen]);
 
   const checkAuthStatus = async () => {
+    if (!isSupabaseConfigured) {
+      await AsyncStorage.setItem('isAuthenticated', 'false');
+      setIsAuthenticated(false);
+      return;
+    }
     try {
       const { data: { session }, error } = await supabase.auth.getSession();
       if (session) {
@@ -418,27 +514,6 @@ export default function App() {
     }
   }, [fontsLoaded, authHydrated]);
 
-  useEffect(() => {
-    if (!fontsLoaded || !authHydrated || !navigationReady) return;
-    if (!navigationRef.isReady()) return;
-    if (skipInitialAuthNavRef.current) {
-      skipInitialAuthNavRef.current = false;
-      return;
-    }
-    if (!isAuthenticated) {
-      navigationRef.dispatch(
-        CommonActions.reset({ index: 0, routes: [{ name: 'Auth' }] })
-      );
-      return;
-    }
-    if (!landingGatePassedRef.current) {
-      return;
-    }
-    navigationRef.dispatch(
-      CommonActions.reset({ index: 0, routes: [{ name: 'Main' }] })
-    );
-  }, [isAuthenticated, fontsLoaded, authHydrated, navigationReady]);
-
   if (!fontsLoaded) {
     return null;
   }
@@ -458,33 +533,32 @@ export default function App() {
     );
   }
 
+  const showMainTabs = isAuthenticated && !blockMainForRecovery;
+
+  // Logged out: Unauthed stack always starts on Landing, then Sign In. Logged in: main tabs.
   return (
     <SafeAreaProvider>
-      <LaunchAuthContext.Provider value={{ isAuthenticated }}>
+      <AuthRecoveryProvider endPasswordRecoveryFlow={endPasswordRecoveryFlow}>
         <NavigationContainer
           ref={navigationRef}
-          onReady={() => setNavigationReady(true)}
+          onReady={() => {
+            if (pendingRecoveryNavRef.current) {
+              navigateToRecoveryScreen();
+              pendingRecoveryNavRef.current = false;
+            }
+          }}
         >
-          <Stack.Navigator
-            initialRouteName="Welcome"
-            screenOptions={{ headerShown: false }}
-          >
-            <Stack.Screen name="Welcome">
-              {() => (
-                <OnboardingScreen
-                  onLandingTimerComplete={() => {
-                    landingGatePassedRef.current = true;
-                  }}
-                />
-              )}
-            </Stack.Screen>
-            <Stack.Screen name="Main" component={MainTabs} />
-            <Stack.Screen name="Auth" options={{ headerShown: false }}>
-              {() => <AuthStack key={unauthedStackKey} />}
-            </Stack.Screen>
+          <Stack.Navigator screenOptions={{ headerShown: false }}>
+            {!showMainTabs ? (
+              <Stack.Screen name="Unauthed" options={{ headerShown: false }}>
+                {() => <UnauthedFlow stackKey={unauthedStackKey} />}
+              </Stack.Screen>
+            ) : (
+              <Stack.Screen name="Main" component={MainTabs} />
+            )}
           </Stack.Navigator>
         </NavigationContainer>
-      </LaunchAuthContext.Provider>
+      </AuthRecoveryProvider>
     </SafeAreaProvider>
   );
 }

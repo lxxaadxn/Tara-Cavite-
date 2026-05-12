@@ -2,9 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { fetchAllPlacesFromSupabase, searchPlacesByText } from '../lib/placesFromSupabase';
+import { placePassesAppliedFilters, sortPlacesByModeWeb } from '../lib/placeFilterHelpers';
 import { AppHeader } from '../components/AppHeader';
 import { FilterModal } from '../components/FilterModal';
 import { PlacesLeafletMap } from '../components/PlacesLeafletMap';
+import { spots } from '../data/spots';
+import { formatNtdpCategoryTagLabel, getEstablishmentAboutBody } from '../lib/ntdpDisplayLabels';
 
 const PLACEHOLDER_IMG = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80';
 
@@ -59,6 +62,12 @@ function buildPlaceTags(place) {
   return Array.from(new Set(tags));
 }
 
+function displayHomeTagLabel(place, tag) {
+  const ntdp = extractNtdpTag(place);
+  if (ntdp && tag === ntdp) return formatNtdpCategoryTagLabel(tag);
+  return tag;
+}
+
 function sanitizeDescription(description) {
   if (!description) return '';
   return description
@@ -96,16 +105,35 @@ function formatDistance(distanceKm) {
   return `${distanceKm.toFixed(1)} km`;
 }
 
+function mapSpotToPlace(spot) {
+  return {
+    id: spot.id,
+    name: spot.name,
+    address: spot.address,
+    lat: spot.lat,
+    lng: spot.lng,
+    imageUrl: spot.image,
+    description: spot.description,
+    ntdp_category: Array.isArray(spot.tags) ? spot.tags[0] : null,
+    city_mun: (spot.address || '').split(',').slice(-1)[0]?.trim() || 'Cavite',
+    type: Array.isArray(spot.tags) ? spot.tags[0] : 'Place',
+  };
+}
+
 export function SearchPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  /** @type {import('../components/FilterModal').AppliedPlaceFilters | null} */
+  const [appliedFilters, setAppliedFilters] = useState(null);
   const [displayPlaces, setDisplayPlaces] = useState([]);
   const [allPlaces, setAllPlaces] = useState([]);
   const [selectedPlaceId, setSelectedPlaceId] = useState(null);
   const [dataSource, setDataSource] = useState('loading');
   const [userCoords, setUserCoords] = useState(null);
-  const [locationStatus, setLocationStatus] = useState('idle');
+  const [locationStatus, setLocationStatus] = useState(
+    typeof window !== 'undefined' && window.navigator?.geolocation ? 'locating' : 'unsupported'
+  );
   const trendingRef = useRef([]);
 
   useEffect(() => {
@@ -120,10 +148,11 @@ export function SearchPage() {
         setDataSource('supabase');
       } catch {
         if (cancelled) return;
-        trendingRef.current = [];
-        setAllPlaces([]);
-        setDisplayPlaces([]);
-        setDataSource('error');
+        const fallbackPlaces = spots.map(mapSpotToPlace);
+        trendingRef.current = fallbackPlaces;
+        setAllPlaces(fallbackPlaces);
+        setDisplayPlaces(fallbackPlaces);
+        setDataSource('fallback');
       }
     })();
     return () => {
@@ -132,13 +161,9 @@ export function SearchPage() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.navigator?.geolocation) {
-      setLocationStatus('unsupported');
-      return;
-    }
+    if (typeof window === 'undefined' || !window.navigator?.geolocation) return;
 
     let cancelled = false;
-    setLocationStatus('locating');
     window.navigator.geolocation.getCurrentPosition(
       (position) => {
         if (cancelled) return;
@@ -171,21 +196,41 @@ export function SearchPage() {
       return;
     }
     const t = setTimeout(() => {
-      searchPlacesByText(supabase, q, 1000)
-        .then((list) => setDisplayPlaces(list.length ? list : []))
-        .catch(() => {});
+      if (dataSource === 'supabase') {
+        searchPlacesByText(supabase, q, 1000)
+          .then((list) => setDisplayPlaces(list.length ? list : []))
+          .catch(() => {});
+        return;
+      }
+      const qLower = q.toLowerCase();
+      setDisplayPlaces(
+        trendingRef.current.filter((place) =>
+          `${place.name} ${place.address} ${place.city_mun ?? ''} ${place.ntdp_category ?? ''}`
+            .toLowerCase()
+            .includes(qLower)
+        )
+      );
     }, 380);
     return () => clearTimeout(t);
-  }, [search]);
+  }, [search, dataSource]);
+
+  const modalFilteredPlaces = useMemo(
+    () => displayPlaces.filter((p) => placePassesAppliedFilters(p, appliedFilters)),
+    [displayPlaces, appliedFilters]
+  );
 
   const filteredPlaces = useMemo(() => {
-    if (!userCoords) return displayPlaces;
-    return [...displayPlaces].sort((a, b) => {
-      const aDistance = haversineDistanceKm(userCoords.lat, userCoords.lng, a.lat, a.lng);
-      const bDistance = haversineDistanceKm(userCoords.lat, userCoords.lng, b.lat, b.lng);
-      return aDistance - bDistance;
-    });
-  }, [displayPlaces, userCoords]);
+    const sortMode = appliedFilters?.sortMode ?? '';
+    let list = sortPlacesByModeWeb(modalFilteredPlaces, sortMode);
+    if (!sortMode && userCoords) {
+      list = [...list].sort((a, b) => {
+        const aDistance = haversineDistanceKm(userCoords.lat, userCoords.lng, a.lat, a.lng);
+        const bDistance = haversineDistanceKm(userCoords.lat, userCoords.lng, b.lat, b.lng);
+        return aDistance - bDistance;
+      });
+    }
+    return list;
+  }, [modalFilteredPlaces, appliedFilters?.sortMode, userCoords]);
 
   const mapPlaces = useMemo(
     () => filteredPlaces.filter((p) => p.lat != null && p.lng != null),
@@ -200,31 +245,39 @@ export function SearchPage() {
     return distances;
   }, [filteredPlaces, userCoords]);
 
-  useEffect(() => {
-    if (!filteredPlaces.length) {
-      setSelectedPlaceId(null);
-      return;
-    }
-    if (selectedPlaceId && !filteredPlaces.some((p) => p.id === selectedPlaceId)) {
-      setSelectedPlaceId(null);
-    }
-  }, [filteredPlaces, selectedPlaceId]);
+  const effectiveSelectedPlaceId = useMemo(() => {
+    if (!selectedPlaceId) return null;
+    return filteredPlaces.some((p) => p.id === selectedPlaceId) ? selectedPlaceId : null;
+  }, [selectedPlaceId, filteredPlaces]);
 
-  const selectedPlace = filteredPlaces.find((p) => p.id === selectedPlaceId) ?? null;
+  const selectedPlace = filteredPlaces.find((p) => p.id === effectiveSelectedPlaceId) ?? null;
   const thumbnailPlaces = useMemo(
-    () => filteredPlaces.filter((p) => p.id !== selectedPlaceId),
-    [filteredPlaces, selectedPlaceId]
+    () => filteredPlaces.filter((p) => p.id !== effectiveSelectedPlaceId),
+    [filteredPlaces, effectiveSelectedPlaceId]
   );
   const selectedPlaceTags = useMemo(() => buildPlaceTags(selectedPlace), [selectedPlace]);
-  const selectedPlaceDescription = useMemo(
-    () => sanitizeDescription(selectedPlace?.description ?? ''),
-    [selectedPlace]
+  const selectedPlaceAboutBody = useMemo(() => {
+    if (!selectedPlace) return '';
+    return getEstablishmentAboutBody({
+      description: sanitizeDescription(selectedPlace.description ?? ''),
+      ntdp_category: selectedPlace.ntdp_category,
+      name: selectedPlace.name,
+      address: selectedPlace.address,
+    });
+  }, [selectedPlace]);
+  const selectedPlaceCardBlurb = useMemo(
+    () => (selectedPlaceAboutBody ? selectedPlaceAboutBody.replace(/\s+/g, ' ').trim() : ''),
+    [selectedPlaceAboutBody]
   );
   const selectedPlaceDistance = selectedPlace ? distanceByPlaceId.get(selectedPlace.id) : null;
 
   return (
     <div className="min-h-screen bg-[#efefec] font-['Inter',sans-serif] text-neutral-900">
       <AppHeader />
+
+      <div className="w-full px-3 pb-1 pt-3 sm:px-4 lg:px-8">
+        <h1 className="font-['Poppins',sans-serif] text-2xl font-bold text-neutral-900">Home</h1>
+      </div>
 
       <div className="w-full px-3 pb-2 pt-2.5 sm:px-4 lg:px-8">
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.45fr_1fr]">
@@ -317,16 +370,16 @@ export function SearchPage() {
                         key={tag}
                         className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-medium text-neutral-700"
                       >
-                        {tag}
+                        {displayHomeTagLabel(selectedPlace, tag)}
                       </span>
                     ))}
                   </div>
                 )}
-                {selectedPlaceDescription && (
+                {selectedPlaceCardBlurb ? (
                   <div className="mt-1.5 rounded-xl bg-neutral-50 px-2 py-1.5">
-                    <p className="text-xs leading-relaxed text-neutral-600 line-clamp-2">{selectedPlaceDescription}</p>
+                    <p className="text-xs leading-relaxed text-neutral-600 line-clamp-4">{selectedPlaceCardBlurb}</p>
                   </div>
-                )}
+                ) : null}
                 <div className="mt-2 flex items-center justify-end gap-2">
                   <button
                     type="button"
@@ -410,7 +463,7 @@ export function SearchPage() {
                     key={place.id}
                     onClick={() => setSelectedPlaceId(place.id)}
                     className={`flex h-full min-h-[234px] cursor-pointer flex-col overflow-hidden rounded-2xl border bg-white p-2 text-left transition ${
-                      selectedPlaceId === place.id ? 'border-neutral-900 shadow-md' : 'border-neutral-200'
+                      effectiveSelectedPlaceId === place.id ? 'border-neutral-900 shadow-md' : 'border-neutral-200'
                     }`}
                   >
                     <div className="overflow-hidden rounded-xl bg-neutral-100">
@@ -471,14 +524,19 @@ export function SearchPage() {
           </section>
         </div>
 
-        {dataSource === 'error' && (
+        {dataSource === 'fallback' && (
           <p className="mx-auto mt-3 max-w-3xl text-center text-xs text-amber-800">
-            Unable to load places from Supabase right now.
+            Supabase is currently unavailable. Showing local fallback places.
           </p>
         )}
       </div>
 
-      <FilterModal open={filtersOpen} onClose={() => setFiltersOpen(false)} places={allPlaces} />
+      <FilterModal
+        open={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        places={allPlaces}
+        onApply={(f) => setAppliedFilters(f)}
+      />
     </div>
   );
 }

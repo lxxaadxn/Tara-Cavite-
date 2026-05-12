@@ -2,11 +2,21 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { LogoWordmark } from '../components/LogoWordmark';
+import { getAdminReservedEmailMessage, isAdminReservedEmail } from '../lib/adminReservedEmail';
 
 const olive = 'var(--ct-olive)';
 const teal = 'var(--ct-teal)';
 const ink = 'var(--ct-ink)';
 const cream = 'var(--ct-cream)';
+
+function toFriendlyLoginError(err) {
+  const message = err instanceof Error ? err.message : String(err || '');
+  const normalized = message.toLowerCase();
+  if (normalized.includes('invalid login credentials')) {
+    return 'Email or password is incorrect. If this account was created with Google, use "Sign in with Google" or reset your password.';
+  }
+  return message || 'Sign in failed';
+}
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -14,27 +24,35 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [googleAuthInProgress, setGoogleAuthInProgress] = useState(false);
+  const [showGoogleConsent, setShowGoogleConsent] = useState(false);
   const [error, setError] = useState('');
 
   const handleGoogleAuth = async () => {
     setError('');
     setLoading(true);
+    setGoogleAuthInProgress(true);
     const { error: err } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/search` },
+      options: { redirectTo: `${window.location.origin}/auth/google` },
     });
     if (err) {
       setError(err.message || 'Google sign in failed');
       setLoading(false);
+      setGoogleAuthInProgress(false);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    const trimmedEmail = email.trim();
+    const trimmedEmail = email.trim().toLowerCase();
     if (!trimmedEmail || !password) {
       setError('Please enter your email and password.');
+      return;
+    }
+    if (isAdminReservedEmail(trimmedEmail)) {
+      setError(getAdminReservedEmailMessage());
       return;
     }
 
@@ -47,7 +65,7 @@ export function LoginPage() {
       if (err) throw err;
       navigate('/search', { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign in failed');
+      setError(toFriendlyLoginError(err));
     } finally {
       setLoading(false);
     }
@@ -55,6 +73,55 @@ export function LoginPage() {
 
   return (
     <div className="min-h-screen px-4 py-6 font-['Inter',sans-serif] sm:px-8 sm:py-8" style={{ backgroundColor: cream }}>
+      {showGoogleConsent ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="google-consent-title"
+          aria-describedby="google-consent-desc"
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-[0_24px_60px_rgba(0,0,0,0.18)]">
+            <p id="google-consent-title" className="text-base font-semibold text-neutral-900">
+              Sign in with Google
+            </p>
+            <p id="google-consent-desc" className="mt-2 text-sm text-neutral-600">
+              Allow CaviTour to sign you in with Google? You will be redirected to Google to continue.
+            </p>
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                className="h-10 flex-1 rounded-full border border-neutral-200 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50"
+                onClick={() => setShowGoogleConsent(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="h-10 flex-1 rounded-full text-sm font-semibold text-white transition"
+                style={{ backgroundColor: teal }}
+                onClick={() => {
+                  setShowGoogleConsent(false);
+                  void handleGoogleAuth();
+                }}
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {googleAuthInProgress ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 text-center shadow-[0_24px_60px_rgba(0,0,0,0.18)]">
+            <div className="mx-auto mb-3 h-9 w-9 animate-spin rounded-full border-2 border-neutral-300 border-t-[var(--ct-teal)]" />
+            <p className="text-base font-semibold text-neutral-900">Authenticating with Google</p>
+            <p className="mt-1 text-sm text-neutral-600">Please continue in the Google sign-in window.</p>
+          </div>
+        </div>
+      ) : null}
+
       <div className="mx-auto grid w-full max-w-5xl overflow-hidden rounded-[1.7rem] bg-white p-3 shadow-[0_24px_60px_rgba(0,0,0,0.10)] sm:p-4 lg:grid-cols-[1fr_1.05fr] lg:gap-6">
         <div className="hidden lg:block">
           <div className="relative h-full min-h-[620px] overflow-hidden rounded-[1.2rem] bg-neutral-100">
@@ -115,7 +182,7 @@ export function LoginPage() {
                   />
                   Remember login
                 </label>
-                <Link to="#" className="font-medium hover:underline" style={{ color: teal }}>
+                <Link to="/forgot-password" className="font-medium hover:underline" style={{ color: teal }}>
                   Forgot Password?
                 </Link>
               </div>
@@ -141,7 +208,7 @@ export function LoginPage() {
             <div className="space-y-3">
               <button
                 type="button"
-                onClick={handleGoogleAuth}
+                onClick={() => setShowGoogleConsent(true)}
                 disabled={loading}
                 className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-neutral-100 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-200/70 disabled:opacity-60"
               >

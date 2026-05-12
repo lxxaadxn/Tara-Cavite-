@@ -4,10 +4,13 @@ import { supabase } from './lib/supabase';
 import { LandingPageClean } from './pages/LandingPageClean';
 import { LoginPage } from './pages/LoginPage';
 import { SignupPage } from './pages/SignupPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { PrototypeTitlePage } from './pages/PrototypeTitlePage';
 import { PrototypeStartupFeaturesPage } from './pages/PrototypeStartupFeaturesPage';
 import { PrototypeSignInPage } from './pages/PrototypeSignInPage';
 import { PrototypeSignUpPage } from './pages/PrototypeSignUpPage';
+import { GoogleAuthProcessingPage } from './pages/GoogleAuthProcessingPage';
 import { SearchPage } from './pages/SearchPage';
 import { PlaceDetailPage } from './pages/PlaceDetailPage';
 import { SavedPage } from './pages/SavedPage';
@@ -38,10 +41,13 @@ export default function App() {
         <Route path="/" element={<LandingPageClean />}/>
         <Route path="/login" element={<LoginPage />}/>
         <Route path="/signup" element={<SignupPage />}/>
+        <Route path="/forgot-password" element={<ForgotPasswordPage />}/>
+        <Route path="/reset-password" element={<ResetPasswordPage />}/>
         <Route path="/prototype/title" element={<PrototypeTitlePage />}/>
         <Route path="/prototype/startup" element={<PrototypeStartupFeaturesPage />}/>
         <Route path="/prototype/sign-in" element={<PrototypeSignInPage />}/>
         <Route path="/prototype/sign-up" element={<PrototypeSignUpPage />}/>
+        <Route path="/auth/google" element={<GoogleAuthProcessingPage />}/>
         <Route path="/search" element={<ProtectedRoute>
               <SearchPage />
             </ProtectedRoute>}/>

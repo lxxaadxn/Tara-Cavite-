@@ -1,9 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AppHeader } from '../components/AppHeader';
+import { TerminalsLeafletMap } from '../components/TerminalsLeafletMap';
 import { pitxGallery } from '../data/terminalPitx';
+import { supabase } from '../lib/supabase';
+import { fetchTerminalsFromSupabase } from '../lib/terminalsFromSupabase';
 
-const terminals = [
+const FALLBACK_TERMINALS = [
   {
     id: 'pitx',
     name: 'PITX',
@@ -54,23 +57,98 @@ const terminals = [
   },
 ];
 
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const toR = (d) => (d * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toR(lat2 - lat1);
+  const dLng = toR(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toR(lat1)) * Math.cos(toR(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 export function TerminalsPage() {
-  const [selectedTerminalId, setSelectedTerminalId] = useState(terminals[0].id);
+  const [terminals, setTerminals] = useState(FALLBACK_TERMINALS);
+  const [selectedTerminalId, setSelectedTerminalId] = useState(FALLBACK_TERMINALS[0].id);
   const [search, setSearch] = useState('');
+  const [userCoords, setUserCoords] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const live = await fetchTerminalsFromSupabase(supabase);
+        if (!cancelled && live.length > 0) {
+          setTerminals(live);
+          setSelectedTerminalId((prev) => (live.some((terminal) => terminal.id === prev) ? prev : live[0].id));
+        }
+      } catch {
+        if (!cancelled) setTerminals(FALLBACK_TERMINALS);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.navigator?.geolocation) return;
+    let cancelled = false;
+    window.navigator.geolocation.getCurrentPosition(
+      (position) => {
+        if (cancelled) return;
+        setUserCoords({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+      },
+      () => {},
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const filteredTerminals = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return terminals;
-    return terminals.filter(
-      (terminal) =>
-        `${terminal.name} ${terminal.subtitle} ${terminal.city}`.toLowerCase().includes(q)
-    );
-  }, [search]);
+    let list = !q
+      ? terminals
+      : terminals.filter((terminal) =>
+          `${terminal.name} ${terminal.subtitle} ${terminal.city}`.toLowerCase().includes(q)
+        );
+    if (
+      userCoords &&
+      list.every((t) => t.lat != null && t.lng != null && Number.isFinite(t.lat) && Number.isFinite(t.lng))
+    ) {
+      list = [...list].sort(
+        (a, b) =>
+          haversineKm(userCoords.lat, userCoords.lng, a.lat, a.lng) -
+          haversineKm(userCoords.lat, userCoords.lng, b.lat, b.lng)
+      );
+    }
+    return list;
+  }, [search, terminals, userCoords]);
 
   const selectedTerminal =
-    filteredTerminals.find((terminal) => terminal.id === selectedTerminalId) ?? filteredTerminals[0] ?? terminals[0];
+    filteredTerminals.find((terminal) => terminal.id === selectedTerminalId) ??
+    filteredTerminals[0] ??
+    terminals[0];
 
-  const mapSrc = `https://www.openstreetmap.org/export/embed.html?bbox=${selectedTerminal.lng - 0.08}%2C${selectedTerminal.lat - 0.06}%2C${selectedTerminal.lng + 0.08}%2C${selectedTerminal.lat + 0.06}&layer=mapnik&marker=${selectedTerminal.lat}%2C${selectedTerminal.lng}`;
+  const mapMarkers = useMemo(
+    () =>
+      filteredTerminals
+        .filter((t) => t.lat != null && t.lng != null && Number.isFinite(t.lat) && Number.isFinite(t.lng))
+        .map((t) => ({ id: String(t.id), name: t.name, lat: t.lat, lng: t.lng })),
+    [filteredTerminals]
+  );
+
+  const distanceLine =
+    userCoords && selectedTerminal?.lat != null && selectedTerminal?.lng != null
+      ? haversineKm(userCoords.lat, userCoords.lng, selectedTerminal.lat, selectedTerminal.lng).toFixed(1)
+      : null;
 
   return (
     <div className="min-h-screen bg-[#eef1ec] font-['Inter',sans-serif]">
@@ -82,7 +160,11 @@ export function TerminalsPage() {
             <section className="border-b border-neutral-200 bg-[#f8faf7] p-4 lg:border-b-0 lg:border-r">
               <div className="mb-3">
                 <h1 className="font-['Poppins',sans-serif] text-2xl font-bold text-neutral-900">Terminals</h1>
-                <p className="text-xs text-neutral-500">Track major transport hubs and nearby routes.</p>
+                <p className="text-xs text-neutral-500">
+                  {userCoords
+                    ? 'Sorted by distance from your location. Green dots on the map are terminals; a pin appears for your selection.'
+                    : 'Track major transport hubs. Allow location to sort by what’s nearest you.'}
+                </p>
               </div>
 
               <div className="rounded-xl border border-neutral-200 bg-white px-3 py-2.5">
@@ -105,56 +187,69 @@ export function TerminalsPage() {
               </p>
 
               <div className="mt-2.5 space-y-2 overflow-y-auto pr-1 lg:max-h-[63vh]">
-                {filteredTerminals.map((terminal) => (
-                  <button
-                    key={terminal.id}
-                    type="button"
-                    onClick={() => setSelectedTerminalId(terminal.id)}
-                    className={`w-full rounded-xl border p-3 text-left transition ${
-                      selectedTerminal.id === terminal.id
-                        ? 'border-[#95bb23] bg-white shadow-[0_8px_20px_rgba(126,160,14,0.18)]'
-                        : 'border-neutral-200 bg-white hover:shadow-sm'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-semibold text-neutral-900">{terminal.name}</p>
-                      <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold text-neutral-600">
-                        {terminal.status}
-                      </span>
-                    </div>
-                    <p className="mt-0.5 text-xs text-neutral-500">{terminal.subtitle}</p>
-                    <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
-                      <div className="rounded-lg bg-neutral-50 px-2 py-1.5">
-                        <p className="text-neutral-400">City</p>
-                        <p className="font-semibold text-neutral-700">{terminal.city}</p>
+                {filteredTerminals.map((terminal) => {
+                  const dist =
+                    userCoords && terminal.lat != null && terminal.lng != null
+                      ? haversineKm(userCoords.lat, userCoords.lng, terminal.lat, terminal.lng).toFixed(1)
+                      : null;
+                  return (
+                    <button
+                      key={terminal.id}
+                      type="button"
+                      onClick={() => setSelectedTerminalId(terminal.id)}
+                      className={`w-full rounded-xl border p-3 text-left transition ${
+                        selectedTerminal.id === terminal.id
+                          ? 'border-[#95bb23] bg-white shadow-[0_8px_20px_rgba(126,160,14,0.18)]'
+                          : 'border-neutral-200 bg-white hover:shadow-sm'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-semibold text-neutral-900">{terminal.name}</p>
+                        <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold text-neutral-600">
+                          {terminal.status}
+                        </span>
                       </div>
-                      <div className="rounded-lg bg-neutral-50 px-2 py-1.5">
-                        <p className="text-neutral-400">Routes</p>
-                        <p className="font-semibold text-neutral-700">{terminal.routes}</p>
+                      <p className="mt-0.5 text-xs text-neutral-500">{terminal.subtitle}</p>
+                      {dist != null ? (
+                        <p className="mt-1 text-[11px] font-medium text-[#1f4f59]">~{dist} km from you</p>
+                      ) : null}
+                      <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+                        <div className="rounded-lg bg-neutral-50 px-2 py-1.5">
+                          <p className="text-neutral-400">City</p>
+                          <p className="font-semibold text-neutral-700">{terminal.city}</p>
+                        </div>
+                        <div className="rounded-lg bg-neutral-50 px-2 py-1.5">
+                          <p className="text-neutral-400">Routes</p>
+                          <p className="font-semibold text-neutral-700">{terminal.routes}</p>
+                        </div>
                       </div>
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  );
+                })}
               </div>
             </section>
 
             <section className="relative p-3">
-              <div className="relative overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100">
-                <iframe
-                  title={`${selectedTerminal.name} map`}
-                  src={mapSrc}
-                  className="h-[82vh] min-h-[560px] w-full border-0"
+              <div className="relative h-[82vh] min-h-[560px] overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100">
+                <TerminalsLeafletMap
+                  terminals={mapMarkers}
+                  selectedId={selectedTerminalId != null ? String(selectedTerminalId) : null}
+                  userLocation={userCoords}
+                  onSelectTerminal={(id) => setSelectedTerminalId(id)}
                 />
-                <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/80 to-transparent" />
+                <div className="pointer-events-none absolute inset-x-0 top-0 z-[400] h-24 bg-gradient-to-b from-white/80 to-transparent" />
               </div>
 
-              <article className="absolute left-7 top-7 max-w-[340px] rounded-2xl border border-neutral-200 bg-white/95 p-3 shadow-[0_12px_30px_rgba(0,0,0,0.15)] backdrop-blur-sm">
+              <article className="pointer-events-auto absolute left-7 top-7 z-[500] max-w-[340px] rounded-2xl border border-neutral-200 bg-white/95 p-3 shadow-[0_12px_30px_rgba(0,0,0,0.15)] backdrop-blur-sm">
                 <div className="overflow-hidden rounded-xl bg-neutral-100">
                   <img src={selectedTerminal.image} alt={selectedTerminal.name} className="h-28 w-full object-cover" />
                 </div>
                 <div className="mt-2.5">
                   <p className="font-['Poppins',sans-serif] text-lg font-semibold text-neutral-900">{selectedTerminal.name}</p>
                   <p className="mt-0.5 text-xs text-neutral-500">{selectedTerminal.subtitle}</p>
+                  {distanceLine != null ? (
+                    <p className="mt-2 text-xs font-medium text-[#1f4f59]">About {distanceLine} km from your location</p>
+                  ) : null}
                   <p className="mt-2 text-xs leading-relaxed text-neutral-600">{selectedTerminal.blurb}</p>
                   <Link
                     to={`/terminals/${selectedTerminal.id}`}
@@ -168,7 +263,6 @@ export function TerminalsPage() {
           </div>
         </div>
       </div>
-
     </div>
   );
 }

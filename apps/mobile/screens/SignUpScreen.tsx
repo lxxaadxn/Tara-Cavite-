@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Alert,
   View,
   Text,
   StyleSheet,
@@ -16,15 +17,29 @@ import { FontAwesome, Ionicons } from '@expo/vector-icons';
 import { JamIcon } from '../components/JamIcon';
 import { Colors } from '../constants/theme';
 import { Button } from '../components/Button';
-import { supabase } from '../lib/supabase';
+import {
+  isSupabaseConfigured,
+  SUPABASE_ENV_MISSING_MESSAGE,
+  supabase,
+} from '../lib/supabase';
 import { withAuthRetry, isNetworkErrorMsg, NETWORK_ERROR_USER_MESSAGE } from '../lib/authHelpers';
+import { signInWithGoogleMobile } from '../lib/googleAuth';
+import { getAdminReservedEmailMessage, isAdminReservedEmail } from '../lib/adminReservedEmail';
 
 const TURQUOISE = '#54C0CC';
 const MUTED = '#7A7878';
 const LINE = 'rgba(122, 120, 120, 0.45)';
 
 const MIN_PASSWORD_LENGTH = 6;
-const hasUppercase = (str: string) => /[A-Z]/.test(str);
+
+function toFriendlySignupError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  const normalized = message.toLowerCase();
+  if (normalized.includes('user already registered') || normalized.includes('already exists')) {
+    return 'This email is already registered. Log in instead, or use Google sign in if you first created the account with Google.';
+  }
+  return message || 'Sign up failed.';
+}
 
 const SignUpScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
@@ -38,7 +53,11 @@ const SignUpScreen: React.FC = () => {
 
   const handleSignUp = async () => {
     setFormError(null);
-    const trimmedEmail = email.trim();
+    if (!isSupabaseConfigured) {
+      setFormError(SUPABASE_ENV_MISSING_MESSAGE);
+      return;
+    }
+    const trimmedEmail = email.trim().toLowerCase();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     setConfirmPasswordError('');
 
@@ -50,15 +69,12 @@ const SignUpScreen: React.FC = () => {
       setFormError('Please enter a valid email address.');
       return;
     }
-    const trimmedUsername = trimmedEmail.split('@')[0];
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      setFormError(
-        'Password must be at least 6 characters and contain at least one uppercase letter.'
-      );
+    if (isAdminReservedEmail(trimmedEmail)) {
+      setFormError(getAdminReservedEmailMessage());
       return;
     }
-    if (!hasUppercase(password)) {
-      setFormError('Password must contain at least one uppercase letter.');
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setFormError('Password must be at least 6 characters.');
       return;
     }
     if (password !== confirmPassword) {
@@ -71,7 +87,6 @@ const SignUpScreen: React.FC = () => {
         supabase.auth.signUp({
           email: trimmedEmail,
           password,
-          options: { data: { username: trimmedUsername } },
         })
       );
       if (error) throw error;
@@ -86,13 +101,43 @@ const SignUpScreen: React.FC = () => {
     } catch (error: unknown) {
       const message = isNetworkErrorMsg(error)
         ? NETWORK_ERROR_USER_MESSAGE
-        : error instanceof Error
-          ? error.message
-          : String(error);
+        : toFriendlySignupError(error);
       setFormError(message);
     } finally {
       setLoading(false);
     }
+  };
+
+  const runGoogleSignUp = async () => {
+    setLoading(true);
+    try {
+      await signInWithGoogleMobile();
+      await AsyncStorage.setItem('isAuthenticated', 'true');
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'Google sign up failed. Please try again.';
+      setFormError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignUp = () => {
+    setFormError(null);
+    if (!isSupabaseConfigured) {
+      setFormError(SUPABASE_ENV_MISSING_MESSAGE);
+      return;
+    }
+    Alert.alert(
+      'Sign up with Google',
+      'Allow CaviTour to create or link your account with Google? You will continue in the Google sign-in window.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Continue', onPress: () => void runGoogleSignUp() },
+      ]
+    );
   };
 
   return (
@@ -221,7 +266,7 @@ const SignUpScreen: React.FC = () => {
                   <TouchableOpacity
                     style={styles.socialBtn}
                     accessibilityLabel="Sign up with Google"
-                    onPress={() => {}}
+                    onPress={handleGoogleSignUp}
                   >
                     <JamIcon ionicon="logo-google" size={22} color={Colors.primary} />
                   </TouchableOpacity>

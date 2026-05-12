@@ -1,36 +1,22 @@
-import React, { useContext, useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { StackActions, useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/theme';
-import { LaunchAuthContext } from '../contexts/LaunchAuthContext';
 
 /** Slightly longer than before so the landing is easier to read */
 const LANDING_MS = 3200;
 
-type OnboardingScreenProps = {
-  /** Fires right before navigating away from Welcome; used by App so session hydration does not skip landing. */
-  onLandingTimerComplete?: () => void;
-};
-
 /**
- * Brief CaviTour landing — wordmark matches dashboard Header; then Main (signed in) or sign-in.
- * Root stack: Welcome → Main | Auth (see App.tsx).
+ * Brief CaviTour landing — wordmark matches dashboard Header; then navigates to sign-in.
+ * Shown on every app launch while logged out (no AsyncStorage flag — see App Unauthed stack).
  */
-const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
-  onLandingTimerComplete,
-}) => {
+const OnboardingScreen: React.FC = () => {
   const navigation = useNavigation();
-  const { isAuthenticated } = useContext(LaunchAuthContext);
-  const authedRef = useRef(isAuthenticated);
-  authedRef.current = isAuthenticated;
-  const onTimerCompleteRef = useRef(onLandingTimerComplete);
-  onTimerCompleteRef.current = onLandingTimerComplete;
 
   useEffect(() => {
     const t = setTimeout(() => {
-      onTimerCompleteRef.current?.();
-      navigation.replace(authedRef.current ? 'Main' : 'Auth');
+      navigation.dispatch(StackActions.replace('Auth'));
     }, LANDING_MS);
     return () => clearTimeout(t);
   }, [navigation]);
