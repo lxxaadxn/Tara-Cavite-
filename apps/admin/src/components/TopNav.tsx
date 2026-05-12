@@ -21,7 +21,7 @@ export function TopNav() {
   const [searchQuery, setSearchQuery] = useState('');
   const profileRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
-  const { path, platform } = useAdminPlatform();
+  const { platform } = useAdminPlatform();
   const { signOut, session } = useAuth();
   const avatarLabel = navInitials(session?.user?.email);
 
@@ -38,7 +38,7 @@ export function TopNav() {
       <div className={styles.logo} aria-label="CaviTour Admin">
         <img src="/cavitour-logo.png" alt="" className={styles.logoMark} />
         <span className={styles.logoAdmin}>Admin</span>
-        <span className={styles.platformBadge}>{platform === 'web' ? 'Web' : 'Mobile'}</span>
+        <span className={styles.platformBadge}>{platform === 'mobile' ? 'Mobile' : 'Web'}</span>
       </div>
       <div className={styles.search}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -47,7 +47,7 @@ export function TopNav() {
         </svg>
         <input
           type="search"
-          placeholder="Search tourist spots, routes..."
+          placeholder="Search destinations, users…"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
@@ -68,10 +68,9 @@ export function TopNav() {
               <path d="m6 9 6 6 6-6" />
             </svg>
           </button>
-          {profileOpen && (
+            {profileOpen && (
             <div className={styles.dropdown}>
-              <button onClick={() => { setProfileOpen(false); navigate(path('profile')); }}>Profile</button>
-              <button onClick={() => { setProfileOpen(false); navigate(path('settings')); }}>Settings</button>
+              <button type="button" onClick={() => { setProfileOpen(false); navigate('/web/settings'); }}>Settings</button>
               <button
                 type="button"
                 onClick={async () => {

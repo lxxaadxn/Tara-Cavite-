@@ -19,6 +19,39 @@
   color: var(--text-secondary);
 }
 
+.scopeRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 900px) {
+  .scopeRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+.scopeCard {
+  background: var(--bg);
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.scopeCard h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.scopeCard p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
 .statsRow {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -254,4 +287,43 @@
 .badgePending {
   background: rgba(234, 179, 8, 0.3);
   color: #b45309;
+}
+
+.reviewPolicy {
+  margin-top: 24px;
+}
+
+.reviewPolicy h3 {
+  margin: 0 0 12px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.reviewPolicy p {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.reviewPolicy p:last-child {
+  margin-bottom: 0;
+}
+
+.code {
+  font-size: 13px;
+  background: var(--bg);
+  padding: 2px 6px;
+  border-radius: 6px;
+  color: var(--text);
+}
+
+.muted {
+  font-size: 13px !important;
+  color: var(--text-secondary) !important;
+}
+
+.analyticsSection {
+  margin-top: 32px;
+  scroll-margin-top: 24px;
 }

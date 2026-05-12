@@ -1,27 +1,42 @@
+import { useEffect } from 'react';
 import { stats, recentActivity } from '../data/mockData';
-import { useAdminPlatform } from '../hooks/useAdminPlatform';
+import { AnalyticsSection } from '../components/AnalyticsSection';
 import styles from './Dashboard.module.css';
 
 export function Dashboard() {
-  const { platform } = useAdminPlatform();
-  const scope =
-    platform === 'web'
-      ? 'Web app, marketing site, and public search experience.'
-      : 'Mobile app: Map, itineraries, saved lists, and commuters.';
+  useEffect(() => {
+    if (window.location.hash === '#analytics') {
+      requestAnimationFrame(() => {
+        document.getElementById('analytics')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+  }, []);
 
   return (
     <div className={styles.page}>
       <div className={styles.header}>
         <h1>Dashboard</h1>
         <p>
-          Welcome back! {scope}
+          Combined view for the public web experience and the mobile app. Destinations, terminals, and users are managed
+          from one place; mobile-only tools stay in the sidebar under &quot;Mobile app&quot;.
         </p>
+      </div>
+
+      <div className={styles.scopeRow}>
+        <div className={styles.scopeCard}>
+          <h3>Web</h3>
+          <p>Search, place detail, marketing pages, and the web map pull from destinations and terminals you publish here.</p>
+        </div>
+        <div className={styles.scopeCard}>
+          <h3>Mobile</h3>
+          <p>Itineraries, saved lists, commute map, and push content are configured under Mobile app in the sidebar.</p>
+        </div>
       </div>
 
       <div className={styles.statsRow}>
         <div className={styles.statCard}>
           <div className={styles.statContent}>
-            <span className={styles.statLabel}>Total Tourist Spots</span>
+            <span className={styles.statLabel}>Destinations</span>
             <span className={styles.statValue}>{stats.touristSpots}</span>
             <span className={styles.statGrowth}>+{stats.spotsGrowth}%</span>
           </div>
@@ -34,7 +49,7 @@ export function Dashboard() {
         </div>
         <div className={styles.statCard}>
           <div className={styles.statContent}>
-            <span className={styles.statLabel}>Total Routes</span>
+            <span className={styles.statLabel}>Transit routes (system)</span>
             <span className={styles.statValue}>{stats.routes}</span>
             <span className={styles.statGrowth}>+{stats.routesGrowth}%</span>
           </div>
@@ -48,7 +63,7 @@ export function Dashboard() {
         </div>
         <div className={styles.statCard}>
           <div className={styles.statContent}>
-            <span className={styles.statLabel}>Active Users</span>
+            <span className={styles.statLabel}>Active users</span>
             <span className={styles.statValue}>{stats.activeUsers.toLocaleString()}</span>
             <span className={styles.statGrowth}>+{stats.usersGrowth}%</span>
           </div>
@@ -63,7 +78,7 @@ export function Dashboard() {
         </div>
         <div className={styles.statCard}>
           <div className={styles.statContent}>
-            <span className={styles.statLabel}>Most Visited Spot</span>
+            <span className={styles.statLabel}>Most visited spot</span>
             <span className={styles.statValue}>{stats.mostVisited.name}</span>
             <span className={styles.statMeta}>{stats.mostVisited.visits.toLocaleString()} visits</span>
           </div>
@@ -78,14 +93,14 @@ export function Dashboard() {
       <div className={styles.grid}>
         <div className={styles.card}>
           <div className={styles.cardHeader}>
-            <h3>Tourist Spots Map</h3>
+            <h3>Tourist spots map</h3>
             <div className={styles.cardActions}>
-              <button className={styles.iconBtn} title="Filter">
+              <button className={styles.iconBtn} type="button" title="Filter">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
                 </svg>
               </button>
-              <select className={styles.select}>
+              <select className={styles.select} aria-label="City filter">
                 <option>All Cities</option>
                 <option>Cavite</option>
                 <option>Batangas</option>
@@ -109,7 +124,7 @@ export function Dashboard() {
         </div>
 
         <div className={styles.card}>
-          <h3>Recent Activity</h3>
+          <h3>Recent activity</h3>
           <div className={styles.activityList}>
             {recentActivity.map((item) => (
               <div key={item.id} className={styles.activityItem}>
@@ -129,6 +144,25 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      <div className={`${styles.card} ${styles.reviewPolicy}`}>
+        <h3>Reviews &amp; visibility</h3>
+        <p>
+          Public reviews are filtered before they appear in the app or on the web. Low star ratings, abusive language, and
+          clearly malicious posts are withheld automatically using an AI-assisted sentiment check (with a safe fallback when
+          no model key is configured). Wire <code className={styles.code}>shouldPublishReview</code> from{' '}
+          <code className={styles.code}>src/lib/reviewSentiment.ts</code> into your reviews API so hidden items never reach
+          clients.
+        </p>
+        <p className={styles.muted}>
+          Optional: set <code className={styles.code}>VITE_OPENAI_API_KEY</code> for chat-based classification in this admin
+          build (not recommended for production; use a backend secret instead).
+        </p>
+      </div>
+
+      <section id="analytics" className={styles.analyticsSection}>
+        <AnalyticsSection />
+      </section>
     </div>
   );
 }
