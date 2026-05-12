@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Place } from '../data/mockData';
+import { enrichPlaceWithLocalEstablishmentMedia } from './establishmentLocalImages';
 import { normalizeNtdpCopy } from './ntdpDisplayLabels';
 
 export type CavitePlaceRow = {
@@ -85,7 +86,7 @@ export function rowToPlace(row: CavitePlaceRow): Place | null {
   if (row.type_code) p.type_code = row.type_code;
   if (row.ta_category) p.ta_category = row.ta_category;
   if (row.lgu_slug) p.lgu_slug = row.lgu_slug;
-  return p;
+  return enrichPlaceWithLocalEstablishmentMedia(p);
 }
 
 function sanitizeSearchToken(raw: string): string {
