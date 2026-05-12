@@ -1,6 +1,8 @@
 /**
  * Cavite STA-v3 establishments via unified view `v_cavite_establishments`.
  */
+import { enrichPlaceWithLocalEstablishmentMedia } from './establishmentLocalImages';
+
 const CAVITE_SELECT =
   'id, name, ta_name, type_code, ta_category, ntdp_category, city_mun, address, latitude, longitude, description, searchable_text, created_at, lgu_slug';
 
@@ -15,7 +17,7 @@ export function rowToPlace(row) {
   const lat = parseCoord(row.latitude);
   const lng = parseCoord(row.longitude);
   if (lat == null || lng == null) return null;
-  return {
+  return enrichPlaceWithLocalEstablishmentMedia({
     id: row.id,
     name: row.name ?? row.ta_name,
     address: row.address ?? '',
@@ -31,7 +33,7 @@ export function rowToPlace(row) {
     ta_category: row.ta_category ?? null,
     type_code: row.type_code ?? null,
     created_at: row.created_at ?? null,
-  };
+  });
 }
 
 function sanitizeSearchToken(raw) {

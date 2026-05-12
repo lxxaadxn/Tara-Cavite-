@@ -11,6 +11,8 @@ export interface Place {
   latitude: number;
   longitude: number;
   image?: any; // For require() statements or URI strings
+  /** Extra bundled photos (see `establishmentLocalImages.ts`) */
+  gallery?: any[];
   /** Shown on home cards (Figma) */
   rating?: string;
   /** From Supabase / LGU STA inventory */

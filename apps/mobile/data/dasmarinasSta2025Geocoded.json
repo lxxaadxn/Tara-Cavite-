@@ -408,10 +408,10 @@
     "geocodeFallback": "barangay centroid + offset (Sampaloc III)"
   },
   {
-    "slug": "eml-management-corporation",
-    "name": "EML Management Corporation",
+    "slug": "eml-events-place",
+    "name": "EML Events Place",
     "barangay": "Zone IV",
-    "address": "EML Management Corporation, Zone IV, Dasmariñas, Cavite, Philippines",
+    "address": "EML Events Place, Zone IV, Dasmariñas, Cavite, Philippines",
     "taCategory": "Resort Complex",
     "ntdpCategory": "Leisure and Entertainment Tourism",
     "hours": "Contact venue",
