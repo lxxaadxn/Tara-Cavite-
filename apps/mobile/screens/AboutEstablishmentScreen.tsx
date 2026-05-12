@@ -383,6 +383,26 @@ export default function AboutEstablishmentScreen() {
           )}
         </View>
 
+        {place.gallery && place.gallery.length > 1 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.galleryStrip}
+            contentContainerStyle={styles.galleryStripContent}
+            accessibilityLabel="More photos"
+          >
+            {place.gallery.slice(1).map((src, i) => (
+              <Image
+                key={`g-${i}`}
+                source={src}
+                style={styles.galleryThumb}
+                resizeMode="cover"
+                accessibilityLabel={`${place.name} photo ${i + 2}`}
+              />
+            ))}
+          </ScrollView>
+        ) : null}
+
         <Text style={styles.placeName}>{place.name}</Text>
 
         <View style={styles.tagsAndActionsRow}>
@@ -536,6 +556,21 @@ const styles = StyleSheet.create({
   heroPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  galleryStrip: {
+    marginBottom: 12,
+  },
+  galleryStripContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: 4,
+  },
+  galleryThumb: {
+    width: 128,
+    height: 86,
+    borderRadius: 12,
+    backgroundColor: '#E8E8E8',
+    marginRight: 10,
   },
   placeName: {
     fontFamily: 'Poppins_500Medium',

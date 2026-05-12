@@ -1,6 +1,7 @@
 /**
  * Cavite STA-v3 establishments via unified view `v_cavite_establishments`.
  */
+import { enrichPlaceWithLocalEstablishmentMedia } from './establishmentLocalImages';
 
 /** Great-circle distance in kilometers (WGS84 approximate). */
 export function haversineDistanceKm(lat1, lon1, lat2, lon2) {
@@ -29,7 +30,7 @@ export function rowToPlace(row) {
   const lat = parseCoord(row.latitude);
   const lng = parseCoord(row.longitude);
   if (lat == null || lng == null) return null;
-  return {
+  return enrichPlaceWithLocalEstablishmentMedia({
     id: row.id,
     name: row.name ?? row.ta_name,
     address: row.address ?? '',
@@ -46,7 +47,7 @@ export function rowToPlace(row) {
     type_code: row.type_code ?? null,
     created_at: row.created_at ?? null,
     searchable_text: row.searchable_text ?? null,
-  };
+  });
 }
 
 function sanitizeSearchToken(raw) {

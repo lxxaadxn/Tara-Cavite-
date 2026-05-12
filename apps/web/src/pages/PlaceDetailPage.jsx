@@ -281,6 +281,7 @@ export function PlaceDetailPage() {
             lat: p.lat,
             lng: p.lng,
             image: p.imageUrl || PLACEHOLDER_IMG,
+            galleryUrls: p.galleryUrls,
             tags: [p.ntdp_category].filter(Boolean).slice(0, 6),
             description: p.description || `${p.name} — ${p.address}.`,
             subtitle: p.ntdp_category
@@ -326,6 +327,15 @@ export function PlaceDetailPage() {
     'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&q=80',
     'https://images.unsplash.com/photo-1559925393-8be0ec4767c8?w=400&q=80',
   ];
+
+  const detailThumbs = useMemo(() => {
+    if (!spot) return [extras[0], extras[1], PLACEHOLDER_IMG];
+    if (spot.galleryUrls?.length > 1) {
+      const t = spot.galleryUrls.slice(1, 4);
+      return [0, 1, 2].map((i) => t[i] ?? spot.image);
+    }
+    return [extras[0], extras[1], spot.image];
+  }, [spot]);
 
   const reviewBreakdown = [
     { label: 'Five', pct: 72, count: '989' },
@@ -522,7 +532,7 @@ export function PlaceDetailPage() {
                 <img src={spot.image} alt={spot.name} className="h-[300px] w-full object-cover sm:h-[420px]" />
               </div>
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-1">
-                {[extras[0], extras[1], spot.image].map((img, i) => (
+                {detailThumbs.map((img, i) => (
                   <div key={`${img}-${i}`} className="rounded-xl overflow-hidden">
                     <img src={img} alt="" className="h-28 w-full object-cover sm:h-[132px]" />
                   </div>
