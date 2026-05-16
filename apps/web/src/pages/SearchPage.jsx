@@ -275,11 +275,7 @@ export function SearchPage() {
     <div className="min-h-screen bg-[#efefec] font-['Inter',sans-serif] text-neutral-900">
       <AppHeader />
 
-      <div className="w-full px-3 pb-1 pt-3 sm:px-4 lg:px-8">
-        <h1 className="font-['Poppins',sans-serif] text-2xl font-bold text-neutral-900">Home</h1>
-      </div>
-
-      <div className="w-full px-3 pb-2 pt-2.5 sm:px-4 lg:px-8">
+      <div className="w-full px-3 pb-2 pt-3 sm:px-4 lg:px-8">
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.45fr_1fr]">
           <section className="relative min-h-[62vh] overflow-hidden rounded-[20px] border border-neutral-200 bg-[#e8ebe6] shadow-[0_10px_28px_rgba(0,0,0,0.08)] lg:sticky lg:top-[86px] lg:self-start lg:min-h-[calc(100vh-102px)]">
             <PlacesLeafletMap
@@ -383,7 +379,7 @@ export function SearchPage() {
                 <div className="mt-2 flex items-center justify-end gap-2">
                   <button
                     type="button"
-                    onClick={() => navigate(`/place/${selectedPlace.id}?tab=route`)}
+                    onClick={() => navigate(`/place/${selectedPlace.id}`)}
                     className="rounded-xl border border-neutral-300 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
                   >
                     Directions

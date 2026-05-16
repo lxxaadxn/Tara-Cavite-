@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminPlatform } from '../hooks/useAdminPlatform';
 import { useAuth } from '../contexts/AuthContext';
+import { useAdminPathPrefix } from '../contexts/AdminPathPrefixContext';
 import styles from './TopNav.module.css';
 
 function navInitials(email: string | undefined): string {
@@ -21,6 +22,7 @@ export function TopNav() {
   const [searchQuery, setSearchQuery] = useState('');
   const profileRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const routePrefix = useAdminPathPrefix();
   const { path, platform } = useAdminPlatform();
   const { signOut, session } = useAuth();
   const avatarLabel = navInitials(session?.user?.email);
@@ -77,6 +79,11 @@ export function TopNav() {
                 onClick={async () => {
                   setProfileOpen(false);
                   await signOut();
+                  // Full navigation avoids AdminAuthGate racing to /admin/login after session clears.
+                  if (routePrefix) {
+                    window.location.replace('/');
+                    return;
+                  }
                   navigate('/login', { replace: true });
                 }}
               >

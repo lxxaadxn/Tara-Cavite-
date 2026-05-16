@@ -2,10 +2,12 @@ import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ADMIN_ALLOWED_EMAIL, isAllowedAdminEmail } from '../lib/adminEmail';
 import { supabase } from '../lib/supabase';
+import { useAdminHref } from '../contexts/AdminPathPrefixContext';
 import styles from './LoginPage.module.css';
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const dashboardHref = useAdminHref('/web/dashboard');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -31,7 +33,7 @@ export function LoginPage() {
         password,
       });
       if (err) throw err;
-      navigate('/web/dashboard', { replace: true });
+      navigate(dashboardHref, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign in failed.');
     } finally {

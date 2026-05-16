@@ -74,7 +74,8 @@ export const publishedItineraries = [
         title: 'Heritage & Horizons Trail',
         subtitle: 'Imus -> Kawit -> Noveleta',
         route: 'Imus - Kawit - Noveleta',
-        image: 'https://images.unsplash.com/photo-1566127444979-b3d2b82cce7f?w=600&q=80',
+        image:
+            'https://images.unsplash.com/photo-1523906834658-6e24ef2386f9?w=800&h=600&fit=crop&q=80',
         stops: 4,
         durationLabel: 'Full day',
         tags: ['Culture', 'Museums'],

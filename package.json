@@ -2,7 +2,7 @@
   "name": "cavitour",
   "private": true,
   "version": "1.0.0",
-  "description": "CaviTour monorepo — mobile (Expo), marketing web (Vite), admin (Vite)",
+  "description": "CaviTour monorepo — mobile (Expo), marketing web + embedded admin at /admin (Vite), optional standalone admin on :3001",
   "workspaces": [
     "apps/*"
   ],

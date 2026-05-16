@@ -173,7 +173,7 @@ export function SavedPage() {
 
                         <div className="px-1 pb-1 pt-2.5">
                           {card.establishmentTag && (
-                            <p className="mb-1.5 inline-flex rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[11px] font-medium text-neutral-600">
+                            <p className="mb-1.5 inline-flex rounded-full border border-neutral-200 bg-white px-2 py-0.5 text-[10px] font-normal text-neutral-600">
                               {card.establishmentTag}
                             </p>
                           )}

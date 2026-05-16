@@ -1,4 +1,5 @@
 import { Link, NavLink, useLocation } from 'react-router-dom';
+import { useAdminHref, useAdminPathPrefix } from '../contexts/AdminPathPrefixContext';
 import type { AdminPlatform } from '../hooks/useAdminPlatform';
 import styles from './Sidebar.module.css';
 
@@ -159,24 +160,29 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { pathname } = useLocation();
+  const routePrefix = useAdminPathPrefix();
+  const hrefWebDashboard = useAdminHref('/web/dashboard');
+  const hrefMobileDashboard = useAdminHref('/mobile/dashboard');
   const platform = platformFromPath(pathname);
   const base = platform === 'mobile' ? '/mobile' : '/web';
   const items = platform === 'mobile' ? MOBILE_NAV : WEB_NAV;
+  const webTabActive = pathname.includes('/web');
+  const mobileTabActive = pathname.includes('/mobile');
 
   return (
     <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''}`}>
       <div className={styles.platformTabs} role="tablist" aria-label="Admin platform">
         <Link
-          to="/web/dashboard"
-          className={`${styles.platformTab} ${pathname.startsWith('/web') ? styles.platformTabActive : ''}`}
+          to={hrefWebDashboard}
+          className={`${styles.platformTab} ${webTabActive ? styles.platformTabActive : ''}`}
           title="Web app admin"
         >
           <span className={styles.platformIcon}>{icons.monitor}</span>
           {!collapsed && <span>Web</span>}
         </Link>
         <Link
-          to="/mobile/dashboard"
-          className={`${styles.platformTab} ${pathname.startsWith('/mobile') ? styles.platformTabActive : ''}`}
+          to={hrefMobileDashboard}
+          className={`${styles.platformTab} ${mobileTabActive ? styles.platformTabActive : ''}`}
           title="Mobile app admin"
         >
           <span className={styles.platformIcon}>{icons.phone}</span>
@@ -192,7 +198,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {items.map((item) => (
           <NavLink
             key={item.segment}
-            to={`${base}/${item.segment}`}
+            to={`${routePrefix}${base}/${item.segment}`}
             className={({ isActive }) => (isActive ? `${styles.link} ${styles.active}` : styles.link)}
           >
             <span className={styles.icon}>{icons[item.icon]}</span>

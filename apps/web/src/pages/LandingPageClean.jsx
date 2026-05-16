@@ -130,7 +130,6 @@ export function LandingPageClean() {
             <LogoWordmark className="text-base" />
           </Link>
           <nav className="hidden items-center gap-6 pl-4 text-sm font-medium text-neutral-600 lg:flex">
-            <a href="#top" className="transition-colors hover:text-neutral-900">Home</a>
             <a href="#destinations" className="transition-colors hover:text-neutral-900">Top Destinations</a>
             <a href="#itineraries" className="transition-colors hover:text-neutral-900">Itineraries</a>
             <a href="#features" className="transition-colors hover:text-neutral-900">Why CaviTour</a>
@@ -279,7 +278,6 @@ export function LandingPageClean() {
             <p className="mt-1 text-xs text-neutral-500">Sleek travel planning for Cavite explorers.</p>
           </div>
           <nav className="flex flex-wrap items-center justify-center gap-4 text-sm text-neutral-600">
-            <a href="#top" className="hover:text-neutral-900">Home</a>
             <a href="#destinations" className="hover:text-neutral-900">Top Destinations</a>
             <a href="#itineraries" className="hover:text-neutral-900">Itineraries</a>
             <a href="#features" className="hover:text-neutral-900">Why CaviTour</a>

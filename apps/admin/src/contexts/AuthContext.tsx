@@ -20,9 +20,16 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 async function normalizeSession(session: Session | null): Promise<Session | null> {
-  const email = session?.user?.email;
+  if (!session) return null;
+
+  let email = session.user?.email?.trim().toLowerCase() ?? '';
+  if (!email) {
+    const { data } = await supabase.auth.getUser();
+    email = data.user?.email?.trim().toLowerCase() ?? '';
+  }
+
   if (!email || !isAllowedAdminEmail(email)) {
-    if (session) await supabase.auth.signOut();
+    await supabase.auth.signOut();
     return null;
   }
   return session;

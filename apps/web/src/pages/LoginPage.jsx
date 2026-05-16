@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { LogoWordmark } from '../components/LogoWordmark';
-import { getAdminReservedEmailMessage, isAdminReservedEmail } from '../lib/adminReservedEmail';
+import { isAdminReservedEmail } from '../lib/adminReservedEmail';
+import { ADMIN_APP_HOME_PATH } from '../lib/adminPortalPath';
 
 const olive = 'var(--ct-olive)';
 const teal = 'var(--ct-teal)';
@@ -51,10 +52,6 @@ export function LoginPage() {
       setError('Please enter your email and password.');
       return;
     }
-    if (isAdminReservedEmail(trimmedEmail)) {
-      setError(getAdminReservedEmailMessage());
-      return;
-    }
 
     setLoading(true);
     try {
@@ -63,7 +60,12 @@ export function LoginPage() {
         password,
       });
       if (err) throw err;
-      navigate('/search', { replace: true });
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setError('Signed in but session was not ready. Please try again.');
+        return;
+      }
+      navigate(isAdminReservedEmail(trimmedEmail) ? ADMIN_APP_HOME_PATH : '/search', { replace: true });
     } catch (err) {
       setError(toFriendlyLoginError(err));
     } finally {
