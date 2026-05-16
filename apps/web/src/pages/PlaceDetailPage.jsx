@@ -363,6 +363,7 @@ export function PlaceDetailPage() {
             lat: p.lat,
             lng: p.lng,
             image: p.imageUrl || PLACEHOLDER_IMG,
+            galleryUrls: p.galleryUrls,
             tags: [p.ntdp_category].filter(Boolean).slice(0, 6),
             description: p.description || `${p.name} — ${p.address}.`,
             subtitle: p.ntdp_category
@@ -432,6 +433,35 @@ export function PlaceDetailPage() {
     return [...sessionReviews, ...dummyReviews].sort((a, b) => b.at - a.at);
   }, [dummyReviews, sessionReviews]);
 
+  const detailThumbs = useMemo(() => {
+    if (!spot) return [extras[0], extras[1], PLACEHOLDER_IMG];
+    if (spot.galleryUrls?.length > 1) {
+      const t = spot.galleryUrls.slice(1, 4);
+      return [0, 1, 2].map((i) => t[i] ?? spot.image);
+    }
+    return [extras[0], extras[1], spot.image];
+  }, [spot]);
+
+  const relatedPlaces = useMemo(
+    () =>
+      relatedPlacesRaw
+        .filter((s) => s.id !== spot?.id)
+        .sort((a, b) => {
+          if (!spot) return 0;
+          const aDist = haversineDistanceKm(spot.lat, spot.lng, a.lat, a.lng);
+          const bDist = haversineDistanceKm(spot.lat, spot.lng, b.lat, b.lng);
+          return aDist - bDist;
+        })
+        .slice(0, 5)
+        .map((s) => ({
+          id: s.id,
+          name: s.name,
+          location: s.city_mun ?? cleanPlaceAddress(s.name, s.address),
+          image: s.imageUrl || PLACEHOLDER_IMG,
+          price: estimatePrice(s.id),
+        })),
+    [relatedPlacesRaw, spot]
+  );
   const routeOptions = useMemo(() => {
     if (!spot) return [];
     const seed = numericSeed(spot.id, 84);
@@ -578,7 +608,7 @@ export function PlaceDetailPage() {
                 <img src={spot.image} alt={spot.name} className="h-[250px] w-full object-cover sm:h-[360px]" />
               </div>
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-1">
-                {[extras[0], extras[1], spot.image].map((img, i) => (
+                {detailThumbs.map((img, i) => (
                   <div key={`${img}-${i}`} className="rounded-xl overflow-hidden">
                     <img src={img} alt="" className="h-24 w-full object-cover sm:h-[114px]" />
                   </div>

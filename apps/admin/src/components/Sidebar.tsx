@@ -1,36 +1,24 @@
-import { Link, NavLink, useLocation } from 'react-router-dom';
-import { useAdminHref, useAdminPathPrefix } from '../contexts/AdminPathPrefixContext';
-import type { AdminPlatform } from '../hooks/useAdminPlatform';
+import { NavLink } from 'react-router-dom';
+import { useAdminHref } from '../contexts/AdminPathPrefixContext';
 import styles from './Sidebar.module.css';
 
-type NavItem = { segment: string; icon: string; label: string };
+type NavItem = { to: string; icon: string; label: string };
 
-const WEB_NAV: NavItem[] = [
-  { segment: 'dashboard', icon: 'dashboard', label: 'Dashboard' },
-  { segment: 'tourist-spots', icon: 'pin', label: 'Tourist Spots' },
-  { segment: 'terminals', icon: 'bus', label: 'Terminals' },
-  { segment: 'routes', icon: 'route', label: 'Routes' },
-  { segment: 'content', icon: 'document', label: 'Content & SEO' },
-  { segment: 'moderation', icon: 'shield', label: 'Reviews' },
-  { segment: 'users', icon: 'users', label: 'Users' },
-  { segment: 'analytics', icon: 'chart', label: 'Analytics' },
-  { segment: 'profile', icon: 'user', label: 'Profile' },
-  { segment: 'settings', icon: 'gear', label: 'Settings' },
+const MAIN_NAV: NavItem[] = [
+  { to: '/web/dashboard', icon: 'dashboard', label: 'Dashboard' },
+  { to: '/web/destinations', icon: 'pin', label: 'Destinations' },
+  { to: '/web/terminals', icon: 'bus', label: 'Terminals' },
+  { to: '/web/users', icon: 'users', label: 'Users' },
+  { to: '/web/settings', icon: 'gear', label: 'Settings' },
 ];
 
 const MOBILE_NAV: NavItem[] = [
-  { segment: 'dashboard', icon: 'dashboard', label: 'Dashboard' },
-  { segment: 'tourist-spots', icon: 'pin', label: 'Places / POI' },
-  { segment: 'itineraries', icon: 'calendar', label: 'Itineraries' },
-  { segment: 'saved-lists', icon: 'bookmark', label: 'Saved lists' },
-  { segment: 'map-commute', icon: 'map', label: 'Map & commute' },
-  { segment: 'notifications', icon: 'bell', label: 'Push notifications' },
-  { segment: 'app-releases', icon: 'package', label: 'App releases' },
-  { segment: 'onboarding', icon: 'sparkle', label: 'Onboarding' },
-  { segment: 'users', icon: 'users', label: 'Users' },
-  { segment: 'analytics', icon: 'chart', label: 'Analytics' },
-  { segment: 'profile', icon: 'user', label: 'Profile' },
-  { segment: 'settings', icon: 'gear', label: 'Settings' },
+  { to: '/mobile/itineraries', icon: 'calendar', label: 'Itineraries' },
+  { to: '/mobile/saved-lists', icon: 'bookmark', label: 'Saved lists' },
+  { to: '/mobile/map-commute', icon: 'map', label: 'Map & commute' },
+  { to: '/mobile/notifications', icon: 'bell', label: 'Push notifications' },
+  { to: '/mobile/app-releases', icon: 'package', label: 'App releases' },
+  { to: '/mobile/onboarding', icon: 'sparkle', label: 'Onboarding' },
 ];
 
 const icons: Record<string, React.ReactNode> = {
@@ -55,24 +43,6 @@ const icons: Record<string, React.ReactNode> = {
       <path d="M8 18v2M16 18v2" />
     </svg>
   ),
-  route: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="6" cy="6" r="3" />
-      <circle cx="18" cy="18" r="3" />
-      <path d="M9 9l6 6" strokeDasharray="2 2" />
-    </svg>
-  ),
-  document: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />
-    </svg>
-  ),
-  shield: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-    </svg>
-  ),
   users: (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -81,23 +51,10 @@ const icons: Record<string, React.ReactNode> = {
       <path d="M16 3.13a4 4 0 0 1 0 7.75" />
     </svg>
   ),
-  chart: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <line x1="18" y1="20" x2="18" y2="10" />
-      <line x1="12" y1="20" x2="12" y2="4" />
-      <line x1="6" y1="20" x2="6" y2="14" />
-    </svg>
-  ),
   gear: (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-    </svg>
-  ),
-  user: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
     </svg>
   ),
   calendar: (
@@ -135,76 +92,45 @@ const icons: Record<string, React.ReactNode> = {
       <path d="m12 3-1.9 5.8H4l4.95 3.6-1.9 5.8L12 14.6l4.95 3.6-1.9-5.8L20 8.8h-6.1L12 3z" />
     </svg>
   ),
-  monitor: (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <rect x="2" y="3" width="20" height="14" rx="2" />
-      <path d="M8 21h8M12 17v4" />
-    </svg>
-  ),
-  phone: (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <rect x="5" y="2" width="14" height="20" rx="2" />
-      <path d="M12 18h.01" />
-    </svg>
-  ),
 };
-
-function platformFromPath(pathname: string): AdminPlatform {
-  return pathname.startsWith('/mobile') ? 'mobile' : 'web';
-}
 
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
 }
 
-export function Sidebar({ collapsed, onToggle }: SidebarProps) {
-  const { pathname } = useLocation();
-  const routePrefix = useAdminPathPrefix();
-  const hrefWebDashboard = useAdminHref('/web/dashboard');
-  const hrefMobileDashboard = useAdminHref('/mobile/dashboard');
-  const platform = platformFromPath(pathname);
-  const base = platform === 'mobile' ? '/mobile' : '/web';
-  const items = platform === 'mobile' ? MOBILE_NAV : WEB_NAV;
-  const webTabActive = pathname.includes('/web');
-  const mobileTabActive = pathname.includes('/mobile');
+function NavItems({ items, collapsed }: { items: NavItem[]; collapsed: boolean }) {
+  const href = useAdminHref;
+  return (
+    <>
+      {items.map((item) => (
+        <NavLink
+          key={item.to}
+          to={href(item.to)}
+          className={({ isActive }) => (isActive ? `${styles.link} ${styles.active}` : styles.link)}
+        >
+          <span className={styles.icon}>{icons[item.icon]}</span>
+          {!collapsed && <span>{item.label}</span>}
+        </NavLink>
+      ))}
+    </>
+  );
+}
 
+export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''}`}>
-      <div className={styles.platformTabs} role="tablist" aria-label="Admin platform">
-        <Link
-          to={hrefWebDashboard}
-          className={`${styles.platformTab} ${webTabActive ? styles.platformTabActive : ''}`}
-          title="Web app admin"
-        >
-          <span className={styles.platformIcon}>{icons.monitor}</span>
-          {!collapsed && <span>Web</span>}
-        </Link>
-        <Link
-          to={hrefMobileDashboard}
-          className={`${styles.platformTab} ${mobileTabActive ? styles.platformTabActive : ''}`}
-          title="Mobile app admin"
-        >
-          <span className={styles.platformIcon}>{icons.phone}</span>
-          {!collapsed && <span>Mobile</span>}
-        </Link>
-      </div>
-
       {!collapsed && (
-        <p className={styles.platformHint}>{platform === 'web' ? 'Web & marketing' : 'iOS / Android app'}</p>
+        <p className={styles.platformHint} style={{ marginTop: 0 }}>
+          Web & mobile admin
+        </p>
       )}
 
       <nav className={styles.nav} aria-label="Admin sections">
-        {items.map((item) => (
-          <NavLink
-            key={item.segment}
-            to={`${routePrefix}${base}/${item.segment}`}
-            className={({ isActive }) => (isActive ? `${styles.link} ${styles.active}` : styles.link)}
-          >
-            <span className={styles.icon}>{icons[item.icon]}</span>
-            {!collapsed && <span>{item.label}</span>}
-          </NavLink>
-        ))}
+        <NavItems items={MAIN_NAV} collapsed={collapsed} />
+        {!collapsed && <p className={styles.navSectionLabel}>Mobile app</p>}
+        {collapsed && <div className={styles.navDivider} aria-hidden />}
+        <NavItems items={MOBILE_NAV} collapsed={collapsed} />
       </nav>
       <button className={styles.collapseBtn} onClick={onToggle} title={collapsed ? 'Expand' : 'Collapse'}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
