@@ -122,3 +122,52 @@ export function placePassesAppliedFilters(place, f) {
   }
   return true;
 }
+
+function hashIdToInt(id) {
+  let h = 0;
+  const s = String(id ?? '');
+  for (let i = 0; i < s.length; i += 1) {
+    h = (h * 31 + s.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
+function effectiveRatingWeb(place) {
+  const r = parseFloat(place.rating ?? '');
+  if (Number.isFinite(r)) return r;
+  return 4.2 + (hashIdToInt(place.id) % 8) * 0.1;
+}
+
+function syntheticReviewCountWeb(place) {
+  return 200 + (hashIdToInt(place.id) % 9800);
+}
+
+/** Sort search results (recent / top / reviewed); default order unchanged. */
+export function sortPlacesByModeWeb(places, sortMode) {
+  const list = [...places];
+  if (sortMode === 'recent') {
+    list.sort((a, b) => {
+      const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return tb - ta || String(a.name).localeCompare(String(b.name));
+    });
+    return list;
+  }
+  if (sortMode === 'reviewed') {
+    list.sort(
+      (a, b) =>
+        syntheticReviewCountWeb(b) - syntheticReviewCountWeb(a) ||
+        effectiveRatingWeb(b) - effectiveRatingWeb(a) ||
+        String(a.name).localeCompare(String(b.name))
+    );
+    return list;
+  }
+  if (sortMode === 'top') {
+    list.sort(
+      (a, b) =>
+        effectiveRatingWeb(b) - effectiveRatingWeb(a) || String(a.name).localeCompare(String(b.name))
+    );
+    return list;
+  }
+  return list;
+}
