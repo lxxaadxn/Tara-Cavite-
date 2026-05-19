@@ -893,6 +893,69 @@ const stGregoryTheGreatParishGallery = [
   require('../assets/images/St._Gregory_the_Great_Parish_3.png'),
 ];
 
+const magallanesMarkerGallery = [
+  require('../assets/images/Magallanes_Marker.png'),
+  require('../assets/images/Magallanes_Marker_1.png'),
+  require('../assets/images/Magallanes_Marker_2.png'),
+  require('../assets/images/Magallanes_Marker_3.png'),
+];
+
+const nuestraSenoraDeGuiaChurchGallery = [
+  require('../assets/images/Nuestra_Se_ora_de_Guia_Church.png'),
+  require('../assets/images/Nuestra_Se_ora_de_Guia_Church_1.png'),
+  require('../assets/images/Nuestra_Se_ora_de_Guia_Church_2.png'),
+  require('../assets/images/Nuestra_Se_ora_de_Guia_Church_3.png'),
+];
+
+const utodRiverAndFallsGallery = [
+  require('../assets/images/Utod_River___Falls.png'),
+  require('../assets/images/Utod_River___Falls_1.png'),
+  require('../assets/images/Utod_River___Falls_2.png'),
+  require('../assets/images/Utod_River___Falls_3.png'),
+];
+
+const jumpOffToMtMaramiGallery = [
+  require('../assets/images/Jump_off_to_Mt._Marami.png'),
+  require('../assets/images/Jump_off_to_Mt._Marami_1.png'),
+  require('../assets/images/Jump_off_to_Mt._Marami_2.png'),
+  require('../assets/images/Jump_off_to_Mt._Marami_3.png'),
+];
+
+const buhayForestGallery = [
+  require('../assets/images/Buhay_Forest.png'),
+  require('../assets/images/Buhay_Forest_1.png'),
+  require('../assets/images/Buhay_Forest_2.png'),
+  require('../assets/images/Buhay_Forest_3.png'),
+];
+
+const mendezEcologicalParkGallery = [
+  require('../assets/images/Mendez_Ecological_Park.png'),
+  require('../assets/images/Mendez_Ecological_Park_1.png'),
+  require('../assets/images/Mendez_Ecological_Park_2.png'),
+  require('../assets/images/Mendez_Ecological_Park_3.png'),
+];
+
+const stAugustineParishChurchGallery = [
+  require('../assets/images/St._Augustine_Parish_Church.png'),
+  require('../assets/images/St._Augustine_Parish_Church_1.png'),
+  require('../assets/images/St._Augustine_Parish_Church_2.png'),
+  require('../assets/images/St._Augustine_Parish_Church_3.png'),
+];
+
+const yokisFarmGallery = [
+  require('../assets/images/Yoki_s_Farm.png'),
+  require('../assets/images/Yoki_s_Farm_1.png'),
+  require('../assets/images/Yoki_s_Farm_2.png'),
+  require('../assets/images/Yoki_s_Farm_3.png'),
+];
+
+const paradizooThemeFarmGallery = [
+  require('../assets/images/Paradizoo_Theme_Farm.png'),
+  require('../assets/images/Paradizoo_Theme_Farm_1.png'),
+  require('../assets/images/Paradizoo_Theme_Farm_2.png'),
+  require('../assets/images/Paradizoo_Theme_Farm_3.png'),
+];
+
 /** Local bundled photos keyed by `Place.name` as returned from `v_cavite_establishments`. */
 const LOCAL_MEDIA: Record<string, { image: any; gallery: any[] }> = {
   Asador: { image: asadorGallery[0], gallery: asadorGallery },
@@ -1238,6 +1301,30 @@ const LOCAL_MEDIA: Record<string, { image: any; gallery: any[] }> = {
   'St. Gregory the Great Parish': {
     image: stGregoryTheGreatParishGallery[0],
     gallery: stGregoryTheGreatParishGallery,
+  },
+  'Magallanes Marker': { image: magallanesMarkerGallery[0], gallery: magallanesMarkerGallery },
+  'Nuestra Señora de Guia Church': {
+    image: nuestraSenoraDeGuiaChurchGallery[0],
+    gallery: nuestraSenoraDeGuiaChurchGallery,
+  },
+  'Utod River & Falls': { image: utodRiverAndFallsGallery[0], gallery: utodRiverAndFallsGallery },
+  'Jump off to Mt. Marami': {
+    image: jumpOffToMtMaramiGallery[0],
+    gallery: jumpOffToMtMaramiGallery,
+  },
+  'Buhay Forest': { image: buhayForestGallery[0], gallery: buhayForestGallery },
+  'Mendez Ecological Park': {
+    image: mendezEcologicalParkGallery[0],
+    gallery: mendezEcologicalParkGallery,
+  },
+  'St. Augustine Parish Church': {
+    image: stAugustineParishChurchGallery[0],
+    gallery: stAugustineParishChurchGallery,
+  },
+  "Yoki's Farm": { image: yokisFarmGallery[0], gallery: yokisFarmGallery },
+  'Paradizoo Theme Farm': {
+    image: paradizooThemeFarmGallery[0],
+    gallery: paradizooThemeFarmGallery,
   },
 };
 

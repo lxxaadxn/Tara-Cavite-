@@ -896,6 +896,69 @@ const stGregoryTheGreatParishGallery = [
   u('St._Gregory_the_Great_Parish_3.png'),
 ];
 
+const magallanesMarkerGallery = [
+  u('Magallanes_Marker.png'),
+  u('Magallanes_Marker_1.png'),
+  u('Magallanes_Marker_2.png'),
+  u('Magallanes_Marker_3.png'),
+];
+
+const nuestraSenoraDeGuiaChurchGallery = [
+  u('Nuestra_Se_ora_de_Guia_Church.png'),
+  u('Nuestra_Se_ora_de_Guia_Church_1.png'),
+  u('Nuestra_Se_ora_de_Guia_Church_2.png'),
+  u('Nuestra_Se_ora_de_Guia_Church_3.png'),
+];
+
+const utodRiverAndFallsGallery = [
+  u('Utod_River___Falls.png'),
+  u('Utod_River___Falls_1.png'),
+  u('Utod_River___Falls_2.png'),
+  u('Utod_River___Falls_3.png'),
+];
+
+const jumpOffToMtMaramiGallery = [
+  u('Jump_off_to_Mt._Marami.png'),
+  u('Jump_off_to_Mt._Marami_1.png'),
+  u('Jump_off_to_Mt._Marami_2.png'),
+  u('Jump_off_to_Mt._Marami_3.png'),
+];
+
+const buhayForestGallery = [
+  u('Buhay_Forest.png'),
+  u('Buhay_Forest_1.png'),
+  u('Buhay_Forest_2.png'),
+  u('Buhay_Forest_3.png'),
+];
+
+const mendezEcologicalParkGallery = [
+  u('Mendez_Ecological_Park.png'),
+  u('Mendez_Ecological_Park_1.png'),
+  u('Mendez_Ecological_Park_2.png'),
+  u('Mendez_Ecological_Park_3.png'),
+];
+
+const stAugustineParishChurchGallery = [
+  u('St._Augustine_Parish_Church.png'),
+  u('St._Augustine_Parish_Church_1.png'),
+  u('St._Augustine_Parish_Church_2.png'),
+  u('St._Augustine_Parish_Church_3.png'),
+];
+
+const yokisFarmGallery = [
+  u('Yoki_s_Farm.png'),
+  u('Yoki_s_Farm_1.png'),
+  u('Yoki_s_Farm_2.png'),
+  u('Yoki_s_Farm_3.png'),
+];
+
+const paradizooThemeFarmGallery = [
+  u('Paradizoo_Theme_Farm.png'),
+  u('Paradizoo_Theme_Farm_1.png'),
+  u('Paradizoo_Theme_Farm_2.png'),
+  u('Paradizoo_Theme_Farm_3.png'),
+];
+
 const LOCAL_MEDIA = {
   Asador: asadorGallery,
   Arocarria: arocarriaGallery,
@@ -1026,6 +1089,15 @@ const LOCAL_MEDIA = {
   'Precious Garden Events Place': preciousGardenEventsPlaceGallery,
   'Sanctuario Nature Farms': sanctuarioNatureFarmsGallery,
   'St. Gregory the Great Parish': stGregoryTheGreatParishGallery,
+  'Magallanes Marker': magallanesMarkerGallery,
+  'Nuestra Señora de Guia Church': nuestraSenoraDeGuiaChurchGallery,
+  'Utod River & Falls': utodRiverAndFallsGallery,
+  'Jump off to Mt. Marami': jumpOffToMtMaramiGallery,
+  'Buhay Forest': buhayForestGallery,
+  'Mendez Ecological Park': mendezEcologicalParkGallery,
+  'St. Augustine Parish Church': stAugustineParishChurchGallery,
+  "Yoki's Farm": yokisFarmGallery,
+  'Paradizoo Theme Farm': paradizooThemeFarmGallery,
 };
 
 function lookupLocalEstablishmentUrls(name) {
