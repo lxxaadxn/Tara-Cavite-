@@ -2,9 +2,8 @@
 
 ## What you get
 
-- **One table per LGU** in `public`: `places_amadeo`, `places_bacoor_city`, `places_imus_city`, … (17 total).
-- Columns: `id`, `ta_name`, `type_code`, `ta_category`, `ntdp_category`, `city_mun`, `address`, `latitude`, `longitude`, `description`, `searchable_text`, generated `search_vector`, `created_at`.
-- **Unified view** `public.v_cavite_establishments` — web and mobile read/search this view.
+- **Catalog table** `public.places` — web and mobile read establishments here (see `placesFromSupabase`).
+- Legacy STA-v3 **per-LGU tables** and `v_cavite_establishments` are optional staging only; drop them after sync via `supabase/migrations/20260519120000_drop_legacy_sta_catalog.sql`.
 - **Directions** use existing OSM/OSRM helpers (`apps/web/src/lib/osmUrls.js`).
 
 ## A) One-shot SQL for Supabase (copy–paste)
@@ -57,8 +56,19 @@ If you still have the previous `sta_cavite` schema from an older attempt:
 DROP SCHEMA IF EXISTS sta_cavite CASCADE;
 ```
 
-## E) Apps
+## E) Apps (catalog = `public.places` + images)
 
-No extra env vars. Web/mobile use **`v_cavite_establishments`** via `apps/web/src/lib/placesFromSupabase.js` and `apps/mobile/lib/placesFromSupabase.ts`.
+No extra env vars. Web and mobile read **`public.places`** via `placesFromSupabase`. Bundled `/establishments/*.png` photos apply only when a row has no `image_url`.
+
+**If you still have legacy STA tables**, sync once then drop staging:
+
+1. `supabase/migrations/20260518120000_sync_places_with_images.sql` (only if `v_cavite_establishments` exists)
+2. `supabase/migrations/20260519120000_drop_legacy_sta_catalog.sql` (removes per-LGU tables and view; keeps `public.places`)
+
+**Verify from repo root:**
+
+```bash
+npm run cavite:verify-places
+```
 
 Routing on web: **OpenStreetMap** (not Google). Ensure device location permission on mobile for “directions from current location” flows.

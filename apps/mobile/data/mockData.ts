@@ -1,5 +1,6 @@
 /**
- * Mock / offline fallback data. Live Cavite STA listings use `v_cavite_establishments`.
+ * Types and non-catalog mock data (itineraries, terminals, notifications).
+ * Establishments load from `public.places` via placesFromSupabase.
  */
 
 export interface Place {
@@ -92,142 +93,8 @@ export interface Terminal {
   longitude: number;
 }
 
-// Trending Tourist Spots for home screen (Figma dashboard export)
-export const trendingSpots: Place[] = [
-  {
-    id: 'tr-silang',
-    name: 'Tinatangi Cafe',
-    address: 'Silang, Cavite',
-    city_mun: 'Silang',
-    type: 'Cafe',
-    hours: '8:00 AM - 10:00 PM',
-    latitude: 14.2156,
-    longitude: 120.9719,
-    image: require('../assets/images/picture-7.png'),
-    rating: '5.0',
-  },
-  {
-    id: 'tr-cavite-city',
-    name: 'Corregidor Island ferry point',
-    address: 'Cavite City, Cavite',
-    city_mun: 'Cavite City',
-    type: 'Tourism transport',
-    hours: 'See operator',
-    latitude: 14.4826,
-    longitude: 120.908,
-    image: require('../assets/images/picture-15.png'),
-    rating: '4.9',
-  },
-  {
-    id: 'tr-tagaytay',
-    name: 'Taal Volcano View',
-    address: 'Tagaytay City, Cavite',
-    city_mun: 'Tagaytay City',
-    type: 'Tourist Spot',
-    hours: 'Open 24 hours',
-    latitude: 14.1133,
-    longitude: 120.9383,
-    image: require('../assets/images/picture-23.png'),
-    rating: '4.8',
-  },
-  {
-    id: 'tr-dasma',
-    name: 'Immaculate Conception Parish',
-    address: 'Dasmariñas City, Cavite',
-    city_mun: 'Dasmariñas City',
-    type: 'Church',
-    hours: 'Open for mass',
-    latitude: 14.3271,
-    longitude: 120.9358,
-    image: require('../assets/images/picture-31.png'),
-    rating: '5.0',
-  },
-];
-
 // Recent searches (empty initially, will be populated from user's search history)
 export const recentSearches: string[] = [];
-
-// Nearby places for home (offline fallback — spread across Cavite LGUs; live data from Supabase)
-export const nearbyPlaces: Place[] = [
-  {
-    id: 'nb-bacoor',
-    name: 'SM City Bacoor',
-    address: 'Bacoor City, Cavite',
-    city_mun: 'Bacoor City',
-    type: 'Shopping Mall',
-    hours: '10:00 AM - 9:00 PM',
-    latitude: 14.4594,
-    longitude: 120.9605,
-    image: require('../assets/images/picture-43.png'),
-    rating: '5.0',
-  },
-  {
-    id: 'nb-imus',
-    name: 'Imus Cathedral',
-    address: 'Imus City, Cavite',
-    city_mun: 'Imus City',
-    type: 'Church',
-    hours: 'See parish schedule',
-    latitude: 14.4296,
-    longitude: 120.9377,
-    image: require('../assets/images/picture-51.png'),
-    rating: '4.9',
-  },
-  {
-    id: 'nb-tagaytay',
-    name: 'Tagaytay Picnic Grove',
-    address: 'Tagaytay City, Cavite',
-    city_mun: 'Tagaytay City',
-    type: 'Nature / Park',
-    hours: '6:00 AM - 10:00 PM',
-    latitude: 14.1153,
-    longitude: 120.9621,
-    image: require('../assets/images/picture-59.png'),
-    rating: '4.8',
-  },
-  {
-    id: 'nb-silang',
-    name: 'Silang Town Plaza',
-    address: 'Silang, Cavite',
-    city_mun: 'Silang',
-    type: 'Town center',
-    hours: 'Open daily',
-    latitude: 14.2156,
-    longitude: 120.9719,
-    image: require('../assets/images/picture-67.png'),
-    rating: '5.0',
-  },
-  {
-    id: 'nb-silang-market',
-    name: 'Silang Public Market',
-    address: 'Silang, Cavite',
-    city_mun: 'Silang',
-    type: 'Market',
-    hours: 'Morning to evening',
-    latitude: 14.218,
-    longitude: 120.973,
-    image: require('../assets/images/picture-7.png'),
-    rating: '4.7',
-  },
-  {
-    id: 'nb-tagaytay-sky',
-    name: 'Sky Ranch Tagaytay',
-    address: 'Tagaytay City, Cavite',
-    city_mun: 'Tagaytay City',
-    type: 'Leisure',
-    hours: '10:00 AM - 10:00 PM',
-    latitude: 14.116,
-    longitude: 120.955,
-    image: require('../assets/images/picture-23.png'),
-    rating: '4.8',
-  },
-];
-
-// Mock places (full list)
-export const mockPlaces: Place[] = [
-  ...nearbyPlaces,
-  ...trendingSpots,
-];
 
 // Mock routes/history
 export const mockRoutes: Route[] = [
@@ -401,9 +268,8 @@ export const mockNotifications: Notification[] = [
   },
 ];
 
-/** Resolves to a `Place` from `trendingSpots` or `nearbyPlaces` (use distinct string ids per pool). */
+/** Optional link to a row in `public.places` (UUID). */
 export type ItineraryStopEstablishmentRef = {
-  source: 'trending' | 'nearby';
   placeId: string;
 };
 
@@ -453,31 +319,26 @@ export const mockItineraries: ItineraryCard[] = [
         name: 'Silang town proper',
         description: 'Meet the route, grab water, confirm trike fares upland.',
         leg: 'Jeepneys from Dasma / Aguinaldo Hwy often pass through.',
-        establishment: { source: 'trending', placeId: 'tr-silang' },
       },
       {
         name: 'Garden café strip',
         description: 'Patios and local roasters — ideal first meal.',
         leg: 'Short trike hops; agree return if late.',
-        establishment: { source: 'nearby', placeId: 'nb-silang' },
       },
       {
         name: 'Ridge approach',
         description: 'Climb with lookout pockets; weekend traffic builds noon–4pm.',
         leg: 'Bus or van along the highway spine.',
-        establishment: { source: 'nearby', placeId: 'nb-tagaytay' },
       },
       {
         name: 'Tagaytay viewpoint',
         description: 'Classic panorama — mist after rain is normal.',
         leg: 'Walk from drop-offs; bring a wind layer.',
-        establishment: { source: 'trending', placeId: 'tr-tagaytay' },
       },
       {
         name: 'Sunset dinner',
         description: 'West-facing grills and bistros — book on holidays.',
         leg: 'Vans early evening; ride-apps after dark.',
-        establishment: { source: 'nearby', placeId: 'nb-bacoor' },
       },
     ],
     tips: ['Light jacket after 4pm', 'Cash for trikes', 'Long weekends = heavier traffic'],
@@ -499,25 +360,21 @@ export const mockItineraries: ItineraryCard[] = [
         name: 'Alfonso jump-off',
         description: 'Coffee, tires/air check, and route briefing.',
         leg: 'Private car or van from Silang / Tagaytay access roads.',
-        establishment: { source: 'trending', placeId: 'tr-silang' },
       },
       {
         name: 'Magallanes sidestreets',
         description: 'Low-traffic pockets; respect local school zones.',
         leg: 'Rolling segments — hydrate every hour.',
-        establishment: { source: 'trending', placeId: 'tr-cavite-city' },
       },
       {
         name: 'Maragondon approach',
         description: 'Greener stretch; photo stops off the shoulder only.',
         leg: 'Narrow lanes — single-file if cycling.',
-        establishment: { source: 'trending', placeId: 'tr-tagaytay' },
       },
       {
         name: 'Late lunch bayan',
         description: 'Carinderia or small grill before the return climb.',
         leg: 'Jeepney connections toward coastal roads if extending the trip.',
-        establishment: { source: 'nearby', placeId: 'nb-silang' },
       },
     ],
     tips: ['Helmet + lights if biking', 'Check weather for afternoon storms', 'Carry repair kit on long rides'],
@@ -525,86 +382,29 @@ export const mockItineraries: ItineraryCard[] = [
   },
 ];
 
-/** Resolve a featured establishment for an itinerary stop (`trending` vs `nearby` disambiguates pools). */
-export function resolveItineraryEstablishment(ref: ItineraryStopEstablishmentRef): Place | undefined {
-  const pool = ref.source === 'trending' ? trendingSpots : nearbyPlaces;
-  return pool.find((p) => p.id === ref.placeId);
+/** Resolve a featured establishment from the live catalog (`public.places`). */
+export function resolveItineraryEstablishment(
+  ref: ItineraryStopEstablishmentRef,
+  catalog: Place[]
+): Place | undefined {
+  return catalog.find((p) => p.id === ref.placeId);
 }
 
-/** Unique establishments linked from itinerary stops (order follows stops; duplicates omitted). */
-export function getItineraryEstablishments(itineraryRefId: string): Place[] {
+/** Unique establishments linked from itinerary stops (requires catalog from Supabase). */
+export function getItineraryEstablishments(itineraryRefId: string, catalog: Place[]): Place[] {
   const it = mockItineraries.find((x) => x.id === itineraryRefId);
-  if (!it?.stopList?.length) return [];
+  if (!it?.stopList?.length || !catalog.length) return [];
   const seen = new Set<string>();
   const out: Place[] = [];
   for (const s of it.stopList) {
     if (!s.establishment) continue;
-    const key = `${s.establishment.source}:${s.establishment.placeId}`;
-    if (seen.has(key)) continue;
-    const p = resolveItineraryEstablishment(s.establishment);
+    if (seen.has(s.establishment.placeId)) continue;
+    const p = resolveItineraryEstablishment(s.establishment, catalog);
     if (p) {
-      seen.add(key);
+      seen.add(s.establishment.placeId);
       out.push(p);
     }
   }
-  return out;
-}
-
-function extractMunicipalityFromAddress(address: string): string {
-  const parts = address
-    .split(',')
-    .map((p) => p.trim())
-    .filter(Boolean);
-  const caviteIdx = parts.findIndex((p) => /^cavite$/i.test(p));
-  if (caviteIdx > 0) return parts[caviteIdx - 1];
-  return parts[0] ?? '';
-}
-
-/** Normalized LGU key for grouping extras with featured-route stops (matches filter-style labels). */
-function foldMunicipalityKey(place: Place): string {
-  const raw = (place.city_mun ?? '').trim() || extractMunicipalityFromAddress(place.address ?? '');
-  return raw
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/\s+city\s*$/i, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-/**
- * Featured stops from each itinerary plus other catalog places in the same city/municipality
- * so tourists can browse ideas without opening every route.
- */
-export function getBrowseEstablishmentsForItineraries(): { place: Place; itineraryTitle: string }[] {
-  const out: { place: Place; itineraryTitle: string }[] = [];
-  const seenIds = new Set<string>();
-  const routeMunKeys = new Set<string>();
-
-  for (const it of mockItineraries) {
-    for (const p of getItineraryEstablishments(it.id)) {
-      routeMunKeys.add(foldMunicipalityKey(p));
-      if (seenIds.has(p.id)) continue;
-      seenIds.add(p.id);
-      out.push({ place: p, itineraryTitle: it.title });
-    }
-  }
-
-  for (const p of mockPlaces) {
-    if (seenIds.has(p.id)) continue;
-    const mk = foldMunicipalityKey(p);
-    if (!mk || !routeMunKeys.has(mk)) continue;
-    const hostIt =
-      mockItineraries.find((it) =>
-        getItineraryEstablishments(it.id).some((ep) => foldMunicipalityKey(ep) === mk)
-      ) ?? null;
-    seenIds.add(p.id);
-    out.push({
-      place: p,
-      itineraryTitle: hostIt ? `${hostIt.title} · more nearby` : 'Along featured routes · more nearby',
-    });
-  }
-
   return out;
 }
 

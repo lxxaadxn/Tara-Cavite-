@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -21,11 +21,15 @@ import {
   DashboardFiltersPanel,
   type DashboardFilterSectionId,
 } from '../components/DashboardFiltersPanel';
-import { getBrowseEstablishmentsForItineraries, mockItineraries, type Place } from '../data/mockData';
+import { mockItineraries, type Place } from '../data/mockData';
+import { getBrowseEstablishmentsForItineraries } from '../lib/itineraryCatalog';
+import { supabase } from '../lib/supabase';
+import { fetchDashboardPlacesPool, logPlacesFetchError } from '../lib/placesFromSupabase';
 import {
   placeMatchesDashboardFilters,
   sortPlacesByDashboardSort,
 } from '../lib/dashboardPlaceFilters';
+import { placeImageSource } from '../lib/placeImageSource';
 
 const HEADER_GREEN = '#7EA00E';
 const TEAL = '#1F4F59';
@@ -72,7 +76,28 @@ const ItinerariesScreen: React.FC = () => {
     }
   };
 
-  const availableEstablishments = useMemo(() => getBrowseEstablishmentsForItineraries(), []);
+  const [catalogPlaces, setCatalogPlaces] = useState<Place[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await fetchDashboardPlacesPool(supabase, 1500);
+        if (!cancelled) setCatalogPlaces(list);
+      } catch (err) {
+        logPlacesFetchError('ItinerariesScreen.fetchDashboardPlacesPool', err);
+        if (!cancelled) setCatalogPlaces([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const availableEstablishments = useMemo(
+    () => getBrowseEstablishmentsForItineraries(catalogPlaces),
+    [catalogPlaces]
+  );
 
   const onFilterTogglesChange = useCallback((toggles: Record<string, boolean>) => {
     setFilterToggles(toggles);
@@ -115,12 +140,16 @@ const ItinerariesScreen: React.FC = () => {
       accessibilityLabel={`${item.place.name} establishment`}
       accessibilityRole="button"
     >
-      <Image
-        source={item.place.image}
-        style={styles.cardImage}
-        resizeMode="cover"
-        accessibilityLabel={`${item.place.name} cover`}
-      />
+      {placeImageSource(item.place.image) ? (
+        <Image
+          source={placeImageSource(item.place.image)!}
+          style={styles.cardImage}
+          resizeMode="cover"
+          accessibilityLabel={`${item.place.name} cover`}
+        />
+      ) : (
+        <View style={styles.cardImage} />
+      )}
       <View style={styles.cardBody}>
         <View style={styles.cardTextCol}>
           <Text style={styles.cardTitle} numberOfLines={2}>

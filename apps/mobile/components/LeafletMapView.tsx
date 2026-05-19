@@ -8,7 +8,7 @@ import {
 } from '../lib/leafletMapBridge';
 import type { LeafletMapViewProps } from './leafletMapTypes';
 
-export type { LeafletMarker } from './leafletMapTypes';
+export type { LeafletMarker, LeafletPreviewPoint } from './leafletMapTypes';
 
 /** Leaflet + OpenStreetMap in WebView — iOS & Android (Expo Go / dev builds). */
 export function LeafletMapView({
@@ -16,6 +16,8 @@ export function LeafletMapView({
   terminals = [],
   userLocation,
   onMarkerPress,
+  onMarkerPreview,
+  onMarkerPreviewEnd,
   style,
 }: LeafletMapViewProps) {
   const webRef = useRef<WebView>(null);
@@ -43,9 +45,15 @@ export function LeafletMapView({
               type?: string;
               id?: string;
               name?: string;
+              x?: number;
+              y?: number;
             };
-            if (msg.type === 'markerPress' && msg.id) {
-              onMarkerPress(msg.id, msg.name ?? '');
+            if (msg.type === 'markerPreview' && msg.id && msg.x != null && msg.y != null) {
+              onMarkerPreview?.(msg.id, { x: msg.x, y: msg.y });
+            } else if (msg.type === 'markerPreviewEnd') {
+              onMarkerPreviewEnd?.();
+            } else if (msg.type === 'markerPress' && msg.id) {
+              onMarkerPress?.(msg.id, msg.name ?? '');
             }
           } catch {
             /* ignore */

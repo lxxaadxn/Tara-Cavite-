@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,8 @@ import {
   resolveItineraryEstablishment,
   type Place,
 } from '../data/mockData';
+import { supabase } from '../lib/supabase';
+import { fetchDashboardPlacesPool, logPlacesFetchError } from '../lib/placesFromSupabase';
 
 const HEADER_GREEN = '#7EA00E';
 const TEAL = '#1F4F59';
@@ -39,13 +41,30 @@ export default function ItineraryDetailScreen() {
   const route = useRoute();
   const { itineraryId } = route.params as ItineraryDetailParams;
 
+  const [catalogPlaces, setCatalogPlaces] = useState<Place[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await fetchDashboardPlacesPool(supabase, 1500);
+        if (!cancelled) setCatalogPlaces(list);
+      } catch (err) {
+        logPlacesFetchError('ItineraryDetailScreen.fetchDashboardPlacesPool', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const it = useMemo(
     () => mockItineraries.find((x) => x.id === itineraryId),
     [itineraryId]
   );
   const linkedPlaces = useMemo(
-    () => (it ? getItineraryEstablishments(it.id) : []),
-    [it]
+    () => (it ? getItineraryEstablishments(it.id, catalogPlaces) : []),
+    [it, catalogPlaces]
   );
 
   const onBack = () => {
@@ -170,7 +189,7 @@ export default function ItineraryDetailScreen() {
             <Text style={styles.sectionTitle}>Route & stops</Text>
             {it.stopList.map((stop, i) => {
               const est = stop.establishment
-                ? resolveItineraryEstablishment(stop.establishment)
+                ? resolveItineraryEstablishment(stop.establishment, catalogPlaces)
                 : undefined;
               return (
                 <View key={`${stop.name}-${i}`} style={styles.stopBlock}>

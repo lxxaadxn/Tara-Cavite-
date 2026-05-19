@@ -191,7 +191,7 @@ export async function addPlaceToSavedList(
       ok: false,
       duplicate: false,
       message:
-        'This establishment is not linked in the places table yet. Sync v_cavite_establishments into public.places (source_slug = establishment id), then try saving again.',
+        'This establishment is not in public.places yet. Add or publish it in the admin catalog, then try saving again.',
     };
   }
   const { error } = await client

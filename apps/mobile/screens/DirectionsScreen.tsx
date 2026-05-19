@@ -18,6 +18,7 @@ import { JamIcon } from '../components/JamIcon';
 import { SaveToListSheet, type SaveToListRow } from '../components/SaveToListSheet';
 import { Place, type Terminal } from '../data/mockData';
 import { parsePlaceCoords } from '../lib/placeCoords';
+import { placeImageSource } from '../lib/placeImageSource';
 import { formatNtdpCategoryTagLabel } from '../lib/ntdpDisplayLabels';
 import {
   fetchDrivingRoute,
@@ -654,9 +655,9 @@ const DirectionsScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.heroWrap}>
-          {place.image ? (
+          {placeImageSource(place.image) ? (
             <Image
-              source={place.image}
+              source={placeImageSource(place.image)!}
               style={styles.heroImage}
               resizeMode="cover"
               accessibilityLabel={`${place.name} photo`}

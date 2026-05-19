@@ -18,11 +18,17 @@ export function LeafletMapView({
   terminals = [],
   userLocation,
   onMarkerPress,
+  onMarkerPreview,
+  onMarkerPreviewEnd,
   style,
 }: LeafletMapViewProps) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const onMarkerPressRef = useRef(onMarkerPress);
+  const onMarkerPreviewRef = useRef(onMarkerPreview);
+  const onMarkerPreviewEndRef = useRef(onMarkerPreviewEnd);
   onMarkerPressRef.current = onMarkerPress;
+  onMarkerPreviewRef.current = onMarkerPreview;
+  onMarkerPreviewEndRef.current = onMarkerPreviewEnd;
 
   const pushToFrame = useCallback(() => {
     const win = iframeRef.current?.contentWindow;
@@ -40,9 +46,19 @@ export function LeafletMapView({
       if (e.source !== iframeRef.current?.contentWindow) return;
       if (typeof e.data !== 'string') return;
       try {
-        const msg = JSON.parse(e.data) as { type?: string; id?: string; name?: string };
-        if (msg.type === 'markerPress' && msg.id) {
-          onMarkerPressRef.current(msg.id, msg.name ?? '');
+        const msg = JSON.parse(e.data) as {
+          type?: string;
+          id?: string;
+          name?: string;
+          x?: number;
+          y?: number;
+        };
+        if (msg.type === 'markerPreview' && msg.id && msg.x != null && msg.y != null) {
+          onMarkerPreviewRef.current?.(msg.id, { x: msg.x, y: msg.y });
+        } else if (msg.type === 'markerPreviewEnd') {
+          onMarkerPreviewEndRef.current?.();
+        } else if (msg.type === 'markerPress' && msg.id) {
+          onMarkerPressRef.current?.(msg.id, msg.name ?? '');
         }
       } catch {
         /* ignore */

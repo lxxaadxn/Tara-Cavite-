@@ -26,6 +26,16 @@ export const CAVITOUR_LEAFLET_HTML = `<!DOCTYPE html>
     }
     /* Keep OSM attribution clear of zoom stack */
     .leaflet-bottom.leaflet-left { bottom: calc(8px + env(safe-area-inset-bottom, 0px)) !important; }
+    .cavitour-place-marker { background: none; border: none; }
+    .cavitour-place-pin {
+      width: 26px; height: 34px;
+      background: #7EA00E;
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      margin: -17px 0 0 -13px;
+      box-shadow: 0 2px 6px rgba(31, 79, 89, 0.28);
+      border: 2px solid #fff;
+    }
   </style>
 </head>
 <body>
@@ -90,6 +100,38 @@ export const CAVITOUR_LEAFLET_HTML = `<!DOCTYPE html>
       var userLayer = L.layerGroup().addTo(map);
       var didCenterUser = false;
       var didFitPlaces = false;
+      var activePreviewId = null;
+      var activePreviewMarker = null;
+
+      var placeIcon = L.divIcon({
+        className: 'cavitour-place-marker',
+        html: '<motion class="cavitour-place-pin" aria-hidden="true"></motion>',
+        iconSize: [26, 34],
+        iconAnchor: [13, 34]
+      });
+
+      function postMarkerPreview(marker, id) {
+        var pt = map.latLngToContainerPoint(marker.getLatLng());
+        activePreviewId = String(id);
+        activePreviewMarker = marker;
+        postToHost({ type: 'markerPreview', id: String(id), x: pt.x, y: pt.y });
+      }
+
+      function clearMarkerPreview() {
+        activePreviewId = null;
+        activePreviewMarker = null;
+        postToHost({ type: 'markerPreviewEnd' });
+      }
+
+      map.on('click', function () {
+        clearMarkerPreview();
+      });
+
+      map.on('move zoom', function () {
+        if (!activePreviewMarker || !activePreviewId) return;
+        var pt = map.latLngToContainerPoint(activePreviewMarker.getLatLng());
+        postToHost({ type: 'markerPreview', id: activePreviewId, x: pt.x, y: pt.y });
+      });
 
       function clampLatLng(lat, lng) {
         var sw = caviteBounds.getSouthWest();
@@ -110,13 +152,23 @@ export const CAVITOUR_LEAFLET_HTML = `<!DOCTYPE html>
           markersLayer.clearLayers();
           terminalsLayer.clearLayers();
           var bounds = [];
+          if (activePreviewId && !markers.some(function (p) { return String(p.id) === activePreviewId; })) {
+            clearMarkerPreview();
+          }
+
           markers.forEach(function (p) {
             if (p.lat == null || p.lng == null || isNaN(p.lat) || isNaN(p.lng)) return;
-            var m = L.marker([p.lat, p.lng]);
-            m.on('click', function () {
-              postToHost({ type: 'markerPress', id: String(p.id), name: String(p.name || '') });
+            var m = L.marker([p.lat, p.lng], { icon: placeIcon });
+            m.on('click', function (ev) {
+              L.DomEvent.stopPropagation(ev);
+              postMarkerPreview(m, p.id);
             });
-            m.bindPopup(String(p.name || 'Place'));
+            m.on('mouseover', function () {
+              postMarkerPreview(m, p.id);
+            });
+            m.on('mouseout', function () {
+              if (activePreviewId === String(p.id)) clearMarkerPreview();
+            });
             markersLayer.addLayer(m);
             bounds.push([p.lat, p.lng]);
           });

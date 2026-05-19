@@ -1,6 +1,14 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import {
+  CAVITE_LEAFLET_MAP_OPTIONS,
+  CAVITE_MAP_BOUNDS,
+  CAVITE_MAP_CENTER,
+  CAVITE_MAP_DEFAULT_ZOOM,
+  CAVITE_MAP_MAX_ZOOM,
+  lockMapToCaviteViewport,
+} from '../lib/caviteMapBounds';
 
 /** Reliable marker assets (avoids Vite path issues with leaflet images) */
 delete L.Icon.Default.prototype._getIconUrl;
@@ -27,10 +35,14 @@ export function PlacesLeafletMap({ places, userLocation, onMarkerClick }) {
     if (!containerRef.current) return;
 
     const valid = (places ?? []).filter((p) => p.lat != null && p.lng != null && Number.isFinite(p.lat) && Number.isFinite(p.lng));
-    const map = L.map(containerRef.current, { scrollWheelZoom: true, zoomControl: false });
+    const map = L.map(containerRef.current, {
+      scrollWheelZoom: true,
+      zoomControl: false,
+      ...CAVITE_LEAFLET_MAP_OPTIONS,
+    });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap',
-      maxZoom: 19,
+      maxZoom: CAVITE_MAP_MAX_ZOOM,
     }).addTo(map);
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
@@ -43,7 +55,7 @@ export function PlacesLeafletMap({ places, userLocation, onMarkerClick }) {
       Number.isFinite(userLocation.lng);
 
     if (valid.length === 0 && !hasUserLocation) {
-      map.setView([14.28, 120.95], 10);
+      map.setView(CAVITE_MAP_CENTER, CAVITE_MAP_DEFAULT_ZOOM);
     } else {
       valid.forEach((p) => {
         const m = L.marker([p.lat, p.lng]).addTo(layer);
@@ -75,9 +87,13 @@ export function PlacesLeafletMap({ places, userLocation, onMarkerClick }) {
       if (hasUserLocation) boundsPoints.push([userLocation.lat, userLocation.lng]);
       const bounds = L.latLngBounds(boundsPoints);
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
+      map.panInsideBounds(CAVITE_MAP_BOUNDS, { animate: false });
     }
 
+    const unlockViewport = lockMapToCaviteViewport(map);
+
     return () => {
+      unlockViewport();
       map.remove();
     };
   }, [places, userLocation]);

@@ -225,10 +225,9 @@ export function TouristSpots() {
         <div>
           <h1>Destinations</h1>
           <p>
-            Admin-managed rows in <code className={styles.inlineCode}>public.places</code> with{' '}
-            <code className={styles.inlineCode}>source_slug</code> like <code className={styles.inlineCode}>admin:%</code>.
-            They are included in <code className={styles.inlineCode}>v_cavite_establishments</code> for web and mobile after
-            you run the latest Supabase migration.
+            Admin-managed rows in <code className={styles.inlineCode}>public.places</code> (catalog for web and mobile).
+            Optional <code className={styles.inlineCode}>source_slug</code> values like{' '}
+            <code className={styles.inlineCode}>admin:%</code> distinguish hand-added destinations.
           </p>
         </div>
         <button type="button" className={styles.addBtn} onClick={openCreate} disabled={loadState === 'loading'}>

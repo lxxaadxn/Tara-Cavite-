@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { fetchAllPlacesFromSupabase, fetchPlaceById } from '../lib/placesFromSupabase';
+import {
+  fetchAllPlacesFromSupabase,
+  fetchPlaceById,
+  haversineDistanceKm,
+  logPlacesFetchError,
+} from '../lib/placesFromSupabase';
 import { AppHeader } from '../components/AppHeader';
+import { PlaceImageLightbox } from '../components/PlaceImageLightbox';
 import { RouteLeafletMap } from '../components/RouteLeafletMap';
 import { readSavedLists, savePlaceToList, savePlaceToListId } from '../lib/savedPlaces';
 import { formatNtdpCategoryTagLabel, isLikelyPlaceholderDescription } from '../lib/ntdpDisplayLabels';
@@ -15,24 +21,6 @@ const COMMUTER_DISCLAIMER =
 const COMMUTER_FOOTNOTE = 'Roads and stops change — double-check locally, especially if you drive.';
 const PLACEHOLDER_IMG =
   'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80';
-const DEFAULT_FALLBACK_SPOT = {
-  id: 'fallback-spot',
-  name: 'Tagaytay Picnic Grove',
-  address: 'Tagaytay City, Cavite, Philippines',
-  lat: 14.1153,
-  lng: 120.9621,
-  image: PLACEHOLDER_IMG,
-  tags: ['Tourist Spot'],
-  description: 'A scenic ridge destination in Cavite with viewpoints, picnic areas, and quick access routes.',
-  subtitle: 'Tourist Spot',
-  hours: 'Open daily',
-  fromSupabase: false,
-  ntdp_category: null,
-  city_mun: 'Tagaytay City',
-  ta_category: null,
-  type_code: null,
-};
-
 function isUuid(s) {
   return typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 }
@@ -102,27 +90,9 @@ function numericSeed(value, fallback = 42) {
   return Number.isFinite(digits) && digits > 0 ? digits : fallback;
 }
 
-function createFallbackSpot(sourcePlace) {
-  if (!sourcePlace) return { ...DEFAULT_FALLBACK_SPOT };
-  return {
-    id: sourcePlace.id || DEFAULT_FALLBACK_SPOT.id,
-    name: sourcePlace.name || DEFAULT_FALLBACK_SPOT.name,
-    address: sourcePlace.address || DEFAULT_FALLBACK_SPOT.address,
-    lat: sourcePlace.lat ?? DEFAULT_FALLBACK_SPOT.lat,
-    lng: sourcePlace.lng ?? DEFAULT_FALLBACK_SPOT.lng,
-    image: sourcePlace.imageUrl || DEFAULT_FALLBACK_SPOT.image,
-    tags: [sourcePlace.ntdp_category].filter(Boolean).slice(0, 6),
-    description: sourcePlace.description || `${sourcePlace.name} — ${sourcePlace.address}.`,
-    subtitle: sourcePlace.ntdp_category
-      ? `${sourcePlace.type ?? 'Place'} · ${formatNtdpCategoryTagLabel(sourcePlace.ntdp_category)}`
-      : sourcePlace.type || DEFAULT_FALLBACK_SPOT.subtitle,
-    hours: sourcePlace.hours || DEFAULT_FALLBACK_SPOT.hours,
-    fromSupabase: false,
-    ntdp_category: sourcePlace.ntdp_category ?? null,
-    city_mun: sourcePlace.city_mun ?? DEFAULT_FALLBACK_SPOT.city_mun,
-    ta_category: sourcePlace.ta_category ?? null,
-    type_code: sourcePlace.type_code ?? null,
-  };
+function estimatePrice(placeId) {
+  const tiers = ['PHP 500', 'PHP 800', 'PHP 1,200', 'PHP 1,499', 'PHP 1,650'];
+  return tiers[numericSeed(placeId, 3) % tiers.length];
 }
 
 function formatDuration(totalMinutes) {
@@ -249,6 +219,7 @@ export function PlaceDetailPage() {
   const [routePanelOpen, setRoutePanelOpen] = useState(false);
   const [spot, setSpot] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [placeNotFound, setPlaceNotFound] = useState(false);
   const [relatedPlacesRaw, setRelatedPlacesRaw] = useState([]);
   const [userCoords, setUserCoords] = useState(null);
   const [saveStatus, setSaveStatus] = useState('');
@@ -260,6 +231,7 @@ export function PlaceDetailPage() {
   const [osrmLoading, setOsrmLoading] = useState(false);
   const [osrmError, setOsrmError] = useState(null);
   const [sessionReviews, setSessionReviews] = useState([]);
+  const [lightboxIndex, setLightboxIndex] = useState(null);
 
   const openRoutePanel = useCallback(() => {
     setRoutePanelOpen(true);
@@ -275,6 +247,7 @@ export function PlaceDetailPage() {
 
   useEffect(() => {
     setRoutePanelOpen(false);
+    setLightboxIndex(null);
   }, [id]);
 
   useEffect(() => {
@@ -348,9 +321,13 @@ export function PlaceDetailPage() {
     let cancelled = false;
     (async () => {
       setLoading(true);
+      setPlaceNotFound(false);
       try {
         if (!id || !isUuid(id)) {
-          if (!cancelled) setSpot(createFallbackSpot());
+          if (!cancelled) {
+            setPlaceNotFound(true);
+            setSpot(null);
+          }
           return;
         }
         const p = await fetchPlaceById(supabase, id);
@@ -376,12 +353,16 @@ export function PlaceDetailPage() {
             ta_category: p.ta_category ?? null,
             type_code: p.type_code ?? null,
           });
+          setPlaceNotFound(false);
         } else {
-          setSpot(createFallbackSpot(relatedPlacesRaw[0]));
+          setSpot(null);
+          setPlaceNotFound(true);
         }
-      } catch {
+      } catch (err) {
+        logPlacesFetchError('fetchPlaceById', err);
         if (!cancelled) {
-          setSpot(createFallbackSpot(relatedPlacesRaw[0]));
+          setSpot(null);
+          setPlaceNotFound(true);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -441,6 +422,12 @@ export function PlaceDetailPage() {
     }
     return [extras[0], extras[1], spot.image];
   }, [spot]);
+
+  const galleryImages = useMemo(() => {
+    if (!spot?.image) return detailThumbs.filter(Boolean);
+    const merged = [spot.image, ...detailThumbs];
+    return merged.filter((url, i) => url && merged.indexOf(url) === i);
+  }, [spot?.image, detailThumbs]);
 
   const relatedPlaces = useMemo(
     () =>
@@ -533,8 +520,22 @@ export function PlaceDetailPage() {
     return (
       <div className="min-h-screen flex flex-col bg-white font-['Inter',sans-serif]">
         <AppHeader />
-        <main className="flex-1 flex items-center justify-center p-8 text-neutral-500">
-          {loading ? 'Loading place…' : 'Place not found.'}
+        <main className="flex-1 flex flex-col items-center justify-center gap-3 p-8 text-center text-neutral-600">
+          {loading ? (
+            <p>Loading place…</p>
+          ) : (
+            <>
+              <p className="text-lg font-semibold text-neutral-800">Establishment not found</p>
+              <p className="max-w-md text-sm text-neutral-500">
+                {placeNotFound && id
+                  ? 'This listing is not in public.places yet. Run sync_places_with_images.sql in Supabase SQL Editor.'
+                  : 'Invalid place link.'}
+              </p>
+              <Link to="/search" className="text-sm font-semibold text-[#7ea00e] hover:underline">
+                Back to search
+              </Link>
+            </>
+          )}
         </main>
       </div>
     );
@@ -604,15 +605,43 @@ export function PlaceDetailPage() {
             </div>
 
             <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_216px]">
-              <div className="rounded-2xl overflow-hidden">
-                <img src={spot.image} alt={spot.name} className="h-[250px] w-full object-cover sm:h-[360px]" />
-              </div>
+              <button
+                type="button"
+                onClick={() => setLightboxIndex(0)}
+                className="group relative block w-full overflow-hidden rounded-2xl text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7ea00e] focus-visible:ring-offset-2"
+                aria-label={`View photo of ${spot.name}`}
+              >
+                <img
+                  src={spot.image}
+                  alt={spot.name}
+                  className="h-[250px] w-full object-cover transition duration-200 group-hover:scale-[1.02] sm:h-[360px]"
+                />
+                <span className="pointer-events-none absolute inset-0 bg-black/0 transition group-hover:bg-black/10" />
+                <span className="pointer-events-none absolute bottom-3 right-3 rounded-full bg-black/55 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white opacity-0 transition group-hover:opacity-100">
+                  View
+                </span>
+              </button>
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-1">
-                {detailThumbs.map((img, i) => (
-                  <div key={`${img}-${i}`} className="rounded-xl overflow-hidden">
-                    <img src={img} alt="" className="h-24 w-full object-cover sm:h-[114px]" />
-                  </div>
-                ))}
+                {detailThumbs.map((img, i) => {
+                  const galleryIdx = galleryImages.indexOf(img);
+                  const openIdx = galleryIdx >= 0 ? galleryIdx : i + 1;
+                  return (
+                    <button
+                      key={`${img}-${i}`}
+                      type="button"
+                      onClick={() => setLightboxIndex(openIdx)}
+                      className="group relative overflow-hidden rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7ea00e] focus-visible:ring-offset-2"
+                      aria-label={`View photo ${i + 1}`}
+                    >
+                      <img
+                        src={img}
+                        alt=""
+                        className="h-24 w-full object-cover transition duration-200 group-hover:scale-105 sm:h-[114px]"
+                      />
+                      <span className="pointer-events-none absolute inset-0 bg-black/0 transition group-hover:bg-black/15" />
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -957,6 +986,15 @@ export function PlaceDetailPage() {
           </aside>
         </div>
       </main>
+
+      {lightboxIndex !== null && galleryImages.length > 0 ? (
+        <PlaceImageLightbox
+          images={galleryImages}
+          initialIndex={lightboxIndex}
+          alt={spot.name}
+          onClose={() => setLightboxIndex(null)}
+        />
+      ) : null}
 
       {saveModalOpen && (
         <div

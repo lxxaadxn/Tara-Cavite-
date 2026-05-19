@@ -19,6 +19,7 @@ import { SaveToListSheet, type SaveToListRow } from '../components/SaveToListShe
 import { ReviewCardsList } from '../components/ReviewCardsList';
 import { Place, getItineraryEstablishments } from '../data/mockData';
 import { parsePlaceCoords } from '../lib/placeCoords';
+import { placeImageSource } from '../lib/placeImageSource';
 import { formatNtdpCategoryTagLabel, getEstablishmentAboutBody } from '../lib/ntdpDisplayLabels';
 import { supabase } from '../lib/supabase';
 import {
@@ -69,7 +70,7 @@ export default function AboutEstablishmentScreen() {
   const route = useRoute();
   const { place } = route.params as AboutEstablishmentParams;
   const isItinerary = place.type === 'Itinerary';
-  const itineraryStops = useMemo(() => getItineraryEstablishments(place.id), [place.id]);
+  const itineraryStops = useMemo(() => getItineraryEstablishments(place.id, []), [place.id]);
 
   const [tab, setTab] = useState<'description' | 'reviews'>('description');
   const [saved, setSaved] = useState(false);
@@ -320,9 +321,9 @@ export default function AboutEstablishmentScreen() {
           ListHeaderComponent={
             <View style={styles.itineraryHeaderBlock}>
               <View style={styles.heroWrap}>
-                {place.image ? (
+                {placeImageSource(place.image) ? (
                   <Image
-                    source={place.image}
+                    source={placeImageSource(place.image)!}
                     style={styles.heroImage}
                     resizeMode="cover"
                     accessibilityLabel={`${place.name} photo`}
@@ -374,8 +375,13 @@ export default function AboutEstablishmentScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.heroWrap}>
-          {place.image ? (
-            <Image source={place.image} style={styles.heroImage} resizeMode="cover" accessibilityLabel={`${place.name} photo`} />
+          {placeImageSource(place.image) ? (
+            <Image
+              source={placeImageSource(place.image)!}
+              style={styles.heroImage}
+              resizeMode="cover"
+              accessibilityLabel={`${place.name} photo`}
+            />
           ) : (
             <View style={[styles.heroImage, styles.heroPlaceholder]}>
               <JamIcon ionicon="image-outline" size={48} color={MUTED} />

@@ -1,6 +1,14 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import {
+  CAVITE_LEAFLET_MAP_OPTIONS,
+  CAVITE_MAP_BOUNDS,
+  CAVITE_MAP_CENTER,
+  CAVITE_MAP_DEFAULT_ZOOM,
+  CAVITE_MAP_MAX_ZOOM,
+  lockMapToCaviteViewport,
+} from '../lib/caviteMapBounds';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -30,10 +38,14 @@ export function TerminalsLeafletMap({ terminals, selectedId, userLocation, onSel
     const valid = (terminals ?? []).filter(
       (t) => t.lat != null && t.lng != null && Number.isFinite(t.lat) && Number.isFinite(t.lng)
     );
-    const map = L.map(containerRef.current, { scrollWheelZoom: true, zoomControl: false });
+    const map = L.map(containerRef.current, {
+      scrollWheelZoom: true,
+      zoomControl: false,
+      ...CAVITE_LEAFLET_MAP_OPTIONS,
+    });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap',
-      maxZoom: 19,
+      maxZoom: CAVITE_MAP_MAX_ZOOM,
     }).addTo(map);
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
@@ -92,13 +104,17 @@ export function TerminalsLeafletMap({ terminals, selectedId, userLocation, onSel
     if (hasUser) boundsPoints.push([userLocation.lat, userLocation.lng]);
 
     if (boundsPoints.length === 0) {
-      map.setView([14.28, 120.95], 10);
+      map.setView(CAVITE_MAP_CENTER, CAVITE_MAP_DEFAULT_ZOOM);
     } else {
       const bounds = L.latLngBounds(boundsPoints);
       map.fitBounds(bounds, { padding: [48, 48], maxZoom: 13 });
+      map.panInsideBounds(CAVITE_MAP_BOUNDS, { animate: false });
     }
 
+    const unlockViewport = lockMapToCaviteViewport(map);
+
     return () => {
+      unlockViewport();
       map.remove();
     };
   }, [terminals, selectedId, userLocation]);

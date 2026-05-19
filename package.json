@@ -32,7 +32,9 @@
     "cavite:import": "node scripts/import-sta-cavite-v3.mjs",
     "cavite:geocode": "node scripts/geocode-cavite-lgu.mjs",
     "cavite:seed": "node scripts/generate-cavite-lgu-seed.mjs",
-    "cavite:sql-all": "node scripts/build-cavite-sta-complete-sql.mjs"
+    "cavite:sql-all": "node scripts/build-cavite-sta-complete-sql.mjs",
+    "cavite:verify-view": "node scripts/verify-v-cavite-establishments.js",
+    "cavite:verify-places": "node scripts/verify-places-catalog.js"
   },
   "devDependencies": {
     "xlsx": "^0.18.5"
