@@ -1,7 +1,14 @@
 /**
- * Cavite STA-v3 establishments via unified view `v_cavite_establishments`.
+ * Cavite establishments via unified view `v_cavite_establishments`
+ * (includes admin CMS rows from public.places with source_slug admin:*).
  */
 import { enrichPlaceWithLocalEstablishmentMedia } from './establishmentLocalImages';
+import {
+  CAVITE_ESTABLISHMENTS_SELECT,
+  ESTABLISHMENTS_VIEW,
+  collectRemoteMediaUrls,
+  isAdminCuratedRow,
+} from './cavitePlaceRow';
 
 /** Great-circle distance in kilometers (WGS84 approximate). */
 export function haversineDistanceKm(lat1, lon1, lat2, lon2) {
@@ -16,9 +23,6 @@ export function haversineDistanceKm(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
-const CAVITE_SELECT =
-  'id, name, ta_name, type_code, ta_category, ntdp_category, city_mun, address, latitude, longitude, description, searchable_text, created_at, lgu_slug';
-
 function parseCoord(v) {
   if (v == null) return null;
   const n = typeof v === 'number' ? v : parseFloat(String(v));
@@ -30,24 +34,42 @@ export function rowToPlace(row) {
   const lat = parseCoord(row.latitude);
   const lng = parseCoord(row.longitude);
   if (lat == null || lng == null) return null;
-  return enrichPlaceWithLocalEstablishmentMedia({
+
+  const remoteUrls = collectRemoteMediaUrls(row);
+  const adminCurated = isAdminCuratedRow(row);
+
+  const base = {
     id: row.id,
     name: row.name ?? row.ta_name,
     address: row.address ?? '',
     type: row.ta_category || row.type_code || 'Place',
-    hours: '',
+    hours: row.hours?.trim() || '',
     lat,
     lng,
-    imageUrl: row.image_url,
+    imageUrl: remoteUrls[0] ?? null,
+    galleryUrls: remoteUrls.length ? remoteUrls : undefined,
     description: row.description,
     ntdp_category: row.ntdp_category,
     city_mun: row.city_mun ?? null,
     lgu_slug: row.lgu_slug,
+    source_slug: row.source_slug ?? null,
     ta_category: row.ta_category ?? null,
     type_code: row.type_code ?? null,
     created_at: row.created_at ?? null,
     searchable_text: row.searchable_text ?? null,
-  });
+    phone: row.phone?.trim() || null,
+    email: row.email?.trim() || null,
+    website: row.website?.trim() || null,
+    social_facebook: row.social_facebook?.trim() || null,
+    social_instagram: row.social_instagram?.trim() || null,
+    social_twitter: row.social_twitter?.trim() || null,
+    fromAdminCms: adminCurated,
+  };
+
+  if (adminCurated || remoteUrls.length) {
+    return base;
+  }
+  return enrichPlaceWithLocalEstablishmentMedia(base);
 }
 
 function sanitizeSearchToken(raw) {
@@ -77,8 +99,8 @@ export async function searchPlacesByText(client, rawQuery, limit = 40) {
   ].join(',');
 
   const { data, error } = await client
-    .from('v_cavite_establishments')
-    .select(CAVITE_SELECT)
+    .from(ESTABLISHMENTS_VIEW)
+    .select(CAVITE_ESTABLISHMENTS_SELECT)
     .or(orFilter)
     .not('latitude', 'is', null)
     .not('longitude', 'is', null)
@@ -100,8 +122,8 @@ export async function searchPlacesByText(client, rawQuery, limit = 40) {
 
 export async function fetchTrendingPlacesFromSupabase(client, limit = 120) {
   const { data, error } = await client
-    .from('v_cavite_establishments')
-    .select(CAVITE_SELECT)
+    .from(ESTABLISHMENTS_VIEW)
+    .select(CAVITE_ESTABLISHMENTS_SELECT)
     .not('latitude', 'is', null)
     .not('longitude', 'is', null)
     .order('created_at', { ascending: false })
@@ -125,8 +147,8 @@ export async function fetchAllPlacesFromSupabase(client, pageSize = 1000) {
   while (true) {
     const to = from + size - 1;
     const { data, error } = await client
-      .from('v_cavite_establishments')
-      .select(CAVITE_SELECT)
+      .from(ESTABLISHMENTS_VIEW)
+      .select(CAVITE_ESTABLISHMENTS_SELECT)
       .not('latitude', 'is', null)
       .not('longitude', 'is', null)
       .order('created_at', { ascending: false })
@@ -149,8 +171,8 @@ export async function fetchAllPlacesFromSupabase(client, pageSize = 1000) {
 
 export async function fetchPlaceById(client, id) {
   const { data, error } = await client
-    .from('v_cavite_establishments')
-    .select(CAVITE_SELECT)
+    .from(ESTABLISHMENTS_VIEW)
+    .select(CAVITE_ESTABLISHMENTS_SELECT)
     .eq('id', id)
     .maybeSingle();
   if (error) throw new Error(error.message);

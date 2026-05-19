@@ -1,0 +1,13 @@
+{
+  "name": "cavitour-shared",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared content pipeline constants and matched offline demo catalog for web + mobile",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./contentPipeline": "./contentPipeline.js",
+    "./demoCatalog": "./demoCatalog.js"
+  }
+}

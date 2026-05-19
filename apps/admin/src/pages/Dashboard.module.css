@@ -324,6 +324,7 @@
 }
 
 .analyticsSection {
-  margin-top: 32px;
+  margin-bottom: 28px;
+  margin-top: 0;
   scroll-margin-top: 24px;
 }

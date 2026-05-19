@@ -1,16 +1,9 @@
 import { NavLink } from 'react-router-dom';
+import { MAIN_ADMIN_NAV, MORE_ADMIN_NAV } from '../config/mainNav';
 import { useAdminHref } from '../contexts/AdminPathPrefixContext';
 import styles from './Sidebar.module.css';
 
 type NavItem = { to: string; icon: string; label: string };
-
-const MAIN_NAV: NavItem[] = [
-  { to: '/web/dashboard', icon: 'dashboard', label: 'Dashboard' },
-  { to: '/web/destinations', icon: 'pin', label: 'Destinations' },
-  { to: '/web/terminals', icon: 'bus', label: 'Terminals' },
-  { to: '/web/users', icon: 'users', label: 'Users' },
-  { to: '/web/settings', icon: 'gear', label: 'Settings' },
-];
 
 const MOBILE_NAV: NavItem[] = [
   { to: '/mobile/itineraries', icon: 'calendar', label: 'Itineraries' },
@@ -127,7 +120,15 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       )}
 
       <nav className={styles.nav} aria-label="Admin sections">
-        <NavItems items={MAIN_NAV} collapsed={collapsed} />
+        <NavItems
+          items={MAIN_ADMIN_NAV.map((item) => ({ to: item.to, icon: item.icon, label: item.label }))}
+          collapsed={collapsed}
+        />
+        {!collapsed && <p className={styles.navSectionLabel}>More</p>}
+        <NavItems
+          items={MORE_ADMIN_NAV.map((item) => ({ to: item.to, icon: item.icon, label: item.label }))}
+          collapsed={collapsed}
+        />
         {!collapsed && <p className={styles.navSectionLabel}>Mobile app</p>}
         {collapsed && <div className={styles.navDivider} aria-hidden />}
         <NavItems items={MOBILE_NAV} collapsed={collapsed} />

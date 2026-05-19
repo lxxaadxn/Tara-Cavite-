@@ -13,6 +13,7 @@ export default defineConfig({
     dedupe: ['react', 'react-dom'],
     alias: {
       '@admin': path.resolve(__dirname, '../admin/src'),
+      'cavitour-shared': path.resolve(__dirname, '../shared'),
     },
   },
   server: {

@@ -2,29 +2,17 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Place } from '../data/mockData';
 import { enrichPlaceWithLocalEstablishmentMedia } from './establishmentLocalImages';
 import { normalizeNtdpCopy } from './ntdpDisplayLabels';
-
-export type CavitePlaceRow = {
-  id: string;
-  name: string;
-  ta_name: string;
-  type_code: string | null;
-  ta_category: string | null;
-  ntdp_category: string | null;
-  city_mun: string | null;
-  address: string;
-  latitude: string | number | null;
-  longitude: string | number | null;
-  description: string | null;
-  searchable_text: string | null;
-  lgu_slug: string | null;
-  created_at?: string | null;
-};
+import {
+  CAVITE_ESTABLISHMENTS_SELECT,
+  ESTABLISHMENTS_VIEW,
+  collectRemoteMediaUrls,
+  isAdminCuratedRow,
+  type CaviteEstablishmentRow,
+} from './cavitePlaceRow';
 
 /** Alias for screens that still import `PlaceRow`. */
-export type PlaceRow = CavitePlaceRow;
-
-const CAVITE_SELECT =
-  'id, name, ta_name, type_code, ta_category, ntdp_category, city_mun, address, latitude, longitude, description, searchable_text, created_at, lgu_slug';
+export type PlaceRow = CaviteEstablishmentRow;
+export type CavitePlaceRow = CaviteEstablishmentRow;
 
 const KM_PER_DEG_LAT = 111;
 
@@ -64,20 +52,25 @@ export function parseCoord(v: string | number | null | undefined): number | null
   return Number.isFinite(n) ? n : null;
 }
 
-/** Map Cavite view row → Place (mockData shape). */
+/** Map Cavite view row → Place (mockData shape). Admin CMS rows use remote image URLs. */
 export function rowToPlace(row: CavitePlaceRow): Place | null {
   const lat = parseCoord(row.latitude);
   const lng = parseCoord(row.longitude);
   if (lat == null || lng == null) return null;
+
+  const adminCurated = isAdminCuratedRow(row);
+  const remoteUrls = collectRemoteMediaUrls(row);
+
   const p: Place = {
     id: row.id,
     name: row.name ?? row.ta_name,
     address: row.address,
     type: row.ta_category || row.type_code || 'Place',
-    hours: '',
+    hours: row.hours?.trim() || '',
     latitude: lat,
     longitude: lng,
   };
+
   if (row.description) p.description = normalizeNtdpCopy(row.description);
   if (row.ntdp_category) p.ntdp_category = normalizeNtdpCopy(row.ntdp_category);
   if (row.city_mun) p.city_mun = row.city_mun;
@@ -86,6 +79,22 @@ export function rowToPlace(row: CavitePlaceRow): Place | null {
   if (row.type_code) p.type_code = row.type_code;
   if (row.ta_category) p.ta_category = row.ta_category;
   if (row.lgu_slug) p.lgu_slug = row.lgu_slug;
+  if (row.source_slug) p.source_slug = row.source_slug;
+  if (row.phone?.trim()) p.phone = row.phone.trim();
+  if (row.email?.trim()) p.email = row.email.trim();
+  if (row.website?.trim()) p.website = row.website.trim();
+  if (row.social_facebook?.trim()) p.social_facebook = row.social_facebook.trim();
+  if (row.social_instagram?.trim()) p.social_instagram = row.social_instagram.trim();
+  if (row.social_twitter?.trim()) p.social_twitter = row.social_twitter.trim();
+
+  if (remoteUrls.length) {
+    p.image = { uri: remoteUrls[0] };
+    p.gallery = remoteUrls.map((uri) => ({ uri }));
+  }
+
+  if (adminCurated || remoteUrls.length) {
+    return p;
+  }
   return enrichPlaceWithLocalEstablishmentMedia(p);
 }
 
@@ -136,8 +145,8 @@ export async function searchPlacesByText(
 
   const fetchCap = 3000;
   const { data, error } = await client
-    .from('v_cavite_establishments')
-    .select(CAVITE_SELECT)
+    .from(ESTABLISHMENTS_VIEW)
+    .select(CAVITE_ESTABLISHMENTS_SELECT)
     .not('latitude', 'is', null)
     .not('longitude', 'is', null)
     .limit(fetchCap);
@@ -181,8 +190,8 @@ export async function fetchTrendingPlacesFromSupabase(
   limit = 40
 ): Promise<Place[]> {
   const { data, error } = await client
-    .from('v_cavite_establishments')
-    .select(CAVITE_SELECT)
+    .from(ESTABLISHMENTS_VIEW)
+    .select(CAVITE_ESTABLISHMENTS_SELECT)
     .not('latitude', 'is', null)
     .not('longitude', 'is', null)
     .order('created_at', { ascending: false })
@@ -209,8 +218,8 @@ export async function fetchNearbyPlacesFromSupabase(
   const bbox = boundingBoxForRadiusKm(userLat, userLng, padKm);
 
   const { data, error } = await client
-    .from('v_cavite_establishments')
-    .select(CAVITE_SELECT)
+    .from(ESTABLISHMENTS_VIEW)
+    .select(CAVITE_ESTABLISHMENTS_SELECT)
     .gte('latitude', bbox.latMin)
     .lte('latitude', bbox.latMax)
     .gte('longitude', bbox.lngMin)
@@ -234,8 +243,8 @@ export async function fetchNearbyPlacesFromSupabase(
 export async function fetchDashboardPlacesPool(client: SupabaseClient, limit = 1500): Promise<Place[]> {
   const cap = Math.min(Math.max(limit, 1), 3000);
   const { data, error } = await client
-    .from('v_cavite_establishments')
-    .select(CAVITE_SELECT)
+    .from(ESTABLISHMENTS_VIEW)
+    .select(CAVITE_ESTABLISHMENTS_SELECT)
     .not('latitude', 'is', null)
     .not('longitude', 'is', null)
     .order('created_at', { ascending: false })
@@ -249,4 +258,14 @@ export async function fetchDashboardPlacesPool(client: SupabaseClient, limit = 1
     if (p) out.push(p);
   }
   return out;
+}
+
+export async function fetchPlaceById(client: SupabaseClient, id: string): Promise<Place | null> {
+  const { data, error } = await client
+    .from(ESTABLISHMENTS_VIEW)
+    .select(CAVITE_ESTABLISHMENTS_SELECT)
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data ? rowToPlace(data as CavitePlaceRow) : null;
 }

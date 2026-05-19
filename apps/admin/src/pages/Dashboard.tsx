@@ -1,31 +1,23 @@
-import { useEffect } from 'react';
 import { stats, recentActivity } from '../data/mockData';
 import { AnalyticsSection } from '../components/AnalyticsSection';
 import styles from './Dashboard.module.css';
 
 export function Dashboard() {
-  useEffect(() => {
-    if (window.location.hash === '#analytics') {
-      requestAnimationFrame(() => {
-        document.getElementById('analytics')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
-    }
-  }, []);
-
   return (
     <div className={styles.page}>
       <div className={styles.header}>
         <h1>Dashboard</h1>
-        <p>
-          Combined view for the public web experience and the mobile app. Destinations, terminals, and users are managed
-          from one place; mobile-only tools stay in the sidebar under &quot;Mobile app&quot;.
-        </p>
+        <p>Overview of web and mobile usage. Analytics appear first; manage destinations under Content Management.</p>
       </div>
+
+      <section id="analytics" className={styles.analyticsSection} aria-label="Analytics">
+        <AnalyticsSection />
+      </section>
 
       <div className={styles.scopeRow}>
         <div className={styles.scopeCard}>
           <h3>Web</h3>
-          <p>Search, place detail, marketing pages, and the web map pull from destinations and terminals you publish here.</p>
+          <p>Search, place detail, and marketing pages use destinations from Content Management.</p>
         </div>
         <div className={styles.scopeCard}>
           <h3>Mobile</h3>
@@ -159,10 +151,6 @@ export function Dashboard() {
           build (not recommended for production; use a backend secret instead).
         </p>
       </div>
-
-      <section id="analytics" className={styles.analyticsSection}>
-        <AnalyticsSection />
-      </section>
     </div>
   );
 }

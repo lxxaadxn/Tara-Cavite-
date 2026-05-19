@@ -5,6 +5,7 @@
   padding: 16px 24px;
   background: var(--card);
   box-shadow: var(--shadow);
+  flex-wrap: wrap;
 }
 
 .logo {
@@ -46,7 +47,8 @@
 
 .search {
   flex: 1;
-  max-width: 480px;
+  min-width: 120px;
+  max-width: 360px;
   display: flex;
   align-items: center;
   gap: 12px;

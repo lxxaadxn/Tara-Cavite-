@@ -23,20 +23,20 @@ export function adminLayoutChildRoutes() {
     <Route key="idx" index element={<Navigate to="web/dashboard" replace />} />,
 
     <Route key="web-dash" path="web/dashboard" element={<Dashboard />} />,
-    <Route key="web-dest" path="web/destinations" element={<TouristSpots />} />,
+    <Route key="web-content" path="web/content" element={<TouristSpots />} />,
+    <Route key="web-dest" path="web/destinations" element={<Navigate to="web/content" replace />} />,
     <Route key="web-term" path="web/terminals" element={<WebTerminals />} />,
     <Route key="web-users" path="web/users" element={<Users />} />,
     <Route key="web-settings" path="web/settings" element={<Settings />} />,
     <Route key="web-analytics" path="web/analytics" element={<Analytics />} />,
 
-    <Route key="web-ts" path="web/tourist-spots" element={<Navigate to="web/destinations" replace />} />,
-    <Route key="web-content" path="web/content" element={<Navigate to="web/dashboard" replace />} />,
+    <Route key="web-ts" path="web/tourist-spots" element={<Navigate to="web/content" replace />} />,
     <Route key="web-mod" path="web/moderation" element={<Navigate to="web/dashboard" replace />} />,
     <Route key="web-profile" path="web/profile" element={<Navigate to="web/settings" replace />} />,
     <Route key="web-routes" path="web/routes" element={<Navigate to="web/dashboard" replace />} />,
 
     <Route key="m-dash" path="mobile/dashboard" element={<Navigate to="web/dashboard" replace />} />,
-    <Route key="m-ts" path="mobile/tourist-spots" element={<Navigate to="web/destinations" replace />} />,
+    <Route key="m-ts" path="mobile/tourist-spots" element={<Navigate to="web/content" replace />} />,
     <Route key="m-itin" path="mobile/itineraries" element={<MobileItineraries />} />,
     <Route key="m-saved" path="mobile/saved-lists" element={<MobileSavedLists />} />,
     <Route key="m-map" path="mobile/map-commute" element={<MobileMapCommute />} />,
@@ -49,7 +49,7 @@ export function adminLayoutChildRoutes() {
     <Route key="m-settings" path="mobile/settings" element={<Settings />} />,
 
     <Route key="leg-dash" path="dashboard" element={<Navigate to="web/dashboard" replace />} />,
-    <Route key="leg-ts" path="tourist-spots" element={<Navigate to="web/destinations" replace />} />,
+    <Route key="leg-ts" path="tourist-spots" element={<Navigate to="web/content" replace />} />,
     <Route key="leg-routes" path="routes" element={<Navigate to="web/dashboard" replace />} />,
     <Route key="leg-users" path="users" element={<Navigate to="web/users" replace />} />,
     <Route key="leg-analytics" path="analytics" element={<Navigate to="web/dashboard" replace />} />,

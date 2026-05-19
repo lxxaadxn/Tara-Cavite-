@@ -665,6 +665,12 @@ function lookupLocalEstablishmentMedia(name: string): { image: any; gallery: any
 }
 
 export function enrichPlaceWithLocalEstablishmentMedia(place: Place): Place {
+  if (place.source_slug?.startsWith('admin:') || place.lgu_slug === 'admin') {
+    return place;
+  }
+  if (place.image && typeof place.image === 'object' && 'uri' in place.image) {
+    return place;
+  }
   const entry = lookupLocalEstablishmentMedia(place.name);
   if (!entry) return place;
   return {

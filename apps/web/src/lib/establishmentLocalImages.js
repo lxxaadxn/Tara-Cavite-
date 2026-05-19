@@ -573,6 +573,9 @@ function lookupLocalEstablishmentUrls(name) {
  * @returns {object}
  */
 export function enrichPlaceWithLocalEstablishmentMedia(place) {
+  if (place.fromAdminCms || place.imageUrl || place.galleryUrls?.length) {
+    return place;
+  }
   const urls = lookupLocalEstablishmentUrls(place.name);
   if (!urls?.length) return place;
   return {

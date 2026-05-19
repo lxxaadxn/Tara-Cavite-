@@ -3,6 +3,10 @@
 # dependencies
 node_modules/
 
+# Windows reserved name (breaks git/npm on some machines)
+nul
+nul/
+
 # Expo
 .expo/
 dist/

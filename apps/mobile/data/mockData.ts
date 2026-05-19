@@ -27,6 +27,14 @@ export interface Place {
   type_code?: string;
   ta_category?: string;
   lgu_slug?: string;
+  /** Admin CMS stable key (admin:uuid) */
+  source_slug?: string;
+  phone?: string;
+  email?: string;
+  website?: string;
+  social_facebook?: string;
+  social_instagram?: string;
+  social_twitter?: string;
 }
 
 export interface Route {
