@@ -833,6 +833,69 @@ const stFrancisOfAssisiParishGallery = [
   u('St._Francis_of_Assisi_Parish_3.png'),
 ];
 
+const indangCommunityMuseumGallery = [
+  u('Indang_Community_Museum.png'),
+  u('Indang_Community_Museum_1.png'),
+  u('Indang_Community_Museum_2.png'),
+  u('Indang_Community_Museum_3.png'),
+];
+
+const bonifacioShrineGallery = [
+  u('Bonifacio_Shrine.png'),
+  u('Bonifacio_Shrine_1.png'),
+  u('Bonifacio_Shrine_2.png'),
+  u('Bonifacio_Shrine_3.png'),
+];
+
+const cvsuAgriEcoTourismParkGallery = [
+  u('CvSU_Agri-Eco_Tourism_Park.png'),
+  u('CvSU_Agri-Eco_Tourism_Park_1.png'),
+  u('CvSU_Agri-Eco_Tourism_Park_2.png'),
+  u('CvSU_Agri-Eco_Tourism_Park_3.png'),
+];
+
+const loufilResortGallery = [
+  u('Loufil_Resort.png'),
+  u('Loufil_Resort_1.png'),
+  u('Loufil_Resort_2.png'),
+  u('Loufil_Resort_3.png'),
+];
+
+const marayataFarmGallery = [
+  u('Marayata_Farm.png'),
+  u('Marayata_Farm_1.png'),
+  u('Marayata_Farm_2.png'),
+  u('Marayata_Farm_3.png'),
+];
+
+const pioDeRodaGallery = [
+  u('Pio_de_Roda.png'),
+  u('Pio_de_Roda_1.png'),
+  u('Pio_de_Roda_2.png'),
+  u('Pio_de_Roda_3.png'),
+];
+
+const preciousGardenEventsPlaceGallery = [
+  u('Precious_Garden_Events_Place.png'),
+  u('Precious_Garden_Events_Place_1.png'),
+  u('Precious_Garden_Events_Place_2.png'),
+  u('Precious_Garden_Events_Place_3.png'),
+];
+
+const sanctuarioNatureFarmsGallery = [
+  u('Sanctuario_Nature_Farms.png'),
+  u('Sanctuario_Nature_Farms_1.png'),
+  u('Sanctuario_Nature_Farms_2.png'),
+  u('Sanctuario_Nature_Farms_3.png'),
+];
+
+const stGregoryTheGreatParishGallery = [
+  u('St._Gregory_the_Great_Parish.png'),
+  u('St._Gregory_the_Great_Parish_1.png'),
+  u('St._Gregory_the_Great_Parish_2.png'),
+  u('St._Gregory_the_Great_Parish_3.png'),
+];
+
 const LOCAL_MEDIA = {
   Asador: asadorGallery,
   Arocarria: arocarriaGallery,
@@ -954,6 +1017,15 @@ const LOCAL_MEDIA = {
   "Serville Ana's Resort": servilleAnasResortGallery,
   "Soak 'N Swim Resort": soakNSwimResortGallery,
   'St. Francis of Assisi Parish': stFrancisOfAssisiParishGallery,
+  'Indang Community Museum': indangCommunityMuseumGallery,
+  'Bonifacio Shrine': bonifacioShrineGallery,
+  'CvSU Agri-Eco Tourism Park': cvsuAgriEcoTourismParkGallery,
+  'Loufil Resort': loufilResortGallery,
+  'Marayata Farm': marayataFarmGallery,
+  'Pio de Roda': pioDeRodaGallery,
+  'Precious Garden Events Place': preciousGardenEventsPlaceGallery,
+  'Sanctuario Nature Farms': sanctuarioNatureFarmsGallery,
+  'St. Gregory the Great Parish': stGregoryTheGreatParishGallery,
 };
 
 function lookupLocalEstablishmentUrls(name) {

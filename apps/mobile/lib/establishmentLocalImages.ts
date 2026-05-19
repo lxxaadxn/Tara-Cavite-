@@ -830,6 +830,69 @@ const stFrancisOfAssisiParishGallery = [
   require('../assets/images/St._Francis_of_Assisi_Parish_3.png'),
 ];
 
+const indangCommunityMuseumGallery = [
+  require('../assets/images/Indang_Community_Museum.png'),
+  require('../assets/images/Indang_Community_Museum_1.png'),
+  require('../assets/images/Indang_Community_Museum_2.png'),
+  require('../assets/images/Indang_Community_Museum_3.png'),
+];
+
+const bonifacioShrineGallery = [
+  require('../assets/images/Bonifacio_Shrine.png'),
+  require('../assets/images/Bonifacio_Shrine_1.png'),
+  require('../assets/images/Bonifacio_Shrine_2.png'),
+  require('../assets/images/Bonifacio_Shrine_3.png'),
+];
+
+const cvsuAgriEcoTourismParkGallery = [
+  require('../assets/images/CvSU_Agri-Eco_Tourism_Park.png'),
+  require('../assets/images/CvSU_Agri-Eco_Tourism_Park_1.png'),
+  require('../assets/images/CvSU_Agri-Eco_Tourism_Park_2.png'),
+  require('../assets/images/CvSU_Agri-Eco_Tourism_Park_3.png'),
+];
+
+const loufilResortGallery = [
+  require('../assets/images/Loufil_Resort.png'),
+  require('../assets/images/Loufil_Resort_1.png'),
+  require('../assets/images/Loufil_Resort_2.png'),
+  require('../assets/images/Loufil_Resort_3.png'),
+];
+
+const marayataFarmGallery = [
+  require('../assets/images/Marayata_Farm.png'),
+  require('../assets/images/Marayata_Farm_1.png'),
+  require('../assets/images/Marayata_Farm_2.png'),
+  require('../assets/images/Marayata_Farm_3.png'),
+];
+
+const pioDeRodaGallery = [
+  require('../assets/images/Pio_de_Roda.png'),
+  require('../assets/images/Pio_de_Roda_1.png'),
+  require('../assets/images/Pio_de_Roda_2.png'),
+  require('../assets/images/Pio_de_Roda_3.png'),
+];
+
+const preciousGardenEventsPlaceGallery = [
+  require('../assets/images/Precious_Garden_Events_Place.png'),
+  require('../assets/images/Precious_Garden_Events_Place_1.png'),
+  require('../assets/images/Precious_Garden_Events_Place_2.png'),
+  require('../assets/images/Precious_Garden_Events_Place_3.png'),
+];
+
+const sanctuarioNatureFarmsGallery = [
+  require('../assets/images/Sanctuario_Nature_Farms.png'),
+  require('../assets/images/Sanctuario_Nature_Farms_1.png'),
+  require('../assets/images/Sanctuario_Nature_Farms_2.png'),
+  require('../assets/images/Sanctuario_Nature_Farms_3.png'),
+];
+
+const stGregoryTheGreatParishGallery = [
+  require('../assets/images/St._Gregory_the_Great_Parish.png'),
+  require('../assets/images/St._Gregory_the_Great_Parish_1.png'),
+  require('../assets/images/St._Gregory_the_Great_Parish_2.png'),
+  require('../assets/images/St._Gregory_the_Great_Parish_3.png'),
+];
+
 /** Local bundled photos keyed by `Place.name` as returned from `v_cavite_establishments`. */
 const LOCAL_MEDIA: Record<string, { image: any; gallery: any[] }> = {
   Asador: { image: asadorGallery[0], gallery: asadorGallery },
@@ -1151,6 +1214,30 @@ const LOCAL_MEDIA: Record<string, { image: any; gallery: any[] }> = {
   'St. Francis of Assisi Parish': {
     image: stFrancisOfAssisiParishGallery[0],
     gallery: stFrancisOfAssisiParishGallery,
+  },
+  'Indang Community Museum': {
+    image: indangCommunityMuseumGallery[0],
+    gallery: indangCommunityMuseumGallery,
+  },
+  'Bonifacio Shrine': { image: bonifacioShrineGallery[0], gallery: bonifacioShrineGallery },
+  'CvSU Agri-Eco Tourism Park': {
+    image: cvsuAgriEcoTourismParkGallery[0],
+    gallery: cvsuAgriEcoTourismParkGallery,
+  },
+  'Loufil Resort': { image: loufilResortGallery[0], gallery: loufilResortGallery },
+  'Marayata Farm': { image: marayataFarmGallery[0], gallery: marayataFarmGallery },
+  'Pio de Roda': { image: pioDeRodaGallery[0], gallery: pioDeRodaGallery },
+  'Precious Garden Events Place': {
+    image: preciousGardenEventsPlaceGallery[0],
+    gallery: preciousGardenEventsPlaceGallery,
+  },
+  'Sanctuario Nature Farms': {
+    image: sanctuarioNatureFarmsGallery[0],
+    gallery: sanctuarioNatureFarmsGallery,
+  },
+  'St. Gregory the Great Parish': {
+    image: stGregoryTheGreatParishGallery[0],
+    gallery: stGregoryTheGreatParishGallery,
   },
 };
 
