@@ -12,6 +12,7 @@ Monorepo for the CaviTour Cavite travel guide: **mobile** (Expo), **marketing we
 | [`supabase/`](supabase/) | SQL migrations & seeds |
 | [`scripts/`](scripts/) | Build helpers (e.g. Jam icons → `apps/mobile/lib/jamSvgMap.ts`) |
 | [`docs/`](docs/) | Setup / verification notes, [layout reference](docs/REPOSITORY_LAYOUT.md) |
+| [`apps/shared/`](apps/shared/) | Shared pipeline constants + matched offline demo catalog (`cavitour-shared`) |
 | [`packages/`](packages/) | Reserved for shared code later |
 
 ## Quick start
@@ -22,12 +23,13 @@ From the **repository root**:
 npm install
 ```
 
+After pulling latest `main`, see [`docs/TEAM_SETUP_AFTER_PULL.md`](docs/TEAM_SETUP_AFTER_PULL.md). If `npm install` fails with certificate errors on your network, use `npm install --strict-ssl=false --no-audit` once from the repo root.
+
 ### Mobile (Expo)
 
 ```bash
-npm run mobile
-# or
-npm run start --workspace=cavitour-mobile
+cd apps/mobile && npm run start
+# or from root: npm run mobile
 ```
 
 Uses **tunnel** by default (see [`docs/QUICK_SETUP.md`](docs/QUICK_SETUP.md) for LAN / firewall tips). Edit routes under `apps/mobile/app/`.
@@ -35,13 +37,15 @@ Uses **tunnel** by default (see [`docs/QUICK_SETUP.md`](docs/QUICK_SETUP.md) for
 ### Marketing web (Vite)
 
 ```bash
-npm run web
+cd apps/web && npm run dev
+# or from root: npm run web
 ```
 
 ### Admin (Vite, port 3001)
 
 ```bash
-npm run admin
+cd apps/admin && npm run dev
+# or from root: npm run admin
 ```
 
 ### Regenerate icon map (mobile)
@@ -64,7 +68,11 @@ Targets `apps/mobile/` automatically.
 
 The shared **Supabase project URL and anon key** are committed in `apps/web/src/lib/supabase.js` and `apps/mobile/lib/supabase.ts` so anyone who clones the repo can run **web** and **mobile** against the same backend without a local `.env`.
 
-Live listings use **`public.v_cavite_establishments`** (see [`docs/CAVITE_STA_V3_SETUP.md`](docs/CAVITE_STA_V3_SETUP.md)). The one-file SQL bundle is [`supabase/cavite_sta_v3_FULL_for_sql_editor.sql`](supabase/cavite_sta_v3_FULL_for_sql_editor.sql) (run once in the Supabase SQL Editor if you reset the DB).
+Live listings use **`public.v_cavite_establishments`**. Admin **Content management** writes to `public.places` (`source_slug` `admin:*`); web and mobile read the same view.
+
+**New clone / co-developer:** follow [`docs/TEAM_SETUP_AFTER_PULL.md`](docs/TEAM_SETUP_AFTER_PULL.md) (npm install + migrations `20260510120003` → `20260510120004`).
+
+Legacy STA-v3 bulk import: [`docs/CAVITE_STA_V3_SETUP.md`](docs/CAVITE_STA_V3_SETUP.md) and [`supabase/cavite_sta_v3_FULL_for_sql_editor.sql`](supabase/cavite_sta_v3_FULL_for_sql_editor.sql).
 
 ---
 

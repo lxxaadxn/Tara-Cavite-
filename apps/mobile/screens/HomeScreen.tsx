@@ -18,14 +18,11 @@ import * as Location from 'expo-location';
 import { JamIcon } from '../components/JamIcon';
 import { DashboardFiltersPanel } from '../components/DashboardFiltersPanel';
 import { Header } from '../components/Header';
+import { SYNC_MESSAGES, mapDemoEstablishmentRows } from 'cavitour-shared';
 import type { Place } from '../data/mockData';
+import { rowToPlace } from '../lib/placesFromSupabase';
 import { supabase } from '../lib/supabase';
-import {
-  fetchDashboardPlacesPool,
-  haversineDistanceKm,
-  logPlacesFetchError,
-} from '../lib/placesFromSupabase';
-import { placeImageSource } from '../lib/placeImageSource';
+import { fetchDashboardPlacesPool, haversineDistanceKm } from '../lib/placesFromSupabase';
 import {
   placeMatchesDashboardFilters,
   sortPlacesByDashboardSort,
@@ -64,7 +61,6 @@ const HomeScreen: React.FC = () => {
   const [catalogPlaces, setCatalogPlaces] = useState<Place[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogFromSupabase, setCatalogFromSupabase] = useState(false);
-  const [catalogError, setCatalogError] = useState('');
   const [userPt, setUserPt] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
@@ -75,14 +71,11 @@ const HomeScreen: React.FC = () => {
         const list = await fetchDashboardPlacesPool(supabase, 1500);
         if (!cancelled) {
           setCatalogPlaces(list);
-          setCatalogFromSupabase(list.length > 0);
-          setCatalogError(list.length > 0 ? '' : 'No geocoded establishments in Supabase.');
+          setCatalogFromSupabase(true);
         }
-      } catch (err) {
-        logPlacesFetchError('fetchDashboardPlacesPool', err);
+      } catch {
         if (!cancelled) {
-          setCatalogError(err instanceof Error ? err.message : 'Could not load establishments.');
-          setCatalogPlaces([]);
+          setCatalogPlaces(mapDemoEstablishmentRows((row) => rowToPlace(row)).filter((p): p is Place => p != null));
           setCatalogFromSupabase(false);
         }
       } finally {
@@ -149,9 +142,9 @@ const HomeScreen: React.FC = () => {
       accessibilityRole="button"
       activeOpacity={0.9}
     >
-      {placeImageSource(place.image) ? (
+      {place.image ? (
         <Image
-          source={placeImageSource(place.image)!}
+          source={place.image}
           style={styles.cardImage}
           resizeMode="cover"
           accessibilityLabel={`${place.name} image`}
@@ -249,12 +242,11 @@ const HomeScreen: React.FC = () => {
             </ScrollView>
           )}
         </View>
+        {catalogFromSupabase && !catalogLoading ? (
+          <Text style={styles.liveHint}>{SYNC_MESSAGES.live}</Text>
+        ) : null}
         {!catalogFromSupabase && !catalogLoading ? (
-          <Text style={styles.offlineHint}>
-            {catalogError
-              ? `Could not load Cavite catalog (${catalogError}). Showing sample listings.`
-              : 'Showing sample listings — connect to load full Cavite catalog.'}
-          </Text>
+          <Text style={styles.offlineHint}>{SYNC_MESSAGES.demo}</Text>
         ) : null}
       </ScrollView>
 
@@ -444,6 +436,14 @@ const styles = StyleSheet.create({
     color: FIGMA.textMuted,
     paddingHorizontal: H_PAD,
     paddingVertical: 8,
+  },
+  liveHint: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#2d5016',
+    paddingHorizontal: H_PAD,
+    paddingBottom: 8,
   },
   offlineHint: {
     fontFamily: 'Inter_400Regular',

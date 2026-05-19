@@ -49,9 +49,6 @@ export function LoginPage() {
           <span className={styles.badge}>Admin</span>
         </div>
         <h1 className={styles.title}>Sign in</h1>
-        <p className={styles.hint}>
-          Use the admin account email <strong>{ADMIN_ALLOWED_EMAIL}</strong>.
-        </p>
 
         <form onSubmit={handleSubmit} className={styles.form}>
           <label className={styles.label}>

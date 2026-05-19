@@ -478,6 +478,23 @@ export default function AboutEstablishmentScreen() {
               <Text style={styles.descriptionLabel}>About this place</Text>
               <Text style={styles.bodyText}>{bodyText}</Text>
             </View>
+            {place.hours?.trim() ? (
+              <View style={styles.descriptionCard}>
+                <Text style={styles.descriptionLabel}>Operating hours</Text>
+                <Text style={styles.bodyText}>{place.hours.trim()}</Text>
+              </View>
+            ) : null}
+            {place.phone || place.email || place.website || place.social_facebook || place.social_instagram || place.social_twitter ? (
+              <View style={styles.descriptionCard}>
+                <Text style={styles.descriptionLabel}>Contact</Text>
+                {place.phone ? <Text style={styles.contactLine}>Phone: {place.phone}</Text> : null}
+                {place.email ? <Text style={styles.contactLine}>Email: {place.email}</Text> : null}
+                {place.website ? <Text style={styles.contactLine}>Website: {place.website}</Text> : null}
+                {place.social_facebook ? <Text style={styles.contactLine}>Facebook: {place.social_facebook}</Text> : null}
+                {place.social_instagram ? <Text style={styles.contactLine}>Instagram: {place.social_instagram}</Text> : null}
+                {place.social_twitter ? <Text style={styles.contactLine}>X: {place.social_twitter}</Text> : null}
+              </View>
+            ) : null}
             <TouchableOpacity
               onPress={openDirections}
               style={styles.directionsButton}
@@ -709,6 +726,13 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     color: TITLE,
     letterSpacing: 0.15,
+  },
+  contactLine: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 15,
+    lineHeight: 24,
+    color: TITLE,
+    marginTop: 6,
   },
   caviTripButton: {
     marginTop: 12,

@@ -352,6 +352,12 @@ export function PlaceDetailPage() {
             city_mun: p.city_mun ?? null,
             ta_category: p.ta_category ?? null,
             type_code: p.type_code ?? null,
+            phone: p.phone ?? null,
+            email: p.email ?? null,
+            website: p.website ?? null,
+            social_facebook: p.social_facebook ?? null,
+            social_instagram: p.social_instagram ?? null,
+            social_twitter: p.social_twitter ?? null,
           });
           setPlaceNotFound(false);
         } else {
@@ -685,6 +691,63 @@ export function PlaceDetailPage() {
                 <div className="border-b border-neutral-100 bg-gradient-to-b from-neutral-50/90 to-white px-5 py-6 sm:px-7 sm:py-7">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-400">About this place</p>
                   <p className="mt-4 text-sm leading-relaxed text-neutral-700 whitespace-pre-line">{touristSpotOverview}</p>
+                  {spot.hours?.trim() ? (
+                    <p className="mt-4 text-sm text-neutral-700">
+                      <span className="font-semibold text-neutral-900">Hours: </span>
+                      {spot.hours.trim()}
+                    </p>
+                  ) : null}
+                  {spot.phone || spot.email || spot.website || spot.social_facebook || spot.social_instagram || spot.social_twitter ? (
+                    <div className="mt-4 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-400">Contact</p>
+                      <ul className="mt-2 space-y-1.5">
+                        {spot.phone ? (
+                          <li>
+                            <span className="font-medium text-neutral-900">Phone: </span>
+                            {spot.phone}
+                          </li>
+                        ) : null}
+                        {spot.email ? (
+                          <li>
+                            <span className="font-medium text-neutral-900">Email: </span>
+                            {spot.email}
+                          </li>
+                        ) : null}
+                        {spot.website ? (
+                          <li>
+                            <span className="font-medium text-neutral-900">Website: </span>
+                            <a href={spot.website} className="text-[#6B8E23] underline break-all" target="_blank" rel="noreferrer">
+                              {spot.website}
+                            </a>
+                          </li>
+                        ) : null}
+                        {spot.social_facebook ? (
+                          <li>
+                            <span className="font-medium text-neutral-900">Facebook: </span>
+                            <a href={spot.social_facebook} className="text-[#6B8E23] underline break-all" target="_blank" rel="noreferrer">
+                              {spot.social_facebook}
+                            </a>
+                          </li>
+                        ) : null}
+                        {spot.social_instagram ? (
+                          <li>
+                            <span className="font-medium text-neutral-900">Instagram: </span>
+                            <a href={spot.social_instagram} className="text-[#6B8E23] underline break-all" target="_blank" rel="noreferrer">
+                              {spot.social_instagram}
+                            </a>
+                          </li>
+                        ) : null}
+                        {spot.social_twitter ? (
+                          <li>
+                            <span className="font-medium text-neutral-900">X: </span>
+                            <a href={spot.social_twitter} className="text-[#6B8E23] underline break-all" target="_blank" rel="noreferrer">
+                              {spot.social_twitter}
+                            </a>
+                          </li>
+                        ) : null}
+                      </ul>
+                    </div>
+                  ) : null}
                 </div>
               )}
 

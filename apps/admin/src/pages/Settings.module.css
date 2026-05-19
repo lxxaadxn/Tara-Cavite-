@@ -101,3 +101,20 @@
 .toggle.on .knob {
   transform: translateX(22px);
 }
+
+.logoutBtn {
+  padding: 10px 18px;
+  border-radius: var(--radius);
+  background: var(--bg);
+  border: 1px solid #e2e8f0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  transition: background 0.15s;
+}
+
+.logoutBtn:hover {
+  background: #fee2e2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
