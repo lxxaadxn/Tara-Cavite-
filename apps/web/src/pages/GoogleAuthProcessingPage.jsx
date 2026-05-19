@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { isAdminReservedEmail } from '../lib/adminReservedEmail';
+import { ADMIN_APP_HOME_PATH } from '../lib/adminPortalPath';
 
 const AUTH_POPUP_MS = 1500;
 
@@ -11,7 +13,12 @@ export function GoogleAuthProcessingPage() {
     let active = true;
     const processGoogleAuth = async () => {
       const { data } = await supabase.auth.getSession();
-      const destination = data?.session ? '/search' : '/login';
+      const email = data?.session?.user?.email?.trim().toLowerCase() ?? '';
+      const destination = !data?.session
+        ? '/login'
+        : email && isAdminReservedEmail(email)
+          ? ADMIN_APP_HOME_PATH
+          : '/search';
 
       // Keep this visible briefly so users always see authentication feedback.
       window.setTimeout(() => {

@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import { useAdminHref } from '../contexts/AdminPathPrefixContext';
 import styles from './Sidebar.module.css';
 
 type NavItem = { to: string; icon: string; label: string };
@@ -99,12 +100,13 @@ interface SidebarProps {
 }
 
 function NavItems({ items, collapsed }: { items: NavItem[]; collapsed: boolean }) {
+  const href = useAdminHref;
   return (
     <>
       {items.map((item) => (
         <NavLink
           key={item.to}
-          to={item.to}
+          to={href(item.to)}
           className={({ isActive }) => (isActive ? `${styles.link} ${styles.active}` : styles.link)}
         >
           <span className={styles.icon}>{icons[item.icon]}</span>

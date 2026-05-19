@@ -1,28 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { fetchAllPlacesFromSupabase, fetchPlaceById } from '../lib/placesFromSupabase';
 import { AppHeader } from '../components/AppHeader';
 import { RouteLeafletMap } from '../components/RouteLeafletMap';
 import { readSavedLists, savePlaceToList, savePlaceToListId } from '../lib/savedPlaces';
-import { planNearestTerminalsForPlaceCommute } from '../lib/terminalTransitPlanner';
-import { recordDestinationReached } from '../lib/destinationReachedActivity';
-import {
-  formatNtdpCategoryTagLabel,
-  getEstablishmentAboutBody,
-  getPreviewReviewEntries,
-} from '../lib/ntdpDisplayLabels';
-import {
-  fetchDrivingRoute,
-  fetchFootRoute,
-  formatDistanceM,
-  formatDurationS,
-} from '../lib/fetchOsrmRoute';
-import {
-  buildCommuterNarrativeFromOsrmSteps,
-  commuterDirectStepInstruction,
-  commuterStepHint,
-} from '../lib/commuterRouteNarration';
+import { formatNtdpCategoryTagLabel, isLikelyPlaceholderDescription } from '../lib/ntdpDisplayLabels';
+import { fetchDrivingRoute } from '../lib/fetchOsrmRoute';
+import { buildCommuterNarrativeFromOsrmSteps } from '../lib/commuterRouteNarration';
 
 const olive = '#7ea00e';
 const COMMUTER_DISCLAIMER =
@@ -43,16 +28,13 @@ const DEFAULT_FALLBACK_SPOT = {
   hours: 'Open daily',
   fromSupabase: false,
   ntdp_category: null,
+  city_mun: 'Tagaytay City',
+  ta_category: null,
+  type_code: null,
 };
 
 function isUuid(s) {
   return typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
-}
-
-function estimatePrice(placeId) {
-  const numeric = Number(String(placeId).replace(/\D/g, '').slice(-3));
-  const seed = Number.isFinite(numeric) && numeric > 0 ? numeric : 42;
-  return 20 + (seed % 70);
 }
 
 function cleanPlaceAddress(name, address) {
@@ -78,6 +60,43 @@ function sanitizeDescription(description) {
     .trim();
 }
 
+function spotCategoryTypeFromDb(spot) {
+  const raw = String(spot?.ntdp_category ?? '').trim();
+  if (raw) return formatNtdpCategoryTagLabel(raw);
+  const ta = typeof spot?.ta_category === 'string' ? spot.ta_category.trim() : '';
+  if (ta) return ta;
+  const tc = typeof spot?.type_code === 'string' ? spot.type_code.trim() : '';
+  if (tc) return tc;
+  const tag = spot?.tags?.find((t) => t && String(t).trim());
+  if (tag) return formatNtdpCategoryTagLabel(String(tag).trim());
+  if (spot?.subtitle && typeof spot.subtitle === 'string') {
+    const parts = spot.subtitle.split('·');
+    if (parts.length > 1) return parts.slice(1).join('·').trim();
+    return spot.subtitle.trim();
+  }
+  return '—';
+}
+
+/** Municipality + province line (Cavite inventory); prefers `city_mun` from DB. */
+function formatMunicipalityProvince(cityMun, address) {
+  const m = cityMun && String(cityMun).trim();
+  if (m) {
+    if (/philippines/i.test(m)) return m;
+    if (/cavite/i.test(m)) return `${m.replace(/,?\s*$/, '')}, Philippines`;
+    return `${m}, Cavite, Philippines`;
+  }
+  const addr = address && String(address).trim();
+  if (!addr) return 'Cavite, Philippines';
+  const parts = addr.split(',').map((s) => s.trim()).filter(Boolean);
+  if (parts.length < 2) return addr;
+  const cavIdx = parts.findIndex((p) => /^cavite$/i.test(p) || /\bcavite\b/i.test(p));
+  if (cavIdx >= 0) {
+    const start = Math.max(0, cavIdx - 1);
+    return parts.slice(start).join(', ');
+  }
+  return parts.slice(-3).join(', ');
+}
+
 function numericSeed(value, fallback = 42) {
   const digits = Number(String(value ?? '').replace(/\D/g, '').slice(-4));
   return Number.isFinite(digits) && digits > 0 ? digits : fallback;
@@ -100,6 +119,9 @@ function createFallbackSpot(sourcePlace) {
     hours: sourcePlace.hours || DEFAULT_FALLBACK_SPOT.hours,
     fromSupabase: false,
     ntdp_category: sourcePlace.ntdp_category ?? null,
+    city_mun: sourcePlace.city_mun ?? DEFAULT_FALLBACK_SPOT.city_mun,
+    ta_category: sourcePlace.ta_category ?? null,
+    type_code: sourcePlace.type_code ?? null,
   };
 }
 
@@ -110,16 +132,69 @@ function formatDuration(totalMinutes) {
   return `${hours} hr ${minutes ? `${minutes} min` : ''}`.trim();
 }
 
-function haversineDistanceKm(lat1, lng1, lat2, lng2) {
-  const toRadians = (deg) => (deg * Math.PI) / 180;
-  const earthRadiusKm = 6371;
-  const dLat = toRadians(lat2 - lat1);
-  const dLng = toRadians(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return earthRadiusKm * c;
+function formatReviewCount(n) {
+  const v = Math.max(0, Math.floor(Number(n) || 0));
+  if (v >= 1000) {
+    const k = v / 1000;
+    const s = k >= 10 ? k.toFixed(0) : k.toFixed(1).replace(/\.0$/, '');
+    return `${s}K`;
+  }
+  return String(v);
+}
+
+/** Build stats so total, average, and bar widths all match the same rating list. */
+function buildReviewStatsFromRatings(ratings) {
+  const list = (ratings ?? []).map((r) => Math.min(5, Math.max(1, Math.round(Number(r)))));
+  const total = list.length;
+  const labels = ['Five', 'Four', 'Three', 'Two', 'One'];
+  const countsByStar = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+  for (const s of list) countsByStar[s] += 1;
+  const breakdown = [5, 4, 3, 2, 1].map((stars, i) => {
+    const count = countsByStar[stars];
+    return {
+      stars,
+      label: labels[i],
+      count,
+      pct: total > 0 ? Math.round((count / total) * 100) : 0,
+    };
+  });
+  const weighted = total ? list.reduce((a, s) => a + s, 0) / total : 0;
+  const avgRating = Math.round(weighted * 10) / 10;
+  return {
+    total,
+    avgRating,
+    breakdown,
+    displayStarCount: total ? Math.min(5, Math.max(1, Math.round(weighted))) : 0,
+  };
+}
+
+/** Sample reviews — included in totals so averages and bars stay consistent. */
+function buildDummyReviews(placeName) {
+  const name = placeName?.trim() || 'This place';
+  const base = Date.now() - 86_400_000 * 14;
+  return [
+    {
+      id: 'sample-1',
+      nickname: 'Mika R.',
+      rating: 5,
+      text: `Easy visit on a weekday. ${name} matched what we expected from the listing and staff were approachable.`,
+      at: base + 86_400_000 * 3,
+    },
+    {
+      id: 'sample-2',
+      nickname: 'Kai del Rosario',
+      rating: 4,
+      text: `Solid stop along our route. A bit busy on a Saturday but still worth the time.`,
+      at: base + 86_400_000 * 8,
+    },
+    {
+      id: 'sample-3',
+      nickname: 'Benj D.',
+      rating: 4,
+      text: `Good for a short stay. We'd consider coming back when we're in Cavite again.`,
+      at: base + 86_400_000 * 11,
+    },
+  ];
 }
 
 function ReviewStars({ value = 5, size = 'h-4 w-4', dimmed = false }) {
@@ -144,37 +219,72 @@ function ReviewStars({ value = 5, size = 'h-4 w-4', dimmed = false }) {
   );
 }
 
+function storageKeyForPlaceReviews(placeId) {
+  return `cavitour-place-reviews-${placeId}`;
+}
+
+function loadSessionReviews(placeId) {
+  if (typeof window === 'undefined' || !placeId) return [];
+  try {
+    const raw = window.sessionStorage.getItem(storageKeyForPlaceReviews(placeId));
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function formatReviewTime(ts) {
+  const ms = Date.now() - Number(ts);
+  if (!Number.isFinite(ms) || ms < 0) return '';
+  if (ms < 60_000) return 'Just now';
+  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m ago`;
+  if (ms < 86_400_000) return `${Math.floor(ms / 3_600_000)}h ago`;
+  return `${Math.floor(ms / 86_400_000)}d ago`;
+}
+
 export function PlaceDetailPage() {
   const { id } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [routePanelOpen, setRoutePanelOpen] = useState(false);
   const [spot, setSpot] = useState(null);
   const [loading, setLoading] = useState(true);
-  const initialTab = (() => {
-    const q = searchParams.get('tab');
-    return ['description', 'reviews', 'route'].includes(q) ? q : 'description';
-  })();
-  const [tab, setTab] = useState(initialTab);
   const [relatedPlacesRaw, setRelatedPlacesRaw] = useState([]);
   const [userCoords, setUserCoords] = useState(null);
   const [saveStatus, setSaveStatus] = useState('');
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [listNameDraft, setListNameDraft] = useState('');
   const [existingLists, setExistingLists] = useState([]);
-  const [terminalTransitPlan, setTerminalTransitPlan] = useState(null);
-  const [terminalTransitLoading, setTerminalTransitLoading] = useState(false);
-  const [destinationReachedBusy, setDestinationReachedBusy] = useState(false);
-  const [routeSubTab, setRouteSubTab] = useState('routeSteps');
+  const [routeSubTab, setRouteSubTab] = useState('routeMain');
   const [osrmDriving, setOsrmDriving] = useState(null);
-  const [osrmFoot, setOsrmFoot] = useState(null);
   const [osrmLoading, setOsrmLoading] = useState(false);
   const [osrmError, setOsrmError] = useState(null);
-  const [fullMapOpen, setFullMapOpen] = useState(false);
+  const [sessionReviews, setSessionReviews] = useState([]);
+
+  const openRoutePanel = useCallback(() => {
+    setRoutePanelOpen(true);
+  }, []);
+
+  const closeRoutePanel = useCallback(() => {
+    setRoutePanelOpen(false);
+    const p = new URLSearchParams(searchParams);
+    if (!p.has('tab')) return;
+    p.delete('tab');
+    setSearchParams(p, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    setRoutePanelOpen(false);
+  }, [id]);
 
   useEffect(() => {
     const q = searchParams.get('tab');
-    const next = ['description', 'reviews', 'route'].includes(q) ? q : 'description';
-    if (next !== tab) setTab(next);
-  }, [searchParams, tab]);
+    if (q === 'description' || q === 'reviews' || q === 'route') {
+      const p = new URLSearchParams(searchParams);
+      p.delete('tab');
+      setSearchParams(p, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.navigator?.geolocation) return;
@@ -200,39 +310,13 @@ export function PlaceDetailPage() {
   }, []);
 
   useEffect(() => {
-    if (!userCoords || spot?.lat == null || spot?.lng == null) {
-      setTerminalTransitPlan(null);
-      setTerminalTransitLoading(false);
-      return;
+    if (!routePanelOpen) {
+      setRouteSubTab('routeMain');
     }
-    let cancelled = false;
-    setTerminalTransitLoading(true);
-    (async () => {
-      try {
-        const plan = await planNearestTerminalsForPlaceCommute(supabase, userCoords, {
-          lat: spot.lat,
-          lng: spot.lng,
-        });
-        if (!cancelled) setTerminalTransitPlan(plan);
-      } catch {
-        if (!cancelled) setTerminalTransitPlan(null);
-      } finally {
-        if (!cancelled) setTerminalTransitLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [userCoords, spot?.lat, spot?.lng]);
+  }, [routePanelOpen]);
 
   useEffect(() => {
-    if (tab !== 'route') {
-      setRouteSubTab('routeSteps');
-    }
-  }, [tab]);
-
-  useEffect(() => {
-    if (tab !== 'route' || spot?.lat == null || spot?.lng == null || !userCoords) {
+    if (!routePanelOpen || spot?.lat == null || spot?.lng == null || !userCoords) {
       return;
     }
     let cancelled = false;
@@ -242,16 +326,14 @@ export function PlaceDetailPage() {
       try {
         const from = { lat: userCoords.lat, lng: userCoords.lng };
         const to = { lat: spot.lat, lng: spot.lng };
-        const [d, f] = await Promise.all([fetchDrivingRoute(from, to), fetchFootRoute(from, to)]);
+        const d = await fetchDrivingRoute(from, to);
         if (!cancelled) {
           setOsrmDriving(d);
-          setOsrmFoot(f);
         }
       } catch {
         if (!cancelled) {
           setOsrmError('Could not load road route.');
           setOsrmDriving(null);
-          setOsrmFoot(null);
         }
       } finally {
         if (!cancelled) setOsrmLoading(false);
@@ -260,7 +342,7 @@ export function PlaceDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [tab, spot?.lat, spot?.lng, userCoords?.lat, userCoords?.lng]);
+  }, [routePanelOpen, spot?.lat, spot?.lng, userCoords?.lat, userCoords?.lng]);
 
   useEffect(() => {
     let cancelled = false;
@@ -290,6 +372,9 @@ export function PlaceDetailPage() {
             hours: p.hours,
             fromSupabase: true,
             ntdp_category: p.ntdp_category ?? null,
+            city_mun: p.city_mun ?? null,
+            ta_category: p.ta_category ?? null,
+            type_code: p.type_code ?? null,
           });
         } else {
           setSpot(createFallbackSpot(relatedPlacesRaw[0]));
@@ -306,6 +391,14 @@ export function PlaceDetailPage() {
       cancelled = true;
     };
   }, [id, relatedPlacesRaw]);
+
+  useEffect(() => {
+    if (!spot?.id) {
+      setSessionReviews([]);
+      return;
+    }
+    setSessionReviews(loadSessionReviews(spot.id));
+  }, [spot?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -328,6 +421,18 @@ export function PlaceDetailPage() {
     'https://images.unsplash.com/photo-1559925393-8be0ec4767c8?w=400&q=80',
   ];
 
+  const dummyReviews = useMemo(() => (spot ? buildDummyReviews(spot.name) : []), [spot?.name]);
+
+  const reviewStatsRatings = useMemo(() => {
+    return [...dummyReviews.map((d) => d.rating), ...sessionReviews.map((s) => s.rating)];
+  }, [dummyReviews, sessionReviews]);
+
+  const mergedReviewStats = useMemo(() => buildReviewStatsFromRatings(reviewStatsRatings), [reviewStatsRatings]);
+
+  const allListedReviews = useMemo(() => {
+    return [...sessionReviews, ...dummyReviews].sort((a, b) => b.at - a.at);
+  }, [dummyReviews, sessionReviews]);
+
   const detailThumbs = useMemo(() => {
     if (!spot) return [extras[0], extras[1], PLACEHOLDER_IMG];
     if (spot.galleryUrls?.length > 1) {
@@ -337,17 +442,6 @@ export function PlaceDetailPage() {
     return [extras[0], extras[1], spot.image];
   }, [spot]);
 
-  const reviewBreakdown = [
-    { label: 'Five', pct: 72, count: '989' },
-    { label: 'Four', pct: 52, count: '4.5K' },
-    { label: 'Three', pct: 14, count: '50' },
-    { label: 'Two', pct: 7, count: '16' },
-    { label: 'One', pct: 4, count: '8' },
-  ];
-  const recentReviews = useMemo(() => {
-    if (!spot) return [];
-    return getPreviewReviewEntries(spot.name, spot.ntdp_category ?? null);
-  }, [spot]);
   const relatedPlaces = useMemo(
     () =>
       relatedPlacesRaw
@@ -413,43 +507,27 @@ export function PlaceDetailPage() {
         meta: userCoords ? 'Detected via GPS' : 'Set your current location',
       },
       {
-        title: `Commute toward ${spot.name}`,
-        meta:
-          'Prefer jeepneys, buses, or UV Express on main roads (many trips pass through Dasmariñas / major Cavite terminals). Ask drivers if they go toward your destination.',
-      },
-      {
         title: spot.name,
         meta: destAddr,
       },
     ];
   }, [displayRoute, spot, userCoords]);
 
-  const handleDestinationReached = async () => {
-    if (!spot?.id || !isUuid(spot.id)) {
-      window.alert('Only catalog places can be added to your trip activity.');
-      return;
-    }
-    setDestinationReachedBusy(true);
-    try {
-      const { data } = await supabase.auth.getUser();
-      if (!data?.user) {
-        window.alert('Sign in to record a completed trip.');
-        return;
-      }
-      recordDestinationReached(data.user.id, spot.id, {
-        name: spot.name,
-        image: spot.image || undefined,
-      });
-      window.alert('Thank You and Enjoy your trip');
-    } finally {
-      setDestinationReachedBusy(false);
-    }
-  };
+  const touristSpotOverview = useMemo(() => {
+    if (!spot) return '';
+    const sanitized = sanitizeDescription(spot.description);
+    if (sanitized && !isLikelyPlaceholderDescription(sanitized)) return sanitized;
+    const cat = spotCategoryTypeFromDb(spot);
+    const c = cat === '—' ? 'Cavite tourism' : cat;
+    return `This destination is classified under “${c}.” Check with the LGU or site operator for current hours, fees, and visitor guidelines.`;
+  }, [spot]);
 
-  const openSeeFullMap = () => {
-    if (spot?.lat == null || spot?.lng == null) return;
-    setFullMapOpen(true);
-  };
+  const touristSpotCategory = useMemo(() => (spot ? spotCategoryTypeFromDb(spot) : '—'), [spot]);
+
+  const touristSpotMunicipalityProvince = useMemo(
+    () => (spot ? formatMunicipalityProvince(spot.city_mun, spot.address) : ''),
+    [spot]
+  );
 
   if (loading || !spot) {
     return (
@@ -461,13 +539,6 @@ export function PlaceDetailPage() {
       </div>
     );
   }
-
-  const setActiveTab = (nextTab) => {
-    setTab(nextTab);
-    const params = new URLSearchParams(searchParams);
-    params.set('tab', nextTab);
-    setSearchParams(params, { replace: true });
-  };
 
   const handleSaveToList = () => {
     const suggestedName = spot?.ntdp_category ? formatNtdpCategoryTagLabel(spot.ntdp_category) : 'My list';
@@ -520,41 +591,51 @@ export function PlaceDetailPage() {
       <main className="w-full max-w-[1480px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
           <section className="rounded-3xl border border-neutral-200 bg-[#f7f7f7] p-4 sm:p-5">
-            <div className="mb-3 flex items-center justify-between text-neutral-700">
-              <Link to="/search" className="inline-flex items-center gap-1.5 text-2xl font-bold hover:underline">
-                <span aria-hidden className="text-3xl leading-none">‹</span>
-                {spot.name}
+            <div className="mb-3">
+              <Link
+                to="/search"
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-neutral-600 transition hover:text-neutral-900 hover:underline"
+              >
+                <span aria-hidden className="text-2xl leading-none">
+                  ‹
+                </span>
+                Back to search
               </Link>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_230px] mb-4">
+            <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_216px]">
               <div className="rounded-2xl overflow-hidden">
-                <img src={spot.image} alt={spot.name} className="h-[300px] w-full object-cover sm:h-[420px]" />
+                <img src={spot.image} alt={spot.name} className="h-[250px] w-full object-cover sm:h-[360px]" />
               </div>
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-1">
                 {detailThumbs.map((img, i) => (
                   <div key={`${img}-${i}`} className="rounded-xl overflow-hidden">
-                    <img src={img} alt="" className="h-28 w-full object-cover sm:h-[132px]" />
+                    <img src={img} alt="" className="h-24 w-full object-cover sm:h-[114px]" />
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              {spot.tags?.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Establishment</p>
-                {spot.tags.slice(0, 5).map((tag) => (
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <h1 className="font-['Poppins',sans-serif] text-xl font-medium tracking-tight text-neutral-900 sm:text-2xl sm:leading-snug">
+                  {spot.name}
+                </h1>
+                {spot.address?.trim() ? (
+                  <p className="mt-2 text-sm leading-relaxed text-neutral-500">{spot.address.trim()}</p>
+                ) : touristSpotMunicipalityProvince ? (
+                  <p className="mt-2 text-sm leading-relaxed text-neutral-500">{touristSpotMunicipalityProvince}</p>
+                ) : null}
+                <p className="mt-3">
                   <span
-                    key={tag}
-                    className="rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[11px] font-medium text-neutral-600"
+                    className="inline-block max-w-full rounded-full px-3 py-1 text-[10px] font-normal leading-snug text-[#3d4a06] shadow-sm sm:text-[11px]"
+                    style={{ backgroundColor: 'rgba(126, 160, 14, 0.22)' }}
                   >
-                    {formatNtdpCategoryTagLabel(tag)}
+                    {touristSpotCategory !== '—' ? touristSpotCategory : 'Cavite tourism'}
                   </span>
-                ))}
-                </div>
-              )}
-              <div className="ml-auto flex items-center gap-2">
+                </p>
+              </div>
+              <div className="flex shrink-0 items-start gap-2 pt-1">
                 {saveStatus && <span className="text-xs font-medium text-emerald-700">{saveStatus}</span>}
                 <button
                   type="button"
@@ -570,622 +651,312 @@ export function PlaceDetailPage() {
               </div>
             </div>
 
-            <div className="mb-3 flex flex-wrap gap-2 border-b border-neutral-200 pb-2">
-              {['description', 'reviews', 'route'].map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setActiveTab(key)}
-                  className="rounded-lg px-3 py-1.5 text-xs font-semibold capitalize"
-                  style={
-                    tab === key
-                      ? { backgroundColor: olive, color: '#fff' }
-                      : { backgroundColor: '#ededed', color: '#5b5b5b' }
-                  }
-                >
-                  {key}
-                </button>
-              ))}
-            </div>
-
-            {tab === 'description' && (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_240px]">
-                <div className="rounded-xl bg-white p-3 text-sm leading-relaxed text-neutral-600">
-                  <p className="whitespace-pre-line">
-                    {getEstablishmentAboutBody({
-                      description: sanitizeDescription(spot.description),
-                      ntdp_category: spot.ntdp_category,
-                      name: spot.name,
-                      address: spot.address,
-                    })}
-                  </p>
+            <div className="overflow-hidden rounded-2xl border border-neutral-200/90 bg-white shadow-[0_4px_28px_rgba(0,0,0,0.05)]">
+              {!routePanelOpen && (
+                <div className="border-b border-neutral-100 bg-gradient-to-b from-neutral-50/90 to-white px-5 py-6 sm:px-7 sm:py-7">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-400">About this place</p>
+                  <p className="mt-4 text-sm leading-relaxed text-neutral-700 whitespace-pre-line">{touristSpotOverview}</p>
                 </div>
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Map location</p>
-                  <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
-                    <iframe
-                      title="Map"
-                      src={`https://www.openstreetmap.org/export/embed.html?bbox=${spot.lng - 0.02}%2C${spot.lat - 0.02}%2C${spot.lng + 0.02}%2C${spot.lat + 0.02}&layer=mapnik&marker=${spot.lat}%2C${spot.lng}`}
-                      className="h-[190px] w-full border-0"
-                    />
-                  </div>
-                  <p className="text-[11px] text-neutral-500">{cleanPlaceAddress(spot.name, spot.address)}</p>
-                </div>
-              </div>
-            )}
+              )}
 
-            {tab === 'reviews' && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 gap-4 rounded-2xl border border-neutral-200 bg-white p-4 shadow-[0_8px_28px_rgba(0,0,0,0.04)] sm:grid-cols-[1.2fr_320px]">
-                  <div className="space-y-2.5">
-                    {reviewBreakdown.map((row) => (
-                      <div key={row.label} className="grid grid-cols-[52px_18px_minmax(0,1fr)_44px] items-center gap-2.5">
-                        <p className="text-[11px] font-semibold uppercase text-neutral-600">{row.label}</p>
-                        <ReviewStars value={1} size="h-3.5 w-3.5" />
-                        <div className="h-2.5 rounded-full bg-neutral-100">
-                          <div className="h-full rounded-full" style={{ width: `${row.pct}%`, backgroundColor: olive }} />
-                        </div>
-                        <p className="text-right text-xs font-semibold text-neutral-600">{row.count}</p>
+              {routePanelOpen && (
+                <div className="border-t border-neutral-100 bg-neutral-50 px-4 py-5 sm:px-6 sm:py-6">
+                  <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
+                    <div className="flex items-start justify-between gap-3 border-b border-neutral-100 px-4 py-4 sm:px-5 sm:py-4">
+                      <div className="min-w-0">
+                        <h3 className="font-['Poppins',sans-serif] text-lg font-semibold tracking-tight text-neutral-900">
+                          Directions
+                        </h3>
+                        <p className="mt-0.5 truncate text-sm text-neutral-500">{spot.name}</p>
                       </div>
-                    ))}
-                  </div>
-                  <div
-                    className="rounded-2xl border border-neutral-200 p-4 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]"
-                    style={{ background: 'linear-gradient(180deg, rgba(126,160,14,0.12), rgba(126,160,14,0.04))' }}
-                  >
-                    <p className="text-4xl font-bold" style={{ color: olive }}>4.3</p>
-                    <div className="mt-2 flex justify-center">
-                      <ReviewStars value={5} size="h-6 w-6" />
-                    </div>
-                    <p className="mt-2 text-sm font-semibold text-neutral-700">50 ratings</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                  <div>
-                    <h3 className="mb-2 text-xl font-bold text-neutral-800">Recent feedback</h3>
-                    <div className="space-y-3">
-                      {recentReviews.map((review) => (
-                        <article
-                          key={review.name}
-                          className="rounded-2xl border border-neutral-200 bg-white p-3 shadow-[0_8px_20px_rgba(0,0,0,0.04)]"
-                        >
-                          <div className="flex items-start gap-3">
-                            <img src={review.image} alt="" className="h-12 w-12 rounded-full object-cover" />
-                            <div className="min-w-0">
-                              <div className="flex items-center justify-between gap-2">
-                                <p className="text-sm font-semibold text-neutral-900">{review.name}</p>
-                                <ReviewStars value={review.rating} size="h-3.5 w-3.5" />
-                              </div>
-                              <p className="mt-1 text-xs leading-relaxed text-neutral-600">{review.text}</p>
-                            </div>
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="mb-2 text-xl font-bold text-neutral-800">Add a Review</h3>
-                    <form className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-[0_8px_20px_rgba(0,0,0,0.04)]">
-                      <label className="block text-xs font-semibold text-neutral-500">Add Your Rating *</label>
-                      <div className="mt-1">
-                        <ReviewStars value={0} size="h-4 w-4" dimmed />
-                      </div>
-                      <label className="mt-3 block text-xs font-semibold text-neutral-500">Name *</label>
-                      <input
-                        type="text"
-                        placeholder="John Doe"
-                        className="mt-1 h-10 w-full rounded-lg border border-neutral-200 px-3 text-sm outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(126,160,14,0.18)]"
-                      />
-                      <label className="mt-3 block text-xs font-semibold text-neutral-500">Email *</label>
-                      <input
-                        type="email"
-                        placeholder="john@example.com"
-                        className="mt-1 h-10 w-full rounded-lg border border-neutral-200 px-3 text-sm outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(126,160,14,0.18)]"
-                      />
-                      <label className="mt-3 block text-xs font-semibold text-neutral-500">Write Your Review *</label>
-                      <textarea
-                        rows={4}
-                        placeholder="Write here..."
-                        className="mt-1 w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(126,160,14,0.18)]"
-                      />
                       <button
                         type="button"
-                        className="mt-4 h-10 w-full rounded-lg text-sm font-semibold text-white"
-                        style={{ backgroundColor: olive }}
+                        onClick={closeRoutePanel}
+                        className="shrink-0 rounded-lg p-2 text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800"
+                        aria-label="Close directions"
                       >
-                        Submit
+                        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                          <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
+                        </svg>
                       </button>
-                    </form>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {tab === 'route' && (
-              <div className="space-y-3">
-                <div className="rounded-2xl border border-[rgba(126,160,14,0.35)] bg-[rgba(126,160,14,0.06)] p-4">
-                  <p className="text-sm font-bold text-[#1f4f59]">Route on the map</p>
-                  <p className="mt-1 text-xs leading-relaxed text-neutral-600">
-                    The map draws a <span className="font-semibold text-[#1d4ed8]">blue line</span> on real roads (OSRM)
-                    from your location to {spot.name}. <span className="font-semibold">Commute steps</span> and{' '}
-                    <span className="font-semibold">Commuter guide</span> use the same OSRM turn data as the mobile app.
-                    Boarding hubs are under <span className="font-semibold">Via Terminals</span>.
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-[rgba(31,79,89,0.2)] bg-white p-4 shadow-sm">
-                  <p className="text-sm font-semibold text-neutral-900">Finished your trip?</p>
-                  <p className="mt-1 text-xs text-neutral-600">
-                    Tap below only after you arrive. Your profile “Activity this month” updates only when you confirm
-                    destination reached — not when you open the map.
-                  </p>
-                  <button
-                    type="button"
-                    disabled={destinationReachedBusy || !isUuid(spot.id)}
-                    onClick={handleDestinationReached}
-                    className="mt-3 w-full rounded-xl px-4 py-3 text-sm font-bold text-white transition disabled:opacity-50"
-                    style={{ backgroundColor: olive }}
-                  >
-                    {destinationReachedBusy ? 'Saving…' : 'Destination Reached'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={openSeeFullMap}
-                    className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50"
-                  >
-                    See full map
-                  </button>
-                  <p className="mt-2 text-[11px] text-neutral-500">
-                    Opens a full-screen OSRM / OpenStreetMap view (same routing as here — not Google Maps).
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-2 border-b border-neutral-200 pb-2">
-                  {[
-                    { id: 'routeSteps', label: 'Commute steps' },
-                    { id: 'stepGuide', label: 'Commuter guide' },
-                    { id: 'viaTerminals', label: 'Via Terminals' },
-                  ].map(({ id, label }) => (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => setRouteSubTab(id)}
-                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                        routeSubTab === id
-                          ? 'text-white'
-                          : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
-                      }`}
-                      style={routeSubTab === id ? { backgroundColor: olive } : undefined}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-
-                {routeSubTab === 'routeSteps' && (
-                  <div className="rounded-2xl border border-[rgba(31,79,89,0.12)] bg-white p-4 shadow-sm">
-                    <span className="inline-block rounded-md bg-[#f4f6ec] px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-[#1f4f59]">
-                      Commuter-first
-                    </span>
-                    <p className="mt-3 text-xs leading-relaxed text-neutral-600">{COMMUTER_DISCLAIMER}</p>
-                    <p className="mt-2 text-xs text-neutral-500">{COMMUTER_FOOTNOTE}</p>
-                    <div className="mt-3 rounded-xl border border-neutral-200 bg-[#f8faf7] px-3 py-2">
-                      <p className="text-[11px] font-semibold text-neutral-700">
-                        {userCoords ? 'Your current location' : 'Current location'}
-                      </p>
-                      <p className="text-[11px] text-neutral-600">→ {spot.name}</p>
                     </div>
-                    {osrmLoading ? <p className="mt-3 text-sm text-neutral-500">Calculating road route…</p> : null}
-                    {osrmError ? <p className="mt-3 text-sm text-red-600">{osrmError}</p> : null}
-                    {!userCoords ? (
-                      <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                        Location is off — turn it on to load segments from where you are. You can still open the full map
-                        to plan transfers and walking.
-                      </p>
-                    ) : null}
-                    {osrmDriving && osrmDriving.steps?.length > 0 ? (
-                      <>
-                        <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
-                          Whole corridor (road length)
-                        </p>
-                        <p className="mt-1 text-sm text-neutral-800">
-                          {formatDistanceM(osrmDriving.distanceM)} · {formatDurationS(osrmDriving.durationS)} if driven
-                          end-to-end — commute time depends on waits and transfers
-                        </p>
-                        {osrmFoot ? (
-                          <p className="mt-2 text-xs text-neutral-600">
-                            Walking-only reference (same endpoints): {formatDistanceM(osrmFoot.distanceM)} ·{' '}
-                            {formatDurationS(osrmFoot.durationS)} — use for short links between rides, not as a full
-                            commute time
-                          </p>
-                        ) : null}
-                        <div className="mt-4 space-y-4 border-t border-neutral-100 pt-4">
-                          {osrmDriving.steps.map((step, index) => {
-                            const hint = commuterStepHint(index, osrmDriving.steps.length, step.distanceM);
-                            return (
-                              <div
-                                key={`osrm-step-${index}-${Math.round(step.distanceM)}`}
-                                className="flex gap-3 border-b border-neutral-50 pb-4 last:border-b-0 last:pb-0"
-                              >
-                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ backgroundColor: olive }}>
-                                  {index + 1}
-                                </span>
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-medium text-neutral-900">
-                                    {commuterDirectStepInstruction(step, index, osrmDriving.steps.length, spot.name)}
-                                  </p>
-                                  <p className="mt-1 text-xs text-neutral-500">
-                                    {formatDistanceM(step.distanceM)} · ~{formatDurationS(step.durationS)} driving
-                                    reference
-                                  </p>
-                                    {hint ? <p className="mt-1 text-xs text-[#1f4f59]">{hint}</p> : null}
+
+                    <div className="px-4 pb-5 pt-3 sm:px-5 sm:pb-6">
+                      <div className="flex gap-1 border-b border-neutral-200" role="tablist" aria-label="Route views">
+                        {[
+                          { id: 'routeMain', label: 'Map' },
+                          { id: 'stepGuide', label: 'Turn-by-turn' },
+                        ].map(({ id, label }) => (
+                          <button
+                            key={id}
+                            type="button"
+                            role="tab"
+                            aria-selected={routeSubTab === id}
+                            onClick={() => setRouteSubTab(id)}
+                            className={`relative -mb-px border-b-2 px-3 pb-3 text-sm font-medium transition sm:px-4 ${
+                              routeSubTab === id
+                                ? 'border-neutral-900 text-neutral-900'
+                                : 'border-transparent text-neutral-500 hover:text-neutral-800'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="mt-5">
+                        {routeSubTab === 'stepGuide' && (
+                          <div className="space-y-4">
+                            <p className="text-xs leading-relaxed text-neutral-600">{COMMUTER_DISCLAIMER}</p>
+                            <p className="text-xs text-neutral-500">{COMMUTER_FOOTNOTE}</p>
+                            <div className="whitespace-pre-wrap rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3.5 text-sm leading-relaxed text-neutral-800">
+                              {buildCommuterNarrativeFromOsrmSteps(osrmDriving?.steps ?? [], spot.name)}
+                            </div>
+                          </div>
+                        )}
+
+                        {routeSubTab === 'routeMain' && (
+                          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,260px)_minmax(0,1fr)] lg:gap-0 lg:divide-x lg:divide-neutral-100">
+                            <aside className="flex flex-col gap-5 lg:pr-5">
+                              <div>
+                                <p className="text-xs font-medium text-neutral-400">Trip</p>
+                                <div className="mt-2 space-y-3 text-sm">
+                                  <div>
+                                    <p className="text-xs text-neutral-500">From</p>
+                                    <p className="mt-0.5 font-medium text-neutral-900">
+                                      {userCoords ? 'Your location' : 'Current location'}
+                                    </p>
+                                    {userCoords ? (
+                                      <p className="mt-0.5 text-xs text-neutral-500">GPS</p>
+                                    ) : null}
+                                  </div>
+                                  <div className="h-px bg-neutral-200" />
+                                  <div>
+                                    <p className="text-xs text-neutral-500">To</p>
+                                    <p className="mt-0.5 font-medium leading-snug text-neutral-900">{spot.name}</p>
+                                    <p className="mt-1 text-xs leading-relaxed text-neutral-500">
+                                      {cleanPlaceAddress(spot.name, spot.address)}
+                                    </p>
+                                  </div>
                                 </div>
                               </div>
-                            );
-                          })}
-                        </div>
-                      </>
-                    ) : null}
-                    {!osrmLoading && userCoords && (!osrmDriving?.steps?.length || !osrmDriving) ? (
-                      <p className="mt-3 text-sm text-neutral-600">
-                        No segments returned for this corridor — try the map or another nearby road.
-                      </p>
-                    ) : null}
-                  </div>
-                )}
 
-                {routeSubTab === 'stepGuide' && (
-                  <div className="rounded-2xl border border-[rgba(31,79,89,0.12)] bg-white p-4 shadow-sm">
-                    <span className="inline-block rounded-md bg-[#f4f6ec] px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-[#1f4f59]">
-                      Commuter-first
-                    </span>
-                    <p className="mt-3 text-xs leading-relaxed text-neutral-600">{COMMUTER_DISCLAIMER}</p>
-                    <p className="mt-2 text-xs text-neutral-500">{COMMUTER_FOOTNOTE}</p>
-                    <div className="mt-4 whitespace-pre-wrap rounded-xl bg-[#fafafa] p-3 text-sm leading-relaxed text-neutral-800">
-                      {buildCommuterNarrativeFromOsrmSteps(osrmDriving?.steps ?? [], spot.name)}
-                    </div>
-                  </div>
-                )}
+                              {displayRoute ? (
+                                <div>
+                                  <p className="text-xs font-medium text-neutral-400">Best route</p>
+                                  <div className="mt-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-3">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="min-w-0">
+                                        <p className="text-sm font-medium text-neutral-900">{displayRoute.label}</p>
+                                        <p className="mt-0.5 text-xs text-neutral-500">{displayRoute.mode}</p>
+                                      </div>
+                                      <span className={`h-2 w-2 shrink-0 rounded-full ${displayRoute.accent}`} aria-hidden />
+                                    </div>
+                                    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-neutral-200/80 pt-3 text-xs tabular-nums text-neutral-700">
+                                      <span>{formatDuration(displayRoute.durationMin)}</span>
+                                      <span className="text-neutral-300" aria-hidden>
+                                        |
+                                      </span>
+                                      <span>{displayRoute.distanceKm} km</span>
+                                      <span className="text-neutral-300" aria-hidden>
+                                        |
+                                      </span>
+                                      <span>{displayRoute.traffic}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : null}
+                            </aside>
 
-                {routeSubTab === 'viaTerminals' && (
-                  <div className="space-y-3">
-                    <div className="rounded-2xl border border-[rgba(31,79,89,0.12)] bg-white p-4 shadow-sm">
-                      <h3 className="font-['Poppins',sans-serif] text-base font-bold text-neutral-900">Via Terminals</h3>
-                      <p className="mt-2 text-xs leading-relaxed text-neutral-600">
-                        Nearest public terminals and how to use them with this trip. Always confirm routes, signboards,
-                        and fares at the terminal or with the driver.
-                      </p>
-                      {userCoords && terminalTransitPlan ? (
-                        <div className="mt-4 space-y-3 text-sm text-neutral-800">
-                          {terminalTransitPlan.originTerminal.id === terminalTransitPlan.destinationTerminal.id ? (
-                            <>
-                              <div className="flex gap-3">
-                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ backgroundColor: olive }}>
-                                  1
-                                </span>
-                                <p>
-                                  <span className="font-semibold">{terminalTransitPlan.originTerminal.name}</span> is
-                                  the closest major terminal to both your area and {spot.name}. Open it below for
-                                  routes, gates, and reminders.
-                                </p>
-                              </div>
-                              <div className="flex gap-3">
-                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ backgroundColor: olive }}>
-                                  2
-                                </span>
-                                <p>
-                                  Ride toward {spot.name} (or its municipality), then use{' '}
-                                  <span className="font-semibold">Commute steps</span> or a tricycle for the last leg.
-                                </p>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="flex gap-3">
-                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ backgroundColor: olive }}>
-                                  1
-                                </span>
-                                <p>
-                                  Go to{' '}
-                                  <span className="font-semibold">{terminalTransitPlan.originTerminal.name}</span>
-                                  {` (~${haversineDistanceKm(userCoords.lat, userCoords.lng, terminalTransitPlan.originTerminal.latitude, terminalTransitPlan.originTerminal.longitude).toFixed(1)} km from your start) `}
-                                  to board jeepneys, buses, or vans toward the general direction of {spot.name}.
-                                </p>
-                              </div>
-                              <div className="flex gap-3">
-                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ backgroundColor: olive }}>
-                                  2
-                                </span>
-                                <p>
-                                  Stay on lines that serve{' '}
-                                  <span className="font-semibold">
-                                    {terminalTransitPlan.destinationTerminal.municipality}
-                                  </span>{' '}
-                                  or corridors leading to {spot.name}. Ask the driver or konduktor before boarding.
-                                </p>
-                              </div>
-                              <div className="flex gap-3">
-                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ backgroundColor: olive }}>
-                                  3
-                                </span>
-                                <p>
-                                  Alight near{' '}
-                                  <span className="font-semibold">{terminalTransitPlan.destinationTerminal.name}</span>
-                                  {` (~${haversineDistanceKm(spot.lat, spot.lng, terminalTransitPlan.destinationTerminal.latitude, terminalTransitPlan.destinationTerminal.longitude).toFixed(1)} km from ${spot.name})`}
-                                  , then follow <span className="font-semibold">Commute steps</span> or local rides to
-                                  the exact spot.
-                                </p>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      ) : !userCoords ? (
-                        <p className="mt-3 text-xs text-amber-900">Turn on location to load terminal suggestions for this trip.</p>
-                      ) : terminalTransitLoading ? (
-                        <p className="mt-3 text-xs text-neutral-500">Loading terminals…</p>
-                      ) : (
-                        <p className="mt-3 text-xs text-neutral-600">
-                          No terminal match is available yet for this area. Try the Terminals tab or ask locally for the
-                          nearest jeepney or bus stop.
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="rounded-2xl border border-[rgba(31,79,89,0.15)] bg-[#f5faf8] p-4">
-                      <p className="text-sm font-bold text-[#1f4f59]">Terminals for this trip</p>
-                      <p className="mt-1 text-xs leading-relaxed text-neutral-600">
-                        Nearest terminal to you and nearest to {spot.name}.
-                      </p>
-                      {!userCoords ? (
-                        <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                          Allow location access to load terminals matched to you and this establishment.
-                        </p>
-                      ) : terminalTransitLoading ? (
-                        <p className="mt-3 text-xs text-neutral-500">Finding nearest terminals…</p>
-                      ) : terminalTransitPlan ? (
-                        <div
-                          className={`mt-3 grid gap-3 ${
-                            terminalTransitPlan.originTerminal.id === terminalTransitPlan.destinationTerminal.id
-                              ? 'grid-cols-1'
-                              : 'sm:grid-cols-2'
-                          }`}
-                        >
-                          {terminalTransitPlan.originTerminal.id === terminalTransitPlan.destinationTerminal.id ? (
-                            <Link
-                              to={`/terminals/${terminalTransitPlan.originTerminal.id}`}
-                              className="block rounded-xl border border-neutral-200 bg-white p-3 transition hover:border-[#7ea00e] hover:shadow-sm"
-                            >
-                              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#7ea00e]">
-                                Nearest terminal (you & destination)
-                              </p>
-                              <p className="mt-1 text-sm font-semibold text-neutral-900">
-                                {terminalTransitPlan.originTerminal.name}
-                              </p>
-                              <p className="mt-1 text-[11px] text-neutral-600">
-                                {terminalTransitPlan.originTerminal.municipality}
-                                {' · ~'}
-                                {haversineDistanceKm(
-                                  userCoords.lat,
-                                  userCoords.lng,
-                                  terminalTransitPlan.originTerminal.latitude,
-                                  terminalTransitPlan.originTerminal.longitude
-                                ).toFixed(1)}
-                                {' km from you · ~'}
-                                {haversineDistanceKm(
-                                  spot.lat,
-                                  spot.lng,
-                                  terminalTransitPlan.originTerminal.latitude,
-                                  terminalTransitPlan.originTerminal.longitude
-                                ).toFixed(1)}
-                                {` km from ${spot.name}`}
-                              </p>
-                              <p className="mt-2 text-xs font-semibold text-[#1f4f59]">Open terminal →</p>
-                            </Link>
-                          ) : (
-                            <>
-                              <Link
-                                to={`/terminals/${terminalTransitPlan.originTerminal.id}`}
-                                className="block rounded-xl border border-neutral-200 bg-white p-3 transition hover:border-[#7ea00e] hover:shadow-sm"
-                              >
-                                <p className="text-[10px] font-semibold uppercase tracking-wide text-[#7ea00e]">
-                                  Board near you
-                                </p>
-                                <p className="mt-1 text-sm font-semibold text-neutral-900">
-                                  {terminalTransitPlan.originTerminal.name}
-                                </p>
-                                <p className="mt-1 text-[11px] text-neutral-600">
-                                  {terminalTransitPlan.originTerminal.municipality}
-                                  {' · ~'}
-                                  {haversineDistanceKm(
-                                    userCoords.lat,
-                                    userCoords.lng,
-                                    terminalTransitPlan.originTerminal.latitude,
-                                    terminalTransitPlan.originTerminal.longitude
-                                  ).toFixed(1)}
-                                  {' km away'}
-                                </p>
-                                <p className="mt-2 text-xs font-semibold text-[#1f4f59]">Open terminal →</p>
-                              </Link>
-                              <Link
-                                to={`/terminals/${terminalTransitPlan.destinationTerminal.id}`}
-                                className="block rounded-xl border border-neutral-200 bg-white p-3 transition hover:border-[#7ea00e] hover:shadow-sm"
-                              >
-                                <p className="text-[10px] font-semibold uppercase tracking-wide text-[#7ea00e]">
-                                  Near {spot.name}
-                                </p>
-                                <p className="mt-1 text-sm font-semibold text-neutral-900">
-                                  {terminalTransitPlan.destinationTerminal.name}
-                                </p>
-                                <p className="mt-1 text-[11px] text-neutral-600">
-                                  {terminalTransitPlan.destinationTerminal.municipality}
-                                  {' · ~'}
-                                  {haversineDistanceKm(
-                                    spot.lat,
-                                    spot.lng,
-                                    terminalTransitPlan.destinationTerminal.latitude,
-                                    terminalTransitPlan.destinationTerminal.longitude
-                                  ).toFixed(1)}
-                                  {' km from destination'}
-                                </p>
-                                <p className="mt-2 text-xs font-semibold text-[#1f4f59]">Open terminal →</p>
-                              </Link>
-                            </>
-                          )}
-                        </div>
-                      ) : (
-                        <p className="mt-3 text-xs text-neutral-500">No terminal data for this area.</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
-                <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)]">
-                  <aside className="border-b border-neutral-200 bg-[#f8faf7] p-3.5 lg:border-b-0 lg:border-r">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Route options</p>
-                    <div className="mt-2 rounded-xl border border-neutral-200 bg-white px-3 py-2">
-                      <p className="text-xs font-semibold text-neutral-700">{userCoords ? 'From your current GPS location' : 'From current location'}</p>
-                      <p className="mt-0.5 line-clamp-2 text-[11px] text-neutral-500">
-                        Destination: {cleanPlaceAddress(spot.name, spot.address)}
-                      </p>
-                    </div>
-
-                    <div className="mt-3 space-y-2.5">
-                      {displayRoute ? (
-                        <article className="rounded-xl border border-neutral-200 bg-white p-3">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <p className="text-sm font-semibold text-neutral-900">{displayRoute.label}</p>
-                              <p className="text-[11px] text-neutral-500">{displayRoute.mode}</p>
-                            </div>
-                            <span className={`mt-0.5 inline-block h-2.5 w-2.5 rounded-full ${displayRoute.accent}`} />
-                          </div>
-                          <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
-                            <div className="rounded-lg bg-neutral-50 px-2 py-1.5">
-                              <p className="text-neutral-400">ETA</p>
-                              <p className="font-semibold text-neutral-700">{formatDuration(displayRoute.durationMin)}</p>
-                            </div>
-                            <div className="rounded-lg bg-neutral-50 px-2 py-1.5">
-                              <p className="text-neutral-400">Distance</p>
-                              <p className="font-semibold text-neutral-700">{displayRoute.distanceKm} km</p>
-                            </div>
-                            <div className="rounded-lg bg-neutral-50 px-2 py-1.5">
-                              <p className="text-neutral-400">Traffic</p>
-                              <p className="font-semibold text-neutral-700">{displayRoute.traffic}</p>
-                            </div>
-                          </div>
-                        </article>
-                      ) : null}
-                    </div>
-                  </aside>
-
-                  <div className="p-3.5">
-                    <div className="rounded-xl border border-neutral-200 bg-white p-3">
-                      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-semibold text-neutral-900">Tracking route to {spot.name}</p>
-                          <p className="text-[11px] text-neutral-500">{displayRoute?.distanceKm ?? '--'} km • {formatDuration(displayRoute?.durationMin ?? 0)}</p>
-                          <p className="mt-1 text-[10px] text-[#1d4ed8]">
-                            Map: road path from your location (driving, then walking if needed).
-                          </p>
-                        </div>
-                        <div className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-1 text-[11px] font-semibold text-neutral-600">
-                          <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: displayRoute?.color ?? '#10b981' }} />
-                          Route active
-                        </div>
-                      </div>
-
-                      <div className="overflow-hidden rounded-xl border border-neutral-200">
-                        <RouteLeafletMap
-                          start={userCoords}
-                          end={{ lat: spot.lat, lng: spot.lng }}
-                          routeId={displayRoute?.id ?? 'main-road'}
-                          lineColor={displayRoute?.color ?? '#0ea5e9'}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="mt-3">
-                      <div className="rounded-xl border border-neutral-200 bg-white p-3">
-                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Route timeline</p>
-                        <div className="space-y-2.5">
-                          {routeTimeline.map((step, idx) => (
-                            <div key={`route-tl-${idx}-${step.title}`} className="grid grid-cols-[18px_minmax(0,1fr)] items-start gap-2">
-                              <div className="relative mt-0.5">
-                                <span className={`block h-2.5 w-2.5 rounded-full ${idx === routeTimeline.length - 1 ? 'bg-neutral-900' : 'bg-sky-500'}`} />
-                                {idx < routeTimeline.length - 1 && <span className="absolute left-[4px] top-3 block h-6 w-[1.5px] bg-neutral-200" />}
-                              </div>
+                            <div className="flex flex-col gap-5 lg:pl-5">
                               <div>
-                                <p className="text-sm font-semibold text-neutral-800">{step.title}</p>
-                                <p className="text-xs text-neutral-500">{step.meta}</p>
+                                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                                  <p className="text-sm text-neutral-600">
+                                    <span className="tabular-nums text-neutral-900">
+                                      {displayRoute?.distanceKm ?? '—'} km
+                                    </span>
+                                    <span className="mx-1.5 text-neutral-300">·</span>
+                                    <span className="tabular-nums text-neutral-900">
+                                      {formatDuration(displayRoute?.durationMin ?? 0)}
+                                    </span>
+                                  </p>
+                                  <span className="text-xs text-neutral-400">OpenStreetMap · OSRM</span>
+                                </div>
+                                <p className="mt-1 text-xs text-neutral-500">
+                                  Driving corridor; walking segments appear when the router uses them.
+                                </p>
+                                <div className="mt-3 overflow-hidden rounded-lg border border-neutral-200 bg-neutral-100">
+                                  <RouteLeafletMap
+                                    className="h-[220px] w-full sm:h-[300px] lg:h-[340px]"
+                                    start={userCoords}
+                                    end={{ lat: spot.lat, lng: spot.lng }}
+                                    routeId={displayRoute?.id ?? 'main-road'}
+                                    lineColor={displayRoute?.color ?? '#2563eb'}
+                                  />
+                                </div>
                               </div>
+
+                              <div>
+                                <p className="text-xs font-medium text-neutral-400">Overview</p>
+                                <ul className="mt-3">
+                                  {routeTimeline.map((step, idx) => {
+                                    const isLast = idx === routeTimeline.length - 1;
+                                    return (
+                                      <li key={`route-tl-${idx}-${step.title}`} className="flex gap-3">
+                                        <div className="flex w-4 shrink-0 flex-col items-center pt-1.5">
+                                          <span
+                                            className={`h-2 w-2 rounded-full ${
+                                              isLast ? 'bg-neutral-800' : 'bg-neutral-400'
+                                            }`}
+                                            aria-hidden
+                                          />
+                                          {!isLast ? (
+                                            <span className="mt-1 w-px flex-1 min-h-[1.25rem] bg-neutral-200" aria-hidden />
+                                          ) : null}
+                                        </div>
+                                        <div className={`min-w-0 flex-1 ${!isLast ? 'pb-4' : ''}`}>
+                                          <p className="text-sm font-medium text-neutral-900">{step.title}</p>
+                                          <p className="mt-0.5 text-xs leading-relaxed text-neutral-500">{step.meta}</p>
+                                        </div>
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {!routePanelOpen && (
+              <div className="bg-white">
+                <div className="border-b border-neutral-100 bg-gradient-to-br from-[rgba(126,160,14,0.08)] via-white to-white px-5 py-5 sm:px-7 sm:py-6">
+                  <h2 className="font-['Poppins',sans-serif] text-base font-semibold tracking-tight text-neutral-900 sm:text-lg">
+                    Reviews
+                  </h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-600">
+                    Read what visitors shared below — basahin ang experience ng iba pag nagplaplano ka ng bisita.
+                  </p>
+                </div>
+
+                <div className="space-y-5 p-5 sm:p-7 sm:pt-6">
+                  <div className="overflow-hidden rounded-xl border border-neutral-100 bg-neutral-50/40 shadow-sm">
+                    <div className="grid grid-cols-1 gap-0 lg:grid-cols-[minmax(0,1.35fr)_minmax(220px,1fr)]">
+                      <div className="space-y-3 border-b border-neutral-100/90 p-5 sm:p-6 lg:border-b-0 lg:border-r lg:border-neutral-100/90 lg:py-7 lg:pl-7 lg:pr-8">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-400">
+                          Rating breakdown
+                        </p>
+                        <div className="space-y-2.5">
+                          {mergedReviewStats.breakdown.map((row) => (
+                            <div
+                              key={row.label}
+                              className="grid grid-cols-[48px_minmax(0,80px)_minmax(0,1fr)_52px] items-center gap-2 sm:gap-3"
+                            >
+                              <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                                {row.label}
+                              </p>
+                              <div className="flex shrink-0 justify-start">
+                                <ReviewStars value={row.stars} size="h-3.5 w-3.5" />
+                              </div>
+                              <div className="h-2 min-w-0 rounded-full bg-white/80 ring-1 ring-neutral-200/80">
+                                <div
+                                  className="h-full rounded-full transition-[width] duration-500 ease-out"
+                                  style={{ width: `${row.pct}%`, backgroundColor: olive }}
+                                />
+                              </div>
+                              <span className="text-right text-xs text-neutral-300 tabular-nums" aria-hidden>
+                                {'\u00a0'}
+                              </span>
                             </div>
                           ))}
                         </div>
                       </div>
+                      <div
+                        className="flex flex-col justify-center gap-2 px-5 py-6 text-center sm:px-8 sm:py-8"
+                        style={{
+                          background:
+                            'linear-gradient(165deg, rgba(126,160,14,0.12), rgba(126,160,14,0.04) 50%, #fff 100%)',
+                        }}
+                      >
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-500">
+                          Overall
+                        </p>
+                        <p
+                          className="text-4xl font-bold tabular-nums leading-none sm:text-5xl"
+                          style={{ color: olive }}
+                        >
+                          {mergedReviewStats.total > 0 ? mergedReviewStats.avgRating.toFixed(1) : '—'}
+                        </p>
+                        <div className="flex justify-center pt-1">
+                          {mergedReviewStats.total > 0 ? (
+                            <ReviewStars value={mergedReviewStats.displayStarCount} size="h-5 w-5 sm:h-6 sm:w-6" />
+                          ) : (
+                            <ReviewStars value={0} size="h-5 w-5 sm:h-6 sm:w-6" dimmed />
+                          )}
+                        </div>
+                        <p className="text-xs font-medium text-neutral-700 sm:text-sm">
+                          {mergedReviewStats.total > 0 ? `${formatReviewCount(mergedReviewStats.total)} reviews` : '—'}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
+
+                  <ul className="divide-y divide-neutral-100 overflow-hidden rounded-xl border border-neutral-100 bg-white shadow-sm">
+                    {allListedReviews.map((r) => {
+                      const displayNickname =
+                        typeof r.nickname === 'string' && r.nickname.trim() ? r.nickname.trim() : 'Guest';
+                      return (
+                        <li key={r.id} className="px-4 py-4 transition-colors hover:bg-neutral-50/60 sm:px-5 sm:py-5">
+                          <div className="flex flex-wrap items-baseline justify-between gap-2">
+                            <p className="text-sm font-semibold text-neutral-900">{displayNickname}</p>
+                            <time
+                              className="text-[11px] text-neutral-400 tabular-nums"
+                              dateTime={new Date(r.at).toISOString()}
+                            >
+                              {formatReviewTime(r.at)}
+                            </time>
+                          </div>
+                          <div className="mt-1.5">
+                            <ReviewStars value={r.rating} size="h-4 w-4" />
+                          </div>
+                          <p className="mt-2 text-sm leading-relaxed text-neutral-700">{r.text}</p>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </div>
               </div>
-            )}
+              )}
 
+            </div>
           </section>
 
           <aside className="rounded-3xl border border-neutral-200 bg-[#f7f7f7] p-4 lg:sticky lg:top-24 self-start">
-            <h2 className="text-xl font-semibold text-neutral-800">Places you may like</h2>
-            <div className="mt-4 space-y-3">
-              {relatedPlaces.map((place) => (
-                <Link
-                  key={place.id}
-                  to={`/place/${place.id}`}
-                  className="flex items-center gap-3 rounded-xl border border-neutral-200 bg-white p-3 transition hover:shadow-sm"
-                >
-                  <img src={place.image} alt="" className="h-[72px] w-[72px] rounded-lg object-cover" />
-                  <div className="min-w-0">
-                    <p className="line-clamp-1 text-sm font-semibold text-neutral-900">{place.name}</p>
-                    <p className="line-clamp-1 text-xs text-neutral-500">{place.location}</p>
-                  </div>
-                </Link>
-              ))}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Map location</p>
+              <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
+                <iframe
+                  title="Map"
+                  src={`https://www.openstreetmap.org/export/embed.html?bbox=${spot.lng - 0.02}%2C${spot.lat - 0.02}%2C${spot.lng + 0.02}%2C${spot.lat + 0.02}&layer=mapnik&marker=${spot.lat}%2C${spot.lng}`}
+                  className="h-[180px] w-full border-0 lg:h-[200px]"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={openRoutePanel}
+                className="w-full rounded-lg px-3 py-2 text-center text-xs font-semibold text-white shadow-sm transition hover:opacity-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7ea00e] focus-visible:ring-offset-2"
+                style={{ backgroundColor: olive }}
+              >
+                Go here?
+              </button>
             </div>
           </aside>
         </div>
       </main>
-
-      {fullMapOpen && spot?.lat != null && spot?.lng != null ? (
-        <div
-          className="fixed inset-0 z-[2000] flex flex-col bg-neutral-950/90 p-4 sm:p-6"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Full route map"
-        >
-          <div className="mb-3 flex shrink-0 items-center justify-between gap-2">
-            <p className="text-sm font-semibold text-white">OSRM route — {spot.name}</p>
-            <button
-              type="button"
-              onClick={() => setFullMapOpen(false)}
-              className="rounded-lg border border-white/30 bg-white/10 px-3 py-2 text-sm font-semibold text-white hover:bg-white/20"
-            >
-              Close
-            </button>
-          </div>
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/20 bg-white shadow-lg">
-            <RouteLeafletMap
-              className="h-full min-h-[280px] w-full flex-1 sm:min-h-[420px]"
-              start={userCoords}
-              end={{ lat: spot.lat, lng: spot.lng }}
-              routeId={displayRoute?.id ?? 'main-road'}
-              lineColor={displayRoute?.color ?? '#0ea5e9'}
-            />
-          </div>
-          <p className="mt-3 shrink-0 text-center text-[11px] text-white/80">
-            Project OSRM + OpenStreetMap — same in-app routing as mobile (not Google Maps).
-          </p>
-        </div>
-      ) : null}
 
       {saveModalOpen && (
         <div
@@ -1195,7 +966,7 @@ export function PlaceDetailPage() {
           aria-label="Save to list"
         >
           <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-neutral-200 bg-white p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
-            <h3 className="text-base font-semibold text-neutral-900">Save establishment</h3>
+            <h3 className="text-sm font-normal text-neutral-800">Save establishment</h3>
             <p className="mt-1 text-sm text-neutral-500">Pick a list you already created, or type a new list name.</p>
             {existingLists.length > 0 ? (
               <div className="mt-3">
