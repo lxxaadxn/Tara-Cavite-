@@ -1,10 +1,25 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { useAdminPathPrefix } from '../contexts/AdminPathPrefixContext';
 import styles from './Settings.module.css';
 
 export function Settings() {
   const [emailNotif, setEmailNotif] = useState(true);
   const [pushNotif, setPushNotif] = useState(false);
   const [compactMode, setCompactMode] = useState(false);
+  const { signOut, session } = useAuth();
+  const navigate = useNavigate();
+  const routePrefix = useAdminPathPrefix();
+
+  const handleLogout = async () => {
+    await signOut();
+    if (routePrefix) {
+      window.location.replace('/');
+      return;
+    }
+    navigate('/login', { replace: true });
+  };
 
   return (
     <div className={styles.page}>
@@ -71,6 +86,18 @@ export function Settings() {
             <span className={styles.knob} />
           </button>
         </div>
+      </div>
+
+      <div className={styles.card}>
+        <h3>Account</h3>
+        {session?.user?.email ? (
+          <p className={styles.value} style={{ marginBottom: 12 }}>
+            Signed in as {session.user.email}
+          </p>
+        ) : null}
+        <button type="button" className={styles.logoutBtn} onClick={() => void handleLogout()}>
+          Log out
+        </button>
       </div>
     </div>
   );

@@ -6,7 +6,8 @@ import { placePassesAppliedFilters, sortPlacesByModeWeb } from '../lib/placeFilt
 import { AppHeader } from '../components/AppHeader';
 import { FilterModal } from '../components/FilterModal';
 import { PlacesLeafletMap } from '../components/PlacesLeafletMap';
-import { spots } from '../data/spots';
+import { SYNC_MESSAGES, mapDemoEstablishmentRows } from 'cavitour-shared';
+import { rowToPlace } from '../lib/placesFromSupabase';
 import { formatNtdpCategoryTagLabel, getEstablishmentAboutBody } from '../lib/ntdpDisplayLabels';
 
 const PLACEHOLDER_IMG = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80';
@@ -145,14 +146,14 @@ export function SearchPage() {
         trendingRef.current = list;
         setAllPlaces(list);
         setDisplayPlaces(list);
-        setDataSource('supabase');
+        setDataSource('live');
       } catch {
         if (cancelled) return;
-        const fallbackPlaces = spots.map(mapSpotToPlace);
+        const fallbackPlaces = mapDemoEstablishmentRows((row) => rowToPlace(row));
         trendingRef.current = fallbackPlaces;
         setAllPlaces(fallbackPlaces);
         setDisplayPlaces(fallbackPlaces);
-        setDataSource('fallback');
+        setDataSource('demo');
       }
     })();
     return () => {
@@ -196,7 +197,7 @@ export function SearchPage() {
       return;
     }
     const t = setTimeout(() => {
-      if (dataSource === 'supabase') {
+      if (dataSource === 'live') {
         searchPlacesByText(supabase, q, 1000)
           .then((list) => setDisplayPlaces(list.length ? list : []))
           .catch(() => {});
@@ -520,9 +521,14 @@ export function SearchPage() {
           </section>
         </div>
 
-        {dataSource === 'fallback' && (
+        {dataSource === 'live' && (
+          <p className="mx-auto mt-3 max-w-3xl text-center text-xs text-emerald-800">
+            {SYNC_MESSAGES.live}
+          </p>
+        )}
+        {dataSource === 'demo' && (
           <p className="mx-auto mt-3 max-w-3xl text-center text-xs text-amber-800">
-            Supabase is currently unavailable. Showing local fallback places.
+            {SYNC_MESSAGES.demo}
           </p>
         )}
       </div>

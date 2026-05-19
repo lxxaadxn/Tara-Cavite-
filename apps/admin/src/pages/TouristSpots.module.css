@@ -23,6 +23,49 @@
   color: var(--text-secondary);
 }
 
+.syncNote {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  max-width: 52rem;
+  line-height: 1.45;
+}
+
+.specCard {
+  background: var(--card);
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.specCard strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-primary, #1a1a1a);
+}
+
+.specCard ul {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--text-secondary);
+}
+
+.specCard li {
+  margin: 6px 0;
+}
+
+.sectionTitle {
+  margin: 16px 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
 .addBtn {
   display: flex;
   align-items: center;

@@ -10,6 +10,7 @@ import {
   persistGalleryUrls,
   updateAdminPlace,
 } from '../lib/destinationPlaces';
+import { SYNC_MESSAGES } from 'cavitour-shared';
 import { supabase } from '../lib/supabase';
 import styles from './TouristSpots.module.css';
 
@@ -223,17 +224,25 @@ export function TouristSpots() {
     <div className={styles.page}>
       <div className={styles.header}>
         <div>
-          <h1>Destinations</h1>
-          <p>
-            Admin-managed rows in <code className={styles.inlineCode}>public.places</code> with{' '}
-            <code className={styles.inlineCode}>source_slug</code> like <code className={styles.inlineCode}>admin:%</code>.
-            They are included in <code className={styles.inlineCode}>v_cavite_establishments</code> for web and mobile after
-            you run the latest Supabase migration.
-          </p>
+          <h1>Content management</h1>
+          <p>Manage tourist destinations for the web and mobile apps. Use the table below or add a new destination.</p>
+          <p className={styles.syncNote}>{SYNC_MESSAGES.adminHint}</p>
         </div>
         <button type="button" className={styles.addBtn} onClick={openCreate} disabled={loadState === 'loading'}>
           <span>+</span> Add destination
         </button>
+      </div>
+
+      <div className={styles.specCard} role="note" aria-label="Content management capabilities">
+        <strong>Content management includes:</strong>
+        <ul>
+          <li>Add, edit, and delete destinations</li>
+          <li>Upload multiple images per destination</li>
+          <li>Assign destination categories</li>
+          <li>Set location with map coordinates (latitude / longitude)</li>
+          <li>Operating hours and contact information (phone, email)</li>
+          <li>Website and social links (Facebook, Instagram, X / Twitter)</li>
+        </ul>
       </div>
 
       {loadState === 'error' && (
@@ -366,6 +375,7 @@ export function TouristSpots() {
                 </div>
               )}
 
+              <p className={styles.sectionTitle}>Location &amp; map coordinates</p>
               <DestinationMapPicker
                 key={editingId ?? 'create'}
                 lat={form.lat}
@@ -410,17 +420,18 @@ export function TouristSpots() {
                 rows={3}
               />
               <div className={styles.formRow2}>
-                <input
-                  list="dest-categories"
-                  placeholder="Category"
+                <select
                   value={form.category}
                   onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-                />
-                <datalist id="dest-categories">
+                  aria-label="Destination category"
+                >
+                  <option value="">Select category</option>
                   {CATEGORY_OPTIONS.map((c) => (
-                    <option key={c} value={c} />
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
                   ))}
-                </datalist>
+                </select>
                 <input placeholder="City" value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} />
               </div>
               <select

@@ -1,4 +1,7 @@
+import { CONTENT_PIPELINE } from 'cavitour-shared';
 import type { SupabaseClient } from '@supabase/supabase-js';
+
+/** Admin table; web/mobile read {@link CONTENT_PIPELINE.establishmentsView}. */
 
 export type Destination = {
   id: string;

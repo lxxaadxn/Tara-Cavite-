@@ -1,0 +1,33 @@
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.tab {
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.tab:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.tab.active {
+  background: rgba(107, 142, 35, 0.12);
+  color: var(--primary-dark);
+  font-weight: 600;
+}
+
+@media (max-width: 1100px) {
+  .tabs {
+    display: none;
+  }
+}
