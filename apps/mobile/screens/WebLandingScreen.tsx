@@ -16,10 +16,10 @@ const WebLandingScreen: React.FC = () => {
           resizeMode="contain"
         />
         <View style={styles.headerButtons}>
-          <TouchableOpacity onPress={() => navigation.navigate('SignIn' as never)} style={styles.logInButton}>
+          <TouchableOpacity onPress={() => navigation.navigate('SignIn')} style={styles.logInButton}>
             <Text style={styles.logInText}>Log In</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate('SignUp' as never)} style={styles.signUpButton}>
+          <TouchableOpacity onPress={() => navigation.navigate('SignUp')} style={styles.signUpButton}>
             <Text style={styles.signUpButtonText}>Sign Up</Text>
           </TouchableOpacity>
         </View>
@@ -34,7 +34,7 @@ const WebLandingScreen: React.FC = () => {
         </Text>
         <View style={styles.ctaRow}>
           <TouchableOpacity
-            onPress={() => navigation.navigate('SignIn' as never)}
+            onPress={() => navigation.navigate('SignIn')}
             style={styles.primaryCta}
           >
             <Text style={styles.primaryCtaText}>Start Exploring</Text>

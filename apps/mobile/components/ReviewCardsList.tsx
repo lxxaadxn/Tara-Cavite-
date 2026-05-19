@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { JamIcon } from './JamIcon';
+import { getPreviewReviewEntries } from '../lib/ntdpDisplayLabels';
 
 const GREEN = '#7EA00E';
 const TITLE = '#241D13';
@@ -11,9 +12,6 @@ const STAR_EMPTY = '#E5E5E5';
 const AVATAR_BG = '#6B6B6B';
 const CARD_BORDER = 'rgba(122, 120, 120, 0.18)';
 
-const REVIEW_PLACEHOLDER_BODY =
-  'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed non risus. Suspendisse lectus tortor, dignissim sit amet, adipiscing nec, ultricies sed, dolor. Cras elementum ultrices diam. Maecenas ligula massa, varius a, semper congue, euismod non, mi. Proin porttitor, orci nec nonummy molestie, enim est eleifend mi, non fermentum diam nisl sit amet erat. Duis semper. Nunc vitae turpis sed ipsum ultricies sagittis vel sit amet neque.';
-
 export type MockReview = {
   id: string;
   username: string;
@@ -22,29 +20,29 @@ export type MockReview = {
   body: string;
 };
 
-export const MOCK_REVIEWS: MockReview[] = [
-  {
-    id: 'r1',
-    username: 'Username',
-    rating: 4,
-    metaLine: 'Ratings 4.5 | 1.3k votes',
-    body: REVIEW_PLACEHOLDER_BODY,
-  },
-  {
-    id: 'r2',
-    username: 'Username',
-    rating: 4,
-    metaLine: 'Ratings 4.5 | 1.3k votes',
-    body: REVIEW_PLACEHOLDER_BODY,
-  },
-];
+function buildMockReviews(placeName: string, ntdpCategory?: string | null): MockReview[] {
+  const entries = getPreviewReviewEntries(placeName, ntdpCategory);
+  return entries.map((e, i) => ({
+    id: `r${i + 1}`,
+    username: e.name,
+    rating: e.rating,
+    metaLine: i === 0 ? 'Sample · reviews coming soon' : 'Sample · not from guests',
+    body: e.text,
+  }));
+}
 
-export function ReviewCardsList() {
+export type ReviewCardsListProps = {
+  placeName?: string;
+  ntdpCategory?: string | null;
+};
+
+export function ReviewCardsList({ placeName = 'This place', ntdpCategory }: ReviewCardsListProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const reviews = useMemo(() => buildMockReviews(placeName, ntdpCategory), [placeName, ntdpCategory]);
 
   return (
     <View style={styles.reviewsList}>
-      {MOCK_REVIEWS.map((rev) => {
+      {reviews.map((rev) => {
         const isOpen = !!expanded[rev.id];
         return (
           <View key={rev.id} style={styles.reviewCard}>

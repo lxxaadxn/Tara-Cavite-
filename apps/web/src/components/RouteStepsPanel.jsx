@@ -1,8 +1,11 @@
 const olive = '#7ea00e';
 const teal = '#1f4f59';
-export function RouteStepsPanel({ steps, className = '' }) {
+export function RouteStepsPanel({ steps, className = '', directionsUrl }) {
     return (<div className={`bg-white rounded-2xl border border-neutral-200 shadow-[0_8px_30px_rgba(0,0,0,0.06)] p-6 ${className}`}>
       <h2 className="font-['Poppins',sans-serif] font-bold text-lg text-neutral-800 mb-6">Route Steps</h2>
+      <p className="text-xs text-neutral-500 mb-4 -mt-2">
+        Illustrative steps — open the link below for routing on OpenStreetMap (OSRM). Set your starting point on the map if needed.
+      </p>
       <ol className="relative">
         {steps.map((step, i) => {
             const last = i === steps.length - 1;
@@ -30,5 +33,10 @@ export function RouteStepsPanel({ steps, className = '' }) {
             </li>);
         })}
       </ol>
+      {directionsUrl ? (<p className="mt-6 pt-4 border-t border-neutral-100">
+          <a href={directionsUrl} target="_blank" rel="noreferrer" className="text-sm font-semibold hover:underline" style={{ color: olive }}>
+            Open directions on OpenStreetMap.org →
+          </a>
+        </p>) : null}
     </div>);
 }

@@ -1,0 +1,82 @@
+Terminal_Id,Terminal_Name,Terminal_Province,Terminal_City,Terminal_Brgy,First_Trip,Last_Trip
+1,SM City Dasmarinas Terminal,Cavite,Dasmarinas,Sampaloc I,04:30,22:30
+2,Robinsons Place Dasmarinas Terminal,Cavite,Dasmarinas,Sampaloc I,04:30,22:30
+3,Vista Mall Dasmarinas Terminal,Cavite,Dasmarinas,San Agustin I,05:00,22:00
+4,WalterMart Dasmarinas Terminal,Cavite,Dasmarinas,Dasmarinas Bayan,05:00,21:30
+5,The District Dasmarinas Terminal,Cavite,Dasmarinas,Burol Main,05:00,22:00
+6,SM City Bacoor Terminal,Cavite,Bacoor,Habay I,04:30,22:00
+7,SM City Molino Terminal,Cavite,Bacoor,Molino IV,04:30,22:30
+8,NOMO A Vista Lifestyle Center Terminal,Cavite,Bacoor,Molino III,05:00,22:00
+9,SM City Rosario Terminal,Cavite,Rosario,Tejero,05:00,21:30
+10,SM City Trece Martires Terminal,Cavite,Trece Martires,San Agustin,04:30,21:30
+11,WalterMart Trece Martires Terminal,Cavite,Trece Martires,Hugo Perez,05:00,21:00
+12,SM City Tanza Terminal,Cavite,Tanza,Daang Amaya 1,05:00,21:30
+13,Vista Mall Tanza Terminal,Cavite,Tanza,Tres Cruses,05:00,21:00
+14,Robinsons Place Imus Terminal,Cavite,Imus,Alapan I-C,04:30,22:00
+15,The District Imus Terminal,Cavite,Imus,Alapan I-C,05:00,22:00
+16,Main Square Mall Terminal,Cavite,Bacoor,Bayanan,05:00,21:00
+17,Robinsons Place General Trias Terminal,Cavite,General Trias,Tapia,05:00,21:30
+18,Vista Mall General Trias Terminal,Cavite,General Trias,Santiago,05:00,21:30
+19,WalterMart General Trias Terminal,Cavite,General Trias,Tejero,05:00,21:00
+20,Vista Mall Kawit Terminal,Cavite,Kawit,Binakayan-Aplaya,05:00,21:00
+21,RFC Mall Terminal,Cavite,General Trias,San Francisco,05:00,21:00
+22,Ayala Malls Vermosa Terminal,Cavite,Imus,Pasong Buaya II,05:00,22:00
+23,Acienda Designer Outlet Terminal,Cavite,Silang,Lalaan II,05:00,21:30
+24,WalterMart Carmona Terminal,Cavite,Carmona,Maduya,05:00,21:30
+25,Fora Mall Tagaytay Terminal,Cavite,Tagaytay,Silang Junction South,05:00,22:00
+26,Pala-Pala Transport Terminal,Cavite,Dasmarinas,Sampaloc I,04:00,23:00
+27,Dasmarinas Bayan Jeepney Terminal,Cavite,Dasmarinas,Dasmarinas Bayan,04:30,22:00
+28,DBB-C Transport Terminal,Cavite,Dasmarinas,Sampaloc IV,05:00,21:00
+29,Salitran Transport Terminal,Cavite,Dasmarinas,Salitran I,05:00,21:00
+30,Paliparan Transport Terminal,Cavite,Dasmarinas,Paliparan III,05:00,21:00
+31,General Trias City Terminal,Cavite,General Trias,Poblacion,04:30,21:30
+32,Tejero Transport Terminal,Cavite,Rosario,Tejero,04:30,21:30
+33,Imus Transport Terminal,Cavite,Imus,Poblacion III-A,04:30,22:00
+34,Bacoor Strike Terminal,Cavite,Bacoor,Zapote V,04:30,22:00
+35,Trece Martires City Terminal,Cavite,Trece Martires,Luciano,04:30,21:30
+36,Tanza Public Transport Terminal,Cavite,Tanza,Poblacion I,05:00,21:00
+37,Naic Transport Terminal,Cavite,Naic,Poblacion,05:00,20:30
+38,Maragondon Transport Terminal,Cavite,Maragondon,Poblacion I-A,05:00,20:00
+39,Ternate Transport Terminal,Cavite,Ternate,Poblacion I,05:00,20:00
+40,Indang Transport Terminal,Cavite,Indang,Poblacion III,05:00,20:00
+41,Silang Bayan Terminal,Cavite,Silang,Poblacion I,05:00,21:00
+42,Tagaytay Olivarez Terminal,Cavite,Tagaytay,San Jose,04:30,22:00
+43,Kawit Transport Terminal,Cavite,Kawit,Binakayan,05:00,21:00
+44,Noveleta Transport Terminal,Cavite,Noveleta,Poblacion,05:00,20:30
+45,Cavite City Transport Terminal,Cavite,Cavite City,San Roque,05:00,21:00
+46,SM City Imus Terminal,Cavite,Imus,Anabu II-E,05:00,22:00
+47,Anabu Kostal Terminal,Cavite,Imus,Anabu II-B,04:30,22:00
+48,Buhay na Tubig Terminal,Cavite,Imus,Buhay na Tubig,05:00,21:30
+49,Zapote Kalinisan Terminal,Cavite,Bacoor,Zapote III,04:30,22:00
+50,Longos Transport Terminal,Cavite,Bacoor,Longos,05:00,21:30
+51,Niog Terminal,Cavite,Bacoor,Niog I,05:00,21:30
+52,Talaba Transport Terminal,Cavite,Bacoor,Talaba V,05:00,21:30
+53,Manggahan Transport Terminal,Cavite,General Trias,Manggahan,05:00,21:30
+54,Arnaldo Highway Terminal,Cavite,General Trias,San Francisco,05:00,21:30
+55,Governor Ferrer Terminal,Cavite,General Trias,Pinagtipunan,05:00,21:00
+56,Lancaster New City Terminal,Cavite,General Trias,Navarro,05:00,21:30
+57,EPZA Rosario Terminal,Cavite,Rosario,Tejero,05:00,21:30
+58,Tanza Crossing Terminal,Cavite,Tanza,Paradahan I,05:00,21:00
+59,Amaya Transport Terminal,Cavite,Tanza,Amaya I,05:00,20:30
+60,Naic Highway Terminal,Cavite,Naic,Bagong Kalsada,05:00,20:30
+61,Ternate Junction Terminal,Cavite,Naic,Labac,05:00,20:00
+62,Indang Junction Terminal,Cavite,Indang,Bancod,05:00,20:00
+63,Trece-Indang Gateway Terminal,Cavite,Trece Martires,Conchu,05:00,21:00
+64,Silang Junction North Terminal,Cavite,Tagaytay,Silang Junction North,05:00,22:00
+65,Mahogany Transport Terminal,Cavite,Tagaytay,Maharlika East,05:00,21:30
+66,People's Park Access Terminal,Cavite,Tagaytay,Sungay East,05:30,20:30
+67,Carmona Exit Terminal,Cavite,Carmona,Maduya,05:00,21:30
+68,GMA Terminal,Cavite,General Mariano Alvarez,Poblacion,05:00,21:00
+69,Golden City Terminal,Cavite,General Mariano Alvarez,San Jose,05:00,21:00
+70,Manggahan-GMA Boundary Terminal,Cavite,General Mariano Alvarez,Gavino Maderan,05:00,21:00
+71,Kawit Centennial Terminal,Cavite,Kawit,Magdalo,05:00,21:00
+72,Binakayan Transport Terminal,Cavite,Kawit,Binakayan-Kanluran,05:00,21:00
+73,Noveleta-Bacoor Boundary Terminal,Cavite,Noveleta,San Rafael IV,05:00,20:30
+74,Cavite City San Antonio Terminal,Cavite,Cavite City,San Antonio,05:00,21:00
+75,Cavite City Dalahican Terminal,Cavite,Cavite City,Dalahican,05:00,20:30
+76,Maragondon Public Market Terminal,Cavite,Maragondon,Poblacion II,05:00,20:00
+77,Magallanes Transport Terminal,Cavite,Magallanes,Poblacion I,05:00,19:30
+78,General Emilio Aguinaldo Terminal,Cavite,General Emilio Aguinaldo,Poblacion I,05:00,19:30
+79,Alfonso Terminal,Cavite,Alfonso,Poblacion II,05:00,20:00
+80,Mendez Terminal,Cavite,Mendez,Poblacion I,05:00,20:00
+81,Amadeo Terminal,Cavite,Amadeo,Poblacion I,05:00,20:00

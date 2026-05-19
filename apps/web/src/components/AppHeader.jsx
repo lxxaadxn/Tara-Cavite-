@@ -1,6 +1,9 @@
+import { useEffect, useState } from 'react';
 import { NavLink, Link, useLocation } from 'react-router-dom';
 import { LogoWordmark } from './LogoWordmark';
+import { supabase } from '../lib/supabase';
 const olive = '#7ea00e';
+const DEFAULT_PROFILE_LOGO = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='%23eaf5cf'/><circle cx='32' cy='32' r='19' fill='%237ea00e'/><text x='32' y='38' text-anchor='middle' font-family='Arial,sans-serif' font-size='18' font-weight='700' fill='white'>CT</text></svg>";
 function navMatch(pathname, to) {
     if (to === '/search')
         return pathname === '/search' || pathname.startsWith('/place/');
@@ -10,6 +13,40 @@ function navMatch(pathname, to) {
 }
 export function AppHeader() {
     const { pathname } = useLocation();
+    const [avatarUrl, setAvatarUrl] = useState(DEFAULT_PROFILE_LOGO);
+
+    useEffect(() => {
+        let cancelled = false;
+        const loadAvatar = async () => {
+            const { data } = await supabase.auth.getUser();
+            const metadata = data?.user?.user_metadata ?? {};
+            const photo = metadata.avatar_url || metadata.picture || DEFAULT_PROFILE_LOGO;
+            if (!cancelled)
+                setAvatarUrl(photo);
+        };
+        loadAvatar();
+        const onAvatarBump = () => {
+            void loadAvatar();
+        };
+        window.addEventListener('cavitour:avatar-updated', onAvatarBump);
+        const { data: { subscription }, } = supabase.auth.onAuthStateChange((event, session) => {
+            if (event === 'SIGNED_OUT') {
+                if (!cancelled)
+                    setAvatarUrl(DEFAULT_PROFILE_LOGO);
+                return;
+            }
+            const metadata = session?.user?.user_metadata ?? {};
+            const photo = metadata.avatar_url || metadata.picture || DEFAULT_PROFILE_LOGO;
+            if (!cancelled)
+                setAvatarUrl(photo);
+        });
+        return () => {
+            cancelled = true;
+            window.removeEventListener('cavitour:avatar-updated', onAvatarBump);
+            subscription.unsubscribe();
+        };
+    }, []);
+
     const nav = [
         { to: '/search', label: 'Search' },
         { to: '/saved', label: 'Saved' },
@@ -18,7 +55,7 @@ export function AppHeader() {
     ];
     return (<header className="sticky top-0 z-40 bg-white border-b border-neutral-200/80">
       <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 h-[72px] flex items-center justify-between gap-4">
-        <Link to="/search" className="shrink-0" aria-label="CaviTour home">
+        <Link to="/search" className="shrink-0" aria-label="CaviTour">
           <LogoWordmark />
         </Link>
 
@@ -36,13 +73,17 @@ export function AppHeader() {
         </nav>
 
         <div className="flex items-center gap-3 shrink-0">
-          <Link to="/saved" className="p-2 rounded-xl text-neutral-500 hover:bg-neutral-100 transition-colors" aria-label="Saved">
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+          <Link
+            to="/saved"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-600 transition hover:bg-neutral-50"
+            aria-label="Saved"
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <path d="m12 21.35-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09A6.02 6.02 0 0 1 16.5 3C19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54z" />
             </svg>
           </Link>
           <Link to="/profile" className="relative rounded-full ring-2 ring-white shadow-md overflow-hidden w-10 h-10 block" aria-label="Profile">
-            <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=128&q=80" alt="" className="w-full h-full object-cover"/>
+            <img src={avatarUrl} alt="" className="w-full h-full object-cover"/>
             <span className="absolute bottom-0.5 right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white" style={{ backgroundColor: olive }} aria-hidden/>
           </Link>
         </div>

@@ -2,105 +2,229 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { LogoWordmark } from '../components/LogoWordmark';
+import { getAdminReservedEmailMessage, isAdminReservedEmail } from '../lib/adminReservedEmail';
+
 const MIN_PASSWORD_LENGTH = 8;
-const olive = '#7ea00e';
-const teal = '#1f4f59';
+const teal = 'var(--ct-teal)';
+const ink = 'var(--ct-ink)';
+const cream = 'var(--ct-cream)';
+
+function toFriendlySignupError(err) {
+  const message = err instanceof Error ? err.message : String(err || '');
+  const normalized = message.toLowerCase();
+  if (normalized.includes('user already registered') || normalized.includes('already exists')) {
+    return 'This email is already registered. Please log in instead. If you previously used Google, choose "Sign in with Google".';
+  }
+  return message || 'Sign up failed';
+}
+
 export function SignupPage() {
-    const navigate = useNavigate();
-    const [name, setName] = useState('');
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+  const navigate = useNavigate();
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [showGoogleConsent, setShowGoogleConsent] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleGoogleAuth = async () => {
+    setError('');
+    setLoading(true);
+    const { error: err } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}/auth/google` },
+    });
+    if (err) {
+      setError(err.message || 'Google sign up failed');
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail || !password) {
+      setError('Please fill in all required fields.');
+      return;
+    }
+    if (isAdminReservedEmail(trimmedEmail)) {
+      setError(getAdminReservedEmailMessage());
+      return;
+    }
+
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setError('Password must be at least 8 characters.');
+      return;
+    }
+
+    const trimmedName = name.trim() || trimmedEmail.split('@')[0];
+    setLoading(true);
+    try {
+      const { data, error: err } = await supabase.auth.signUp({
+        email: trimmedEmail,
+        password,
+        options: { data: { username: trimmedName } },
+      });
+      if (err) throw err;
+
+      if (data.session) {
+        navigate('/search', { replace: true });
+      } else {
         setError('');
-        const trimmedEmail = email.trim();
-        if (!trimmedEmail || !password) {
-            setError('Please fill in all required fields.');
-            return;
-        }
-        if (password.length < MIN_PASSWORD_LENGTH) {
-            setError('Password must be at least 8 characters.');
-            return;
-        }
-        const trimmedName = name.trim() || trimmedEmail.split('@')[0];
-        setLoading(true);
-        try {
-            const { data, error: err } = await supabase.auth.signUp({
-                email: trimmedEmail,
-                password,
-                options: { data: { username: trimmedName } },
-            });
-            if (err)
-                throw err;
-            if (data.session) {
-                navigate('/search', { replace: true });
-            }
-            else {
-                setError('');
-                alert('Check your email. We sent you a confirmation link. Open it to activate your account, then sign in.');
-                navigate('/login', { replace: true });
-            }
-        }
-        catch (err) {
-            setError(err instanceof Error ? err.message : 'Sign up failed');
-        }
-        finally {
-            setLoading(false);
-        }
-    };
-    return (<div className="min-h-screen flex font-['Inter',sans-serif]">
-      <div className="flex-1 flex flex-col justify-center px-6 py-12 sm:px-12 lg:px-20 bg-white min-h-screen order-2 lg:order-1">
-        <div className="max-w-md mx-auto w-full flex-1 flex flex-col justify-center">
-          <Link to="/" className="inline-block mb-10">
-            <LogoWordmark />
-          </Link>
-          <h1 className="font-['Poppins',sans-serif] text-3xl font-bold text-neutral-900 mb-2">Sign up</h1>
-          <p className="text-neutral-600 mb-8">Start your 30-day free trial.</p>
+        alert('Check your email. We sent you a confirmation link. Open it to activate your account, then sign in.');
+        navigate('/login', { replace: true });
+      }
+    } catch (err) {
+      setError(toFriendlySignupError(err));
+    } finally {
+      setLoading(false);
+    }
+  };
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-1.5">Name *</label>
-              <input type="text" placeholder="Enter your name" value={name} onChange={(e) => setName(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-neutral-200 outline-none focus:ring-2 focus:ring-[rgba(126,160,14,0.3)]"/>
+  return (
+    <div className="min-h-screen px-4 py-6 font-['Inter',sans-serif] sm:px-8 sm:py-8" style={{ backgroundColor: cream }}>
+      {showGoogleConsent ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="google-signup-consent-title"
+          aria-describedby="google-signup-consent-desc"
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-[0_24px_60px_rgba(0,0,0,0.18)]">
+            <p id="google-signup-consent-title" className="text-base font-semibold text-neutral-900">
+              Sign up with Google
+            </p>
+            <p id="google-signup-consent-desc" className="mt-2 text-sm text-neutral-600">
+              Allow CaviTour to create or link your account with Google? You will be redirected to Google to continue.
+            </p>
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                className="h-10 flex-1 rounded-full border border-neutral-200 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50"
+                onClick={() => setShowGoogleConsent(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="h-10 flex-1 rounded-full text-sm font-semibold text-white transition"
+                style={{ backgroundColor: teal }}
+                onClick={() => {
+                  setShowGoogleConsent(false);
+                  void handleGoogleAuth();
+                }}
+              >
+                Continue
+              </button>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-1.5">Email *</label>
-              <input type="email" placeholder="Enter your email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-neutral-200 outline-none focus:ring-2 focus:ring-[rgba(126,160,14,0.3)]" required/>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-1.5">Password *</label>
-              <input type="password" placeholder="Create a password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-neutral-200 outline-none focus:ring-2 focus:ring-[rgba(126,160,14,0.3)]" required minLength={MIN_PASSWORD_LENGTH}/>
-              <p className="mt-1 text-xs text-neutral-500">Must be at least 8 characters.</p>
-            </div>
-            {error ? <p className="text-sm text-red-600">{error}</p> : null}
-            <button type="submit" disabled={loading} className="w-full py-3.5 rounded-xl text-white font-bold disabled:opacity-60" style={{ backgroundColor: olive }}>
-              {loading ? 'Creating account…' : 'Create account'}
-            </button>
-            <button type="button" className="w-full py-3.5 rounded-xl border border-neutral-200 flex items-center justify-center gap-2 text-neutral-800 font-semibold hover:bg-neutral-50">
-              <span className="text-lg">G</span> Sign up with Google
-            </button>
-          </form>
+          </div>
+        </div>
+      ) : null}
 
-          <p className="mt-8 text-center text-neutral-600 text-sm">
-            Already have an account?{' '}
-            <Link to="/login" className="font-bold hover:underline" style={{ color: teal }}>
-              Log in
-            </Link>
-          </p>
+      <div className="mx-auto grid w-full max-w-5xl overflow-hidden rounded-[1.7rem] bg-white p-3 shadow-[0_24px_60px_rgba(0,0,0,0.10)] sm:p-4 lg:grid-cols-[1fr_1.05fr] lg:gap-6">
+        <div className="hidden lg:block">
+          <div className="relative h-full min-h-[620px] overflow-hidden rounded-[1.2rem] bg-neutral-100">
+            <img
+              src="https://images.unsplash.com/photo-1463320726281-696a485928c7?w=1300&q=80"
+              alt="Floral collage"
+              className="h-full w-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
+          </div>
         </div>
 
-        <footer className="max-w-md mx-auto w-full flex items-center justify-between text-xs text-neutral-500 pt-12">
-          <span>© CaviTour 2026</span>
-          <a href="mailto:help@cavitour.com" className="flex items-center gap-1 hover:text-neutral-700">
-            ✉ help@cavitour.com
-          </a>
-        </footer>
-      </div>
+        <div className="flex items-center justify-center px-2 py-2 sm:px-4">
+          <div className="w-full max-w-md">
+            <div className="mb-6 text-center">
+              <Link to="/" className="inline-flex items-center justify-center">
+                <LogoWordmark className="text-sm" />
+              </Link>
+              <h1 className="mt-4 font-['Poppins',sans-serif] text-3xl font-semibold" style={{ color: ink }}>Create your account</h1>
+              <p className="mt-2 text-sm text-neutral-500">Enter your details to get started with CaviTour.</p>
+            </div>
 
-      <div className="hidden lg:flex lg:w-[48%] relative overflow-hidden order-1 lg:order-2">
-        <img src="https://images.unsplash.com/photo-1506929562872-bb421503ef21?w=1200&q=80" alt="" className="absolute inset-0 w-full h-full object-cover"/>
-        <div className="absolute inset-0 z-[1] rounded-l-[2.5rem] overflow-hidden pointer-events-none shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]"/>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="mb-1.5 block text-sm text-neutral-600">Name</label>
+                <input
+                  type="text"
+                  placeholder="Enter your name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="h-11 w-full rounded-full border border-neutral-200 px-4 text-sm outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(126,160,14,0.22)]"
+                  style={{ boxShadow: 'none' }}
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm text-neutral-600">Email</label>
+                <input
+                  type="email"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="h-11 w-full rounded-full border border-neutral-200 px-4 text-sm outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(126,160,14,0.22)]"
+                  style={{ boxShadow: 'none' }}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm text-neutral-600">Password</label>
+                <input
+                  type="password"
+                  placeholder="Create your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="h-11 w-full rounded-full border border-neutral-200 px-4 text-sm outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(126,160,14,0.22)]"
+                  style={{ boxShadow: 'none' }}
+                  required
+                  minLength={MIN_PASSWORD_LENGTH}
+                />
+                <p className="mt-1 text-xs text-neutral-500">Must be at least 8 characters.</p>
+              </div>
+
+              {error ? <p className="text-sm text-red-600">{error}</p> : null}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="mt-2 h-11 w-full rounded-full text-sm font-semibold text-white transition disabled:opacity-60"
+                style={{ backgroundColor: teal }}
+              >
+                {loading ? 'Creating account...' : 'Create account'}
+              </button>
+            </form>
+
+            <div className="my-5 flex items-center gap-3 text-xs text-neutral-400">
+              <div className="h-px flex-1 bg-neutral-200" />
+              <span>Or continue with</span>
+              <div className="h-px flex-1 bg-neutral-200" />
+            </div>
+
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => setShowGoogleConsent(true)}
+                disabled={loading}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-neutral-100 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-200/70 disabled:opacity-60"
+              >
+                Sign up with Google
+              </button>
+            </div>
+
+            <p className="mt-5 text-center text-sm text-neutral-500">
+              Already have an account?{' '}
+              <Link to="/login" className="font-semibold hover:underline" style={{ color: teal }}>
+                Log in
+              </Link>
+            </p>
+          </div>
+        </div>
       </div>
-    </div>);
+    </div>
+  );
 }

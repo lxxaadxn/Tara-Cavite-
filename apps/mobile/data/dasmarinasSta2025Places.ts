@@ -1,7 +1,5 @@
 /**
- * Tourist Attraction Inventory — City of Dasmariñas, Cavite (STA-v3, Year 2025).
- * Source: STA-v3_CAVITE_2025-1-Dasmariñas-City.pdf (NTDP / barangay per LGU sheet).
- * Addresses: "{name}, {Barangay}, Dasmariñas, Cavite, Philippines" for geocoding & display.
+ * Legacy Dasmariñas-only extract — kept for `scripts/geocode-dasmarinas-sta2025.mjs`.
  */
 
 export type DasmarinasStaRow = {
@@ -49,7 +47,7 @@ export const DASMARIÑAS_STA_2025_PLACES: DasmarinasStaRow[] = [
   { slug: 'casasignora-resort', name: 'Casasignora Resort', barangay: 'Langkaan 1', address: 'Casasignora Resort, Langkaan 1, Dasmariñas, Cavite, Philippines', taCategory: 'Resort Complex', ntdpCategory: 'Leisure and Entertainment Tourism', hours: 'Contact resort' },
   { slug: 'blue-stone-private-resort', name: 'Blue Stone Private Resort', barangay: 'Langkaan II', address: 'Blue Stone Private Resort, Langkaan II, Dasmariñas, Cavite, Philippines', taCategory: 'Resort Complex', ntdpCategory: 'Leisure and Entertainment Tourism', hours: 'Contact resort' },
   { slug: 'john-cezar-waterfun-resort', name: 'John Cezar Waterfun Resort', barangay: 'Sampaloc III', address: 'John Cezar Waterfun Resort, Sampaloc III, Dasmariñas, Cavite, Philippines', taCategory: 'Resort Complex', ntdpCategory: 'Leisure and Entertainment Tourism', hours: 'Contact resort' },
-  { slug: 'eml-management-corporation', name: 'EML Management Corporation', barangay: 'Zone IV', address: 'EML Management Corporation, Zone IV, Dasmariñas, Cavite, Philippines', taCategory: 'Resort Complex', ntdpCategory: 'Leisure and Entertainment Tourism', hours: 'Contact venue' },
+  { slug: 'eml-events-place', name: 'EML Events Place', barangay: 'Zone IV', address: 'EML Events Place, Zone IV, Dasmariñas, Cavite, Philippines', taCategory: 'Resort Complex', ntdpCategory: 'Leisure and Entertainment Tourism', hours: 'Contact venue' },
   { slug: 'palmas-resort-dasma', name: 'Palmas Resort', barangay: 'Zone III', address: 'Palmas Resort, Zone III, Dasmariñas, Cavite, Philippines', taCategory: 'Resort Complex', ntdpCategory: 'Leisure and Entertainment Tourism', hours: 'Contact resort' },
   { slug: 'green-and-saddle-farm-resort', name: 'Green and Saddle Farm Resort', barangay: 'San Jose', address: 'Green and Saddle Farm Resort, San Jose, Dasmariñas, Cavite, Philippines', taCategory: 'Resort Complex', ntdpCategory: 'Leisure and Entertainment Tourism', hours: 'Contact resort' },
   { slug: 'casa-annilo-rental', name: 'Casa Annilo Rental', barangay: 'Sampaloc III', address: 'Casa Annilo Rental, Sampaloc III, Dasmariñas, Cavite, Philippines', taCategory: 'Resort Complex', ntdpCategory: 'Leisure and Entertainment Tourism', hours: 'Contact property' },

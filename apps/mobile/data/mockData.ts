@@ -1,5 +1,5 @@
 /**
- * Mock data for the app - no API calls
+ * Mock / offline fallback data. Live Cavite STA listings use `v_cavite_establishments`.
  */
 
 export interface Place {
@@ -11,11 +11,22 @@ export interface Place {
   latitude: number;
   longitude: number;
   image?: any; // For require() statements or URI strings
+  /** Extra bundled photos (see `establishmentLocalImages.ts`) */
+  gallery?: any[];
   /** Shown on home cards (Figma) */
   rating?: string;
   /** From Supabase / LGU STA inventory */
   description?: string;
-  ntdp_category?: string
+  ntdp_category?: string;
+  /** LGU label when loaded from Cavite view */
+  city_mun?: string;
+  /** ISO timestamp when loaded from Supabase (for dashboard sort) */
+  created_at?: string;
+  /** Supabase combined search field (filtering) */
+  searchable_text?: string;
+  type_code?: string;
+  ta_category?: string;
+  lgu_slug?: string;
 }
 
 export interface Route {
@@ -84,31 +95,34 @@ export interface Terminal {
 // Trending Tourist Spots for home screen (Figma dashboard export)
 export const trendingSpots: Place[] = [
   {
-    id: '1',
+    id: 'tr-silang',
     name: 'Tinatangi Cafe',
     address: 'Silang, Cavite',
+    city_mun: 'Silang',
     type: 'Cafe',
     hours: '8:00 AM - 10:00 PM',
-    latitude: 14.3297,
-    longitude: 120.9367,
+    latitude: 14.2156,
+    longitude: 120.9719,
     image: require('../assets/images/picture-7.png'),
     rating: '5.0',
   },
   {
-    id: '2',
-    name: 'Aguinaldo Shrine',
-    address: '15, 52 Tirona Hwy, Kawit, 4104 Cavite',
-    type: 'Historical Site',
-    hours: '8:00 AM - 4:00 PM',
-    latitude: 14.4444,
-    longitude: 120.9056,
+    id: 'tr-cavite-city',
+    name: 'Corregidor Island ferry point',
+    address: 'Cavite City, Cavite',
+    city_mun: 'Cavite City',
+    type: 'Tourism transport',
+    hours: 'See operator',
+    latitude: 14.4826,
+    longitude: 120.908,
     image: require('../assets/images/picture-15.png'),
     rating: '4.9',
   },
   {
-    id: '3',
+    id: 'tr-tagaytay',
     name: 'Taal Volcano View',
-    address: 'Tagaytay City',
+    address: 'Tagaytay City, Cavite',
+    city_mun: 'Tagaytay City',
     type: 'Tourist Spot',
     hours: 'Open 24 hours',
     latitude: 14.1133,
@@ -117,13 +131,14 @@ export const trendingSpots: Place[] = [
     rating: '4.8',
   },
   {
-    id: '4',
-    name: 'Immaculate Conception',
-    address: 'Don Placido Campos Avenue, Dasmariñas',
+    id: 'tr-dasma',
+    name: 'Immaculate Conception Parish',
+    address: 'Dasmariñas City, Cavite',
+    city_mun: 'Dasmariñas City',
     type: 'Church',
     hours: 'Open for mass',
-    latitude: 14.3297,
-    longitude: 120.9367,
+    latitude: 14.3271,
+    longitude: 120.9358,
     image: require('../assets/images/picture-31.png'),
     rating: '5.0',
   },
@@ -132,51 +147,79 @@ export const trendingSpots: Place[] = [
 // Recent searches (empty initially, will be populated from user's search history)
 export const recentSearches: string[] = [];
 
-// Nearby places for home (Figma dashboard export)
+// Nearby places for home (offline fallback — spread across Cavite LGUs; live data from Supabase)
 export const nearbyPlaces: Place[] = [
   {
-    id: '1',
-    name: 'SM Dasmarinas',
-    address: "4114 Governor's Dr, Brgy, Dasmariñas City",
+    id: 'nb-bacoor',
+    name: 'SM City Bacoor',
+    address: 'Bacoor City, Cavite',
+    city_mun: 'Bacoor City',
     type: 'Shopping Mall',
     hours: '10:00 AM - 9:00 PM',
-    latitude: 14.3297,
-    longitude: 120.9367,
+    latitude: 14.4594,
+    longitude: 120.9605,
     image: require('../assets/images/picture-43.png'),
     rating: '5.0',
   },
   {
-    id: '2',
-    name: 'Museo De La Salle',
-    address: 'De La Salle University - Dasma Brgy. Fatima 1, Dasmariñas City',
-    type: 'Museum',
-    hours: '9:00 AM - 4:00 PM',
-    latitude: 14.3297,
-    longitude: 120.9367,
+    id: 'nb-imus',
+    name: 'Imus Cathedral',
+    address: 'Imus City, Cavite',
+    city_mun: 'Imus City',
+    type: 'Church',
+    hours: 'See parish schedule',
+    latitude: 14.4296,
+    longitude: 120.9377,
     image: require('../assets/images/picture-51.png'),
     rating: '4.9',
   },
   {
-    id: '3',
-    name: "Volet's Hotel & Resort",
-    address: 'Aguinaldo Hwy, Dasmariñas, Cavite',
-    type: 'Hotel',
-    hours: 'Open 24 hours',
-    latitude: 14.33,
-    longitude: 120.94,
+    id: 'nb-tagaytay',
+    name: 'Tagaytay Picnic Grove',
+    address: 'Tagaytay City, Cavite',
+    city_mun: 'Tagaytay City',
+    type: 'Nature / Park',
+    hours: '6:00 AM - 10:00 PM',
+    latitude: 14.1153,
+    longitude: 120.9621,
     image: require('../assets/images/picture-59.png'),
     rating: '4.8',
   },
   {
-    id: '4',
-    name: 'Brewny Coffee Master',
-    address: 'Immaculate Conception Academy Sports Complex',
-    type: 'Cafe',
-    hours: '7:00 AM - 9:00 PM',
-    latitude: 14.3297,
-    longitude: 120.9367,
+    id: 'nb-silang',
+    name: 'Silang Town Plaza',
+    address: 'Silang, Cavite',
+    city_mun: 'Silang',
+    type: 'Town center',
+    hours: 'Open daily',
+    latitude: 14.2156,
+    longitude: 120.9719,
     image: require('../assets/images/picture-67.png'),
     rating: '5.0',
+  },
+  {
+    id: 'nb-silang-market',
+    name: 'Silang Public Market',
+    address: 'Silang, Cavite',
+    city_mun: 'Silang',
+    type: 'Market',
+    hours: 'Morning to evening',
+    latitude: 14.218,
+    longitude: 120.973,
+    image: require('../assets/images/picture-7.png'),
+    rating: '4.7',
+  },
+  {
+    id: 'nb-tagaytay-sky',
+    name: 'Sky Ranch Tagaytay',
+    address: 'Tagaytay City, Cavite',
+    city_mun: 'Tagaytay City',
+    type: 'Leisure',
+    hours: '10:00 AM - 10:00 PM',
+    latitude: 14.116,
+    longitude: 120.955,
+    image: require('../assets/images/picture-23.png'),
+    rating: '4.8',
   },
 ];
 
@@ -358,7 +401,7 @@ export const mockNotifications: Notification[] = [
   },
 ];
 
-/** Resolves to a `Place` from `trendingSpots` or `nearbyPlaces` (ids overlap between pools). */
+/** Resolves to a `Place` from `trendingSpots` or `nearbyPlaces` (use distinct string ids per pool). */
 export type ItineraryStopEstablishmentRef = {
   source: 'trending' | 'nearby';
   placeId: string;
@@ -410,31 +453,31 @@ export const mockItineraries: ItineraryCard[] = [
         name: 'Silang town proper',
         description: 'Meet the route, grab water, confirm trike fares upland.',
         leg: 'Jeepneys from Dasma / Aguinaldo Hwy often pass through.',
-        establishment: { source: 'trending', placeId: '1' },
+        establishment: { source: 'trending', placeId: 'tr-silang' },
       },
       {
         name: 'Garden café strip',
         description: 'Patios and local roasters — ideal first meal.',
         leg: 'Short trike hops; agree return if late.',
-        establishment: { source: 'nearby', placeId: '4' },
+        establishment: { source: 'nearby', placeId: 'nb-silang' },
       },
       {
         name: 'Ridge approach',
         description: 'Climb with lookout pockets; weekend traffic builds noon–4pm.',
         leg: 'Bus or van along the highway spine.',
-        establishment: { source: 'nearby', placeId: '3' },
+        establishment: { source: 'nearby', placeId: 'nb-tagaytay' },
       },
       {
         name: 'Tagaytay viewpoint',
         description: 'Classic panorama — mist after rain is normal.',
         leg: 'Walk from drop-offs; bring a wind layer.',
-        establishment: { source: 'trending', placeId: '3' },
+        establishment: { source: 'trending', placeId: 'tr-tagaytay' },
       },
       {
         name: 'Sunset dinner',
         description: 'West-facing grills and bistros — book on holidays.',
         leg: 'Vans early evening; ride-apps after dark.',
-        establishment: { source: 'nearby', placeId: '1' },
+        establishment: { source: 'nearby', placeId: 'nb-bacoor' },
       },
     ],
     tips: ['Light jacket after 4pm', 'Cash for trikes', 'Long weekends = heavier traffic'],
@@ -456,25 +499,25 @@ export const mockItineraries: ItineraryCard[] = [
         name: 'Alfonso jump-off',
         description: 'Coffee, tires/air check, and route briefing.',
         leg: 'Private car or van from Silang / Tagaytay access roads.',
-        establishment: { source: 'trending', placeId: '1' },
+        establishment: { source: 'trending', placeId: 'tr-silang' },
       },
       {
         name: 'Magallanes sidestreets',
         description: 'Low-traffic pockets; respect local school zones.',
         leg: 'Rolling segments — hydrate every hour.',
-        establishment: { source: 'trending', placeId: '2' },
+        establishment: { source: 'trending', placeId: 'tr-cavite-city' },
       },
       {
         name: 'Maragondon approach',
         description: 'Greener stretch; photo stops off the shoulder only.',
         leg: 'Narrow lanes — single-file if cycling.',
-        establishment: { source: 'trending', placeId: '3' },
+        establishment: { source: 'trending', placeId: 'tr-tagaytay' },
       },
       {
         name: 'Late lunch bayan',
         description: 'Carinderia or small grill before the return climb.',
         leg: 'Jeepney connections toward coastal roads if extending the trip.',
-        establishment: { source: 'nearby', placeId: '4' },
+        establishment: { source: 'nearby', placeId: 'nb-silang' },
       },
     ],
     tips: ['Helmet + lights if biking', 'Check weather for afternoon storms', 'Carry repair kit on long rides'],
@@ -482,7 +525,7 @@ export const mockItineraries: ItineraryCard[] = [
   },
 ];
 
-/** Resolve a featured establishment for an itinerary stop (`trending` vs `nearby` disambiguates duplicate numeric ids). */
+/** Resolve a featured establishment for an itinerary stop (`trending` vs `nearby` disambiguates pools). */
 export function resolveItineraryEstablishment(ref: ItineraryStopEstablishmentRef): Place | undefined {
   const pool = ref.source === 'trending' ? trendingSpots : nearbyPlaces;
   return pool.find((p) => p.id === ref.placeId);
@@ -504,6 +547,64 @@ export function getItineraryEstablishments(itineraryRefId: string): Place[] {
       out.push(p);
     }
   }
+  return out;
+}
+
+function extractMunicipalityFromAddress(address: string): string {
+  const parts = address
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const caviteIdx = parts.findIndex((p) => /^cavite$/i.test(p));
+  if (caviteIdx > 0) return parts[caviteIdx - 1];
+  return parts[0] ?? '';
+}
+
+/** Normalized LGU key for grouping extras with featured-route stops (matches filter-style labels). */
+function foldMunicipalityKey(place: Place): string {
+  const raw = (place.city_mun ?? '').trim() || extractMunicipalityFromAddress(place.address ?? '');
+  return raw
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+city\s*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Featured stops from each itinerary plus other catalog places in the same city/municipality
+ * so tourists can browse ideas without opening every route.
+ */
+export function getBrowseEstablishmentsForItineraries(): { place: Place; itineraryTitle: string }[] {
+  const out: { place: Place; itineraryTitle: string }[] = [];
+  const seenIds = new Set<string>();
+  const routeMunKeys = new Set<string>();
+
+  for (const it of mockItineraries) {
+    for (const p of getItineraryEstablishments(it.id)) {
+      routeMunKeys.add(foldMunicipalityKey(p));
+      if (seenIds.has(p.id)) continue;
+      seenIds.add(p.id);
+      out.push({ place: p, itineraryTitle: it.title });
+    }
+  }
+
+  for (const p of mockPlaces) {
+    if (seenIds.has(p.id)) continue;
+    const mk = foldMunicipalityKey(p);
+    if (!mk || !routeMunKeys.has(mk)) continue;
+    const hostIt =
+      mockItineraries.find((it) =>
+        getItineraryEstablishments(it.id).some((ep) => foldMunicipalityKey(ep) === mk)
+      ) ?? null;
+    seenIds.add(p.id);
+    out.push({
+      place: p,
+      itineraryTitle: hostIt ? `${hostIt.title} · more nearby` : 'Along featured routes · more nearby',
+    });
+  }
+
   return out;
 }
 

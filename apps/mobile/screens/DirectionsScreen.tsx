@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/nativ
 import * as Location from 'expo-location';
 import { JamIcon } from '../components/JamIcon';
 import { SaveToListSheet, type SaveToListRow } from '../components/SaveToListSheet';
-import { Place } from '../data/mockData';
+import { Place, type Terminal } from '../data/mockData';
 import { parsePlaceCoords } from '../lib/placeCoords';
 import { formatNtdpCategoryTagLabel } from '../lib/ntdpDisplayLabels';
 import {
@@ -27,6 +27,10 @@ import {
   type OsrmRouteResult,
   type RouteStepUi,
 } from '../lib/fetchOsrmRoute';
+import {
+  buildCommuterNarrativeFromOsrmSteps,
+  commuterDirectStepInstruction,
+} from '../lib/commuterRouteNarration';
 import type { DirectionsMapPayload } from '../lib/directionsMapBridge';
 import { supabase } from '../lib/supabase';
 import {
@@ -43,6 +47,13 @@ import {
   placeRowExists,
   fetchUserListsForPicker,
 } from '../lib/savedListItems';
+import {
+  planNearestTerminalsForPlaceCommute,
+  fetchNearestTerminalForUser,
+  type TerminalTransitPlan,
+} from '../lib/terminalTransitPlanner';
+import { recordDestinationReached } from '../lib/destinationReachedActivity';
+import { haversineDistanceKm } from '../lib/placesFromSupabase';
 
 const GREEN = '#7EA00E';
 const TEAL = '#1F4F59';
@@ -52,13 +63,11 @@ const MUTED = '#868686';
 const WHITE = '#FFFFFF';
 const PAGE_BG = '#FAFAF8';
 const CARD_BORDER = 'rgba(122, 120, 120, 0.18)';
-
 /** Shown above route content — commuters are the primary audience. */
 const COMMUTER_DISCLAIMER =
-  'Built for commuters: use each step as a corridor along public roads where jeepneys, buses, UV Express vans, and modern jeepney routes commonly run. The path uses OpenStreetMap via OSRM (car-style geometry) to trace those roads—it is not a live transit schedule, fare, or official route name. Confirm signboards and “para po” stops with the driver.';
+  'Steps follow the mapped road (OSRM / OpenStreetMap), not live transit schedules. Confirm signs, fares, and stops with operators.';
 
-const COMMUTER_FOOTNOTE =
-  'One-way streets, traffic, and terminal locations change often. If you drive, the same corridor still helps—adjust for parking and access.';
+const COMMUTER_FOOTNOTE = 'Roads and stops change — double-check locally, especially if you drive.';
 
 const PILL_STYLES = {
   green: { bg: 'rgba(126, 160, 14, 0.5)', text: GREEN },
@@ -69,6 +78,8 @@ type PillVariant = keyof typeof PILL_STYLES;
 
 export type DirectionsScreenParams = {
   place: Place;
+  /** Live GPS updates on the map while this screen is open (foreground). */
+  caviTrip?: boolean;
 };
 
 function buildTags(place: Place): { label: string; variant: PillVariant }[] {
@@ -83,34 +94,45 @@ function buildTags(place: Place): { label: string; variant: PillVariant }[] {
 }
 
 function buildNarrativeGuide(steps: RouteStepUi[], destinationLabel: string): string {
-  if (!steps.length) {
-    return `Turn on location to build segments from where you are standing.\n\nYou can still open the full map to find ${destinationLabel} and eyeball nearby terminals or jeepney lines—even without steps here.`;
-  }
-  const head =
-    `You’re planning a commute toward ${destinationLabel}.\n\n` +
-    'Read the steps in order: each one is a stretch of road. Prefer rides that stay on that stretch; if your jeepney or bus turns off earlier, get off at a safe corner and catch another line along the next stretch, or walk short links. Tricycles can help for the last few hundred meters when allowed.\n\n' +
-    'Driving? Use the same roads; watch for passenger stops and one-way signs.';
-  const body = steps
-    .map((s, i) => {
-      const dist = formatDistanceM(s.distanceM);
-      const dur = formatDurationS(s.durationS);
-      const n = i + 1;
-      const last = i === steps.length - 1;
-      const segHint = last
-        ? `Final approach (~${dist}, ~${dur}): ask to alight where it’s safe and walk in if the spot is inside a complex or side street.`
-        : `This segment (~${dist}, ~${dur}): stay on this corridor in your ride when the signboard matches; if not, transfer at a crossing or terminal before the road changes.`;
-      return `${n}. ${s.instruction}\n   ${segHint}`;
-    })
-    .join('\n\n');
-  return `${head}\n\n${body}`;
+  return buildCommuterNarrativeFromOsrmSteps(steps, destinationLabel);
 }
 
-function commuterStepHint(index: number, total: number): string {
-  if (total <= 0) return '';
+function commuterStepHint(index: number, total: number, stepDistanceM: number): string {
+  if (total <= 0 || stepDistanceM < 200) return '';
   if (index === total - 1) {
-    return 'Last leg — alight before this corner if your ride won’t enter the side street; walk the rest if needed.';
+    return 'PUVs may stop before narrow streets — ask to alight at a main corner if needed.';
   }
-  return 'Stay on this road with a matching ride when you can; transfer before the turn if your line branches off.';
+  return 'If your ride leaves this road, transfer at a crossing or terminal.';
+}
+
+/** Minimal `Terminal` for navigation — detail screen loads routes by id. */
+function placeImageUriForActivity(place: Place): string | undefined {
+  const img = place.image as unknown;
+  if (img == null) return undefined;
+  if (typeof img === 'number') return undefined;
+  if (typeof img === 'object' && img !== null && 'uri' in img) {
+    return String((img as { uri: string }).uri);
+  }
+  return undefined;
+}
+
+function terminalPlanNodeToStub(node: TerminalTransitPlan['originTerminal']): Terminal {
+  return {
+    id: node.id,
+    name: node.name,
+    municipality: node.municipality,
+    addressLine: `${node.municipality}, Cavite`,
+    category: 'other',
+    transportTypes: ['Jeepney'],
+    status: 'OPEN',
+    operatingHours: 'See terminal',
+    averageFare: '—',
+    paymentType: 'Cash',
+    primaryRoutes: [],
+    reminders: [],
+    latitude: node.latitude,
+    longitude: node.longitude,
+  };
 }
 
 /**
@@ -123,26 +145,39 @@ const DirectionsScreen: React.FC = () => {
   const route = useRoute();
   const raw = route.params as DirectionsScreenParams | undefined;
   const place = raw?.place;
+  const caviTrip = Boolean(raw?.caviTrip);
 
   const isTerminal = place?.type === 'Terminal';
   const isItinerary = place?.type === 'Itinerary';
+  /** Show boarding + near-destination terminal hints (no T2T graph). */
+  const showPlaceOrItineraryTerminalHints = Boolean(place) && !isTerminal;
   const destCoords = useMemo(() => (place ? parsePlaceCoords(place) : null), [place]);
 
-  const [tab, setTab] = useState<'routeSteps' | 'stepGuide'>('routeSteps');
+  const [tab, setTab] = useState<'routeSteps' | 'stepGuide' | 'viaTerminals'>('routeSteps');
   const [userPt, setUserPt] = useState<{ lat: number; lng: number } | null>(null);
+  /** Updated while CaviTrip is on — map dot follows you; route stays from the first fix. */
+  const [liveUserPt, setLiveUserPt] = useState<{ lat: number; lng: number } | null>(null);
   const [locStatus, setLocStatus] = useState<'pending' | 'granted' | 'denied'>('pending');
   const [routeDriving, setRouteDriving] = useState<OsrmRouteResult | null>(null);
   const [routeFoot, setRouteFoot] = useState<OsrmRouteResult | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
+  const [terminalPlan, setTerminalPlan] = useState<TerminalTransitPlan | null>(null);
+  const [terminalPlanLoading, setTerminalPlanLoading] = useState(false);
+  /** When the destination is a terminal: nearest hub from the user's GPS (e.g. first mile / going home). */
+  const [nearestTerminalFromUser, setNearestTerminalFromUser] = useState<
+    TerminalTransitPlan['originTerminal'] | null
+  >(null);
 
   const [saved, setSaved] = useState(false);
   const [saveModalVisible, setSaveModalVisible] = useState(false);
   const [pickLists, setPickLists] = useState<SaveToListRow[]>([]);
   const [saveListBusyId, setSaveListBusyId] = useState<string | null>(null);
   const [checkingSaved, setCheckingSaved] = useState(false);
+  const [destinationReachedBusy, setDestinationReachedBusy] = useState(false);
 
   const tags = useMemo(() => (place ? buildTags(place) : []), [place]);
+  const commuteFromLabel = userPt ? 'Your current location' : 'Current location';
 
   useEffect(() => {
     if (!place) return;
@@ -160,7 +195,9 @@ const DirectionsScreen: React.FC = () => {
           accuracy: Location.Accuracy.Balanced,
         });
         if (!cancelled) {
-          setUserPt({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          const pt = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setUserPt(pt);
+          if (caviTrip) setLiveUserPt(pt);
         }
       } catch {
         if (!cancelled) setLocStatus('denied');
@@ -169,7 +206,46 @@ const DirectionsScreen: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [place]);
+  }, [place, caviTrip]);
+
+  const locationWatchRef = useRef<Location.LocationSubscription | null>(null);
+
+  useEffect(() => {
+    if (!place || !caviTrip || locStatus !== 'granted') {
+      locationWatchRef.current?.remove();
+      locationWatchRef.current = null;
+      return;
+    }
+    let cancelled = false;
+    Location.watchPositionAsync(
+      {
+        accuracy: Location.Accuracy.Balanced,
+        timeInterval: 8000,
+        distanceInterval: 35,
+      },
+      (loc) => {
+        if (!cancelled) {
+          setLiveUserPt({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+        }
+      }
+    )
+      .then((sub) => {
+        if (cancelled) {
+          sub.remove();
+          return;
+        }
+        locationWatchRef.current?.remove();
+        locationWatchRef.current = sub;
+      })
+      .catch(() => {
+        /* keep last live position */
+      });
+    return () => {
+      cancelled = true;
+      locationWatchRef.current?.remove();
+      locationWatchRef.current = null;
+    };
+  }, [place, caviTrip, locStatus]);
 
   useEffect(() => {
     if (!place || !destCoords || !userPt) {
@@ -210,15 +286,72 @@ const DirectionsScreen: React.FC = () => {
     };
   }, [place, destCoords, userPt]);
 
+  useEffect(() => {
+    if (!userPt) {
+      setTerminalPlan(null);
+      setNearestTerminalFromUser(null);
+      setTerminalPlanLoading(false);
+      return;
+    }
+    if (!place) {
+      setTerminalPlan(null);
+      setNearestTerminalFromUser(null);
+      setTerminalPlanLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setTerminalPlanLoading(true);
+    (async () => {
+      try {
+        if (isTerminal) {
+          const nt = await fetchNearestTerminalForUser(supabase, userPt);
+          if (!cancelled) {
+            setTerminalPlan(null);
+            setNearestTerminalFromUser(nt);
+          }
+          return;
+        }
+        if (!destCoords) {
+          if (!cancelled) {
+            setTerminalPlan(null);
+            setNearestTerminalFromUser(null);
+          }
+          return;
+        }
+        const plan = await planNearestTerminalsForPlaceCommute(supabase, userPt, destCoords);
+        if (!cancelled) {
+          setTerminalPlan(plan);
+          setNearestTerminalFromUser(null);
+        }
+      } catch {
+        if (!cancelled) {
+          setTerminalPlan(null);
+          setNearestTerminalFromUser(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setTerminalPlanLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userPt, destCoords, isTerminal, place]);
+
+  const mapUserPt = caviTrip ? liveUserPt ?? userPt : userPt;
+
   const mapPayload: DirectionsMapPayload = useMemo(
     () => ({
-      userLat: userPt?.lat ?? null,
-      userLng: userPt?.lng ?? null,
+      userLat: mapUserPt?.lat ?? null,
+      userLng: mapUserPt?.lng ?? null,
       destLat: destCoords?.lat ?? 0,
       destLng: destCoords?.lng ?? 0,
-      routeGeoJson: routeDriving?.geometry ?? null,
+      routeGeoJson: routeDriving?.geometry ?? routeFoot?.geometry ?? null,
+      routeSegmentsGeoJson: null,
     }),
-    [userPt, destCoords, routeDriving]
+    [mapUserPt, destCoords, routeDriving, routeFoot]
   );
 
   const refreshSavedState = useCallback(async () => {
@@ -401,6 +534,7 @@ const DirectionsScreen: React.FC = () => {
         if (res.ok) {
           setSaveModalVisible(false);
           setSaved(true);
+          Alert.alert('Saved', `Added to “${list.name}”.`);
           return;
         }
         if (res.duplicate) {
@@ -417,6 +551,7 @@ const DirectionsScreen: React.FC = () => {
         if (res.ok) {
           setSaveModalVisible(false);
           setSaved(true);
+          Alert.alert('Saved', `Added to “${list.name}”.`);
           return;
         }
         if (res.duplicate) {
@@ -433,6 +568,7 @@ const DirectionsScreen: React.FC = () => {
       if (res.ok) {
         setSaveModalVisible(false);
         setSaved(true);
+        Alert.alert('Saved', `Added to “${list.name}”.`);
         return;
       }
       if (res.duplicate) {
@@ -456,6 +592,31 @@ const DirectionsScreen: React.FC = () => {
       mapPayload,
     });
   };
+
+  const onDestinationReached = useCallback(async () => {
+    if (!place?.id) return;
+    if (!isSupabasePlaceId(place.id)) {
+      Alert.alert('Not available', 'Only catalog places can be counted toward Activity this month.');
+      return;
+    }
+    setDestinationReachedBusy(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Sign in', 'Sign in to add this trip to your monthly activity.');
+        return;
+      }
+      await recordDestinationReached(user.id, place.id, {
+        name: place.name,
+        image: placeImageUriForActivity(place),
+      });
+      Alert.alert('', 'Thank You and Enjoy your trip');
+    } finally {
+      setDestinationReachedBusy(false);
+    }
+  }, [place]);
 
   if (!place) {
     return (
@@ -509,6 +670,16 @@ const DirectionsScreen: React.FC = () => {
 
         <Text style={styles.placeName}>{place.name}</Text>
 
+        {caviTrip && locStatus === 'granted' ? (
+          <View style={styles.caviTripBanner}>
+            <JamIcon ionicon="navigate" size={18} color={TEAL} />
+            <Text style={styles.caviTripBannerText}>
+              CaviTrip is on — your blue dot on the map updates as you move. Keep this screen open for live GPS
+              (foreground).
+            </Text>
+          </View>
+        ) : null}
+
         <View style={styles.tagsAndActionsRow}>
           <View style={styles.pillRow}>
             {tags.map((t) => {
@@ -560,6 +731,7 @@ const DirectionsScreen: React.FC = () => {
                 styles.segmentLabelCompact,
                 tab === 'routeSteps' ? styles.segmentLabelOn : styles.segmentLabelOff,
               ]}
+              numberOfLines={2}
             >
               Commute steps
             </Text>
@@ -581,10 +753,78 @@ const DirectionsScreen: React.FC = () => {
               Commuter guide
             </Text>
           </Pressable>
+          <Pressable
+            onPress={() => setTab('viaTerminals')}
+            style={[styles.segmentSlot, tab === 'viaTerminals' && styles.segmentSlotActive]}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === 'viaTerminals' }}
+          >
+            <Text
+              style={[
+                styles.segmentLabel,
+                styles.segmentLabelCompact,
+                tab === 'viaTerminals' ? styles.segmentLabelOn : styles.segmentLabelOff,
+              ]}
+              numberOfLines={2}
+            >
+              Via Terminals
+            </Text>
+          </Pressable>
         </View>
 
         {tab === 'routeSteps' ? (
           <View style={styles.routeCard}>
+            <View style={styles.mapsPlannerCard}>
+              <View style={styles.mapsModeRow}>
+                <View style={[styles.mapsModeChip, styles.mapsModeChipActive]}>
+                  <JamIcon ionicon="checkmark-circle" size={14} color={TEAL} />
+                  <Text style={styles.mapsModeChipText}>Best</Text>
+                </View>
+                <View style={styles.mapsModeChip}>
+                  <JamIcon ionicon="bus" size={14} color={TEAL} />
+                </View>
+                <View style={styles.mapsModeChip}>
+                  <JamIcon ionicon="walk" size={14} color={TEAL} />
+                </View>
+              </View>
+
+              <View style={styles.mapsInputCard}>
+                <View style={styles.mapsInputRow}>
+                  <JamIcon ionicon="radio-button-off-outline" size={16} color={TITLE} />
+                  <Text style={styles.mapsInputText} numberOfLines={1}>
+                    {commuteFromLabel}
+                  </Text>
+                </View>
+                <View style={styles.mapsInputDivider} />
+                <View style={styles.mapsInputRow}>
+                  <JamIcon ionicon="location" size={16} color="#d22b2b" />
+                  <Text style={styles.mapsInputText} numberOfLines={1}>
+                    {place.name}
+                  </Text>
+                </View>
+              </View>
+              {routeDriving ? (
+                <View style={styles.routeTripSummaryBox}>
+                  <Text style={styles.routeTripSummaryLabel}>Trip length (driving route)</Text>
+                  <Text style={styles.routeTripSummaryValue}>
+                    {formatDistanceM(routeDriving.distanceM)}
+                    {routeDriving.durationS ? ` · ~${formatDurationS(routeDriving.durationS)}` : ''} from your location
+                    to {place.name}
+                  </Text>
+                </View>
+              ) : routeLoading && userPt && destCoords ? (
+                <Text style={styles.routeTripSummaryLoading}>Calculating road distance…</Text>
+              ) : userPt && destCoords ? (
+                <View style={styles.routeTripSummaryBox}>
+                  <Text style={styles.routeTripSummaryLabel}>Straight-line hint</Text>
+                  <Text style={styles.routeTripSummaryValue}>
+                    ~{formatDistanceM(haversineDistanceKm(userPt.lat, userPt.lng, destCoords.lat, destCoords.lng) * 1000)}{' '}
+                    as the crow flies — open Commute steps when the road route loads
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
             <View style={styles.commuterBadge}>
               <Text style={styles.commuterBadgeLabel}>Commuter-first</Text>
             </View>
@@ -612,26 +852,29 @@ const DirectionsScreen: React.FC = () => {
                     time
                   </Text>
                 ) : null}
-                {routeDriving.steps.map((step, index) => (
-                  <View key={`${index}-${step.instruction.slice(0, 24)}`} style={styles.routeStepRow}>
-                    <Text style={styles.routeStepNum}>{index + 1}</Text>
-                    <View style={styles.routeStepBody}>
-                      <Text style={styles.routeStepInstruction}>{step.instruction}</Text>
-                      <Text style={styles.routeStepMeta}>
-                        {formatDistanceM(step.distanceM)} · {formatDurationS(step.durationS)} along this road
-                      </Text>
-                      <Text style={styles.commuterStepHint}>
-                        {commuterStepHint(index, routeDriving.steps.length)}
-                      </Text>
+                {routeDriving.steps.map((step, index) => {
+                  const stepHint = commuterStepHint(index, routeDriving.steps.length, step.distanceM);
+                  return (
+                    <View key={`corridor-${index}-${Math.round(step.distanceM)}`} style={styles.routeStepRow}>
+                      <Text style={styles.routeStepNum}>{index + 1}</Text>
+                      <View style={styles.routeStepBody}>
+                        <Text style={styles.routeStepInstruction}>
+                          {commuterDirectStepInstruction(step, index, routeDriving.steps.length, place.name)}
+                        </Text>
+                        <Text style={styles.routeStepMeta}>
+                          {formatDistanceM(step.distanceM)} · ~{formatDurationS(step.durationS)} driving reference
+                        </Text>
+                        {stepHint ? <Text style={styles.commuterStepHint}>{stepHint}</Text> : null}
+                      </View>
                     </View>
-                  </View>
-                ))}
+                  );
+                })}
               </>
             ) : !routeLoading && userPt ? (
               <Text style={styles.routeHint}>No segments returned for this corridor — try the map or another nearby road.</Text>
             ) : null}
           </View>
-        ) : (
+        ) : tab === 'stepGuide' ? (
           <View style={styles.routeCard}>
             <View style={styles.commuterBadge}>
               <Text style={styles.commuterBadgeLabel}>Commuter-first</Text>
@@ -640,7 +883,249 @@ const DirectionsScreen: React.FC = () => {
             <Text style={styles.routeFootnote}>{COMMUTER_FOOTNOTE}</Text>
             <Text style={styles.guideBody}>{buildNarrativeGuide(routeDriving?.steps ?? [], place.name)}</Text>
           </View>
+        ) : (
+          <View style={styles.routeCard}>
+            <Text style={styles.viaScreenTitle}>Via Terminals</Text>
+            <Text style={styles.viaScreenLead}>
+              Nearest public terminals and how to use them with this trip. Always confirm routes, signboards, and fares
+              at the terminal or with the driver.
+            </Text>
+
+            {showPlaceOrItineraryTerminalHints && userPt && terminalPlan ? (
+              <View style={styles.viaStepsBlock}>
+                {terminalPlan.originTerminal.id === terminalPlan.destinationTerminal.id ? (
+                  <>
+                    <View style={styles.viaStepRow}>
+                      <Text style={styles.viaStepNum}>1</Text>
+                      <Text style={styles.viaStepText}>
+                        <Text style={styles.viaStepBold}>{terminalPlan.originTerminal.name}</Text> is the closest major
+                        terminal to both your area and {place.name}. Open it below for routes, gates, and reminders.
+                      </Text>
+                    </View>
+                    <View style={styles.viaStepRow}>
+                      <Text style={styles.viaStepNum}>2</Text>
+                      <Text style={styles.viaStepText}>
+                        Ride toward {place.name} (or its municipality), then use <Text style={styles.viaStepBold}>Commute steps</Text>{' '}
+                        or a tricycle for the last leg.
+                      </Text>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <View style={styles.viaStepRow}>
+                      <Text style={styles.viaStepNum}>1</Text>
+                      <Text style={styles.viaStepText}>
+                        Go to <Text style={styles.viaStepBold}>{terminalPlan.originTerminal.name}</Text>
+                        {userPt
+                          ? ` (~${haversineDistanceKm(userPt.lat, userPt.lng, terminalPlan.originTerminal.latitude, terminalPlan.originTerminal.longitude).toFixed(1)} km from your start)`
+                          : ''}{' '}
+                        to board jeepneys, buses, or vans toward the general direction of {place.name}.
+                      </Text>
+                    </View>
+                    <View style={styles.viaStepRow}>
+                      <Text style={styles.viaStepNum}>2</Text>
+                      <Text style={styles.viaStepText}>
+                        Stay on lines that serve <Text style={styles.viaStepBold}>{terminalPlan.destinationTerminal.municipality}</Text> or
+                        corridors leading to {place.name}. Ask the driver or konduktor before boarding.
+                      </Text>
+                    </View>
+                    <View style={styles.viaStepRow}>
+                      <Text style={styles.viaStepNum}>3</Text>
+                      <Text style={styles.viaStepText}>
+                        Alight near <Text style={styles.viaStepBold}>{terminalPlan.destinationTerminal.name}</Text>
+                        {destCoords
+                          ? ` (~${haversineDistanceKm(destCoords.lat, destCoords.lng, terminalPlan.destinationTerminal.latitude, terminalPlan.destinationTerminal.longitude).toFixed(1)} km from ${place.name})`
+                          : ''}
+                        , then follow <Text style={styles.viaStepBold}>Commute steps</Text> or local rides to the exact
+                        spot.
+                      </Text>
+                    </View>
+                  </>
+                )}
+              </View>
+            ) : isTerminal && userPt && nearestTerminalFromUser ? (
+              <View style={styles.viaStepsBlock}>
+                <View style={styles.viaStepRow}>
+                  <Text style={styles.viaStepNum}>1</Text>
+                  <Text style={styles.viaStepText}>
+                    From your GPS, the nearest hub is <Text style={styles.viaStepBold}>{nearestTerminalFromUser.name}</Text>
+                    {userPt
+                      ? ` (~${haversineDistanceKm(userPt.lat, userPt.lng, nearestTerminalFromUser.latitude, nearestTerminalFromUser.longitude).toFixed(1)} km)`
+                      : ''}. Use it for connections toward {place.name}.
+                  </Text>
+                </View>
+                <View style={styles.viaStepRow}>
+                  <Text style={styles.viaStepNum}>2</Text>
+                  <Text style={styles.viaStepText}>
+                    Open the terminal below for route boards, typical vehicles, and safety reminders before you travel.
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              <Text style={styles.tripTerminalsHint}>
+                {!userPt
+                  ? 'Turn on location to load terminal suggestions for this trip.'
+                  : terminalPlanLoading
+                    ? 'Loading terminals…'
+                    : 'No terminal match is available yet for this area. Try the Terminals tab in the app or ask locally for the nearest jeepney or bus stop.'}
+              </Text>
+            )}
+
+            {isTerminal ? (
+              <View style={styles.tripTerminalsSection}>
+                <Text style={styles.tripTerminalsTitle}>Suggested terminal</Text>
+                {!userPt ? (
+                  <Text style={styles.tripTerminalsHint}>Turn on location to see the terminal closest to you.</Text>
+                ) : terminalPlanLoading ? (
+                  <View style={styles.tripTerminalsLoadingRow}>
+                    <ActivityIndicator size="small" color={TEAL} />
+                    <Text style={styles.tripTerminalsHint}>Finding nearest terminal…</Text>
+                  </View>
+                ) : nearestTerminalFromUser ? (
+                  <View style={styles.tripTerminalCards}>
+                    <TouchableOpacity
+                      style={styles.tripTerminalCard}
+                      activeOpacity={0.88}
+                      onPress={() =>
+                        (navigation as { navigate: (name: string, params: object) => void }).navigate('TerminalDetail', {
+                          terminal: terminalPlanNodeToStub(nearestTerminalFromUser),
+                        })
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open ${nearestTerminalFromUser.name}`}
+                    >
+                      <Text style={styles.tripTerminalCardKicker}>Nearest terminal to you</Text>
+                      <Text style={styles.tripTerminalCardName} numberOfLines={2}>
+                        {nearestTerminalFromUser.name}
+                      </Text>
+                      <Text style={styles.tripTerminalCardMeta}>
+                        {nearestTerminalFromUser.municipality}
+                        {userPt
+                          ? ` · ~${haversineDistanceKm(userPt.lat, userPt.lng, nearestTerminalFromUser.latitude, nearestTerminalFromUser.longitude).toFixed(1)} km away`
+                          : ''}
+                      </Text>
+                      <Text style={styles.tripTerminalCardCta}>Terminal details</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <Text style={styles.tripTerminalsHint}>No terminal data for this area right now.</Text>
+                )}
+              </View>
+            ) : showPlaceOrItineraryTerminalHints ? (
+              <View style={styles.tripTerminalsSection}>
+                <Text style={styles.tripTerminalsTitle}>Terminals on this trip</Text>
+                {!userPt ? (
+                  <Text style={styles.tripTerminalsHint}>Turn on location to load terminals.</Text>
+                ) : terminalPlanLoading ? (
+                  <View style={styles.tripTerminalsLoadingRow}>
+                    <ActivityIndicator size="small" color={TEAL} />
+                    <Text style={styles.tripTerminalsHint}>Finding nearest terminals…</Text>
+                  </View>
+                ) : terminalPlan ? (
+                  <View style={styles.tripTerminalCards}>
+                    {terminalPlan.originTerminal.id === terminalPlan.destinationTerminal.id ? (
+                      <TouchableOpacity
+                        style={[styles.tripTerminalCard, { flex: 1 }]}
+                        activeOpacity={0.88}
+                        onPress={() =>
+                          (navigation as { navigate: (name: string, params: object) => void }).navigate('TerminalDetail', {
+                            terminal: terminalPlanNodeToStub(terminalPlan.originTerminal),
+                          })
+                        }
+                        accessibilityRole="button"
+                        accessibilityLabel={`Open ${terminalPlan.originTerminal.name}`}
+                      >
+                        <Text style={styles.tripTerminalCardKicker}>Nearest terminal (you & destination)</Text>
+                        <Text style={styles.tripTerminalCardName} numberOfLines={2}>
+                          {terminalPlan.originTerminal.name}
+                        </Text>
+                        <Text style={styles.tripTerminalCardMeta}>
+                          {terminalPlan.originTerminal.municipality}
+                          {userPt && destCoords
+                            ? ` · ~${haversineDistanceKm(userPt.lat, userPt.lng, terminalPlan.originTerminal.latitude, terminalPlan.originTerminal.longitude).toFixed(1)} km from you · ~${haversineDistanceKm(destCoords.lat, destCoords.lng, terminalPlan.originTerminal.latitude, terminalPlan.originTerminal.longitude).toFixed(1)} km from ${place.name}`
+                            : ''}
+                        </Text>
+                        <Text style={styles.tripTerminalCardCta}>Terminal details</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <>
+                        <TouchableOpacity
+                          style={styles.tripTerminalCard}
+                          activeOpacity={0.88}
+                          onPress={() =>
+                            (navigation as { navigate: (name: string, params: object) => void }).navigate('TerminalDetail', {
+                              terminal: terminalPlanNodeToStub(terminalPlan.originTerminal),
+                            })
+                          }
+                          accessibilityRole="button"
+                          accessibilityLabel={`Open ${terminalPlan.originTerminal.name}`}
+                        >
+                          <Text style={styles.tripTerminalCardKicker}>Board near you</Text>
+                          <Text style={styles.tripTerminalCardName} numberOfLines={2}>
+                            {terminalPlan.originTerminal.name}
+                          </Text>
+                          <Text style={styles.tripTerminalCardMeta}>
+                            {terminalPlan.originTerminal.municipality}
+                            {userPt
+                              ? ` · ~${haversineDistanceKm(userPt.lat, userPt.lng, terminalPlan.originTerminal.latitude, terminalPlan.originTerminal.longitude).toFixed(1)} km away`
+                              : ''}
+                          </Text>
+                          <Text style={styles.tripTerminalCardCta}>Terminal details</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.tripTerminalCard}
+                          activeOpacity={0.88}
+                          onPress={() =>
+                            (navigation as { navigate: (name: string, params: object) => void }).navigate('TerminalDetail', {
+                              terminal: terminalPlanNodeToStub(terminalPlan.destinationTerminal),
+                            })
+                          }
+                          accessibilityRole="button"
+                          accessibilityLabel={`Open ${terminalPlan.destinationTerminal.name}`}
+                        >
+                          <Text style={styles.tripTerminalCardKicker}>Near {place.name}</Text>
+                          <Text style={styles.tripTerminalCardName} numberOfLines={2}>
+                            {terminalPlan.destinationTerminal.name}
+                          </Text>
+                          <Text style={styles.tripTerminalCardMeta}>
+                            {terminalPlan.destinationTerminal.municipality}
+                            {destCoords
+                              ? ` · ~${haversineDistanceKm(destCoords.lat, destCoords.lng, terminalPlan.destinationTerminal.latitude, terminalPlan.destinationTerminal.longitude).toFixed(1)} km from destination`
+                              : ''}
+                          </Text>
+                          <Text style={styles.tripTerminalCardCta}>Terminal details</Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </View>
+                ) : (
+                  <Text style={styles.tripTerminalsHint}>No terminal data for this area right now.</Text>
+                )}
+              </View>
+            ) : null}
+          </View>
         )}
+
+        <View style={styles.destinationReachedWrap}>
+          <Text style={styles.destinationReachedHint}>
+            After you arrive, tap Destination Reached below to record this visit. Opening See full map does not count
+            toward Activity this month.
+          </Text>
+          <TouchableOpacity
+            onPress={onDestinationReached}
+            style={[styles.destinationReachedButton, destinationReachedBusy && styles.destinationReachedButtonDisabled]}
+            activeOpacity={0.92}
+            accessibilityRole="button"
+            accessibilityLabel="Destination Reached"
+            disabled={destinationReachedBusy}
+          >
+            {destinationReachedBusy ? (
+              <ActivityIndicator size="small" color={WHITE} />
+            ) : (
+              <Text style={styles.destinationReachedButtonLabel}>Destination Reached</Text>
+            )}
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity
           onPress={openFullMap}
@@ -739,6 +1224,24 @@ const styles = StyleSheet.create({
     color: TITLE,
     marginBottom: 12,
   },
+  caviTripBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: 'rgba(31, 79, 89, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(31, 79, 89, 0.12)',
+    marginBottom: 14,
+  },
+  caviTripBannerText: {
+    flex: 1,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    lineHeight: 19,
+    color: TITLE,
+  },
   tagsAndActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -811,8 +1314,10 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
     borderRadius: 11,
+    minWidth: 0,
   },
   segmentSlotActive: {
     backgroundColor: WHITE,
@@ -828,8 +1333,8 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   segmentLabelCompact: {
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 11,
+    lineHeight: 14,
     textAlign: 'center',
   },
   segmentLabelOn: {
@@ -853,6 +1358,292 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 2,
     marginBottom: 4,
+  },
+  mapsPlannerCard: {
+    marginBottom: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(31, 79, 89, 0.15)',
+    backgroundColor: '#fff',
+    padding: 10,
+  },
+  routeTripSummaryBox: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(31, 79, 89, 0.12)',
+  },
+  routeTripSummaryLabel: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 11,
+    color: MUTED,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 4,
+  },
+  routeTripSummaryValue: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 14,
+    lineHeight: 20,
+    color: TITLE,
+  },
+  routeTripSummaryLoading: {
+    marginTop: 10,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: MUTED,
+  },
+  viaScreenTitle: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 18,
+    color: TEAL,
+    marginBottom: 8,
+  },
+  viaScreenLead: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 22,
+    color: MUTED,
+    marginBottom: 16,
+  },
+  viaStepsBlock: {
+    marginBottom: 16,
+    gap: 14,
+  },
+  viaStepRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  viaStepNum: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 15,
+    color: GREEN,
+    width: 22,
+    textAlign: 'center',
+  },
+  viaStepText: {
+    flex: 1,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 22,
+    color: TITLE,
+  },
+  viaStepBold: {
+    fontFamily: 'Inter_700Bold',
+    color: TITLE,
+  },
+  tripTerminalsSection: {
+    marginBottom: 14,
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(31, 79, 89, 0.15)',
+    backgroundColor: '#f5faf8',
+  },
+  tripTerminalsTitle: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 14,
+    lineHeight: 20,
+    color: TEAL,
+  },
+  tripTerminalsSubtitle: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 18,
+    color: MUTED,
+    marginTop: 4,
+    marginBottom: 10,
+  },
+  tripTerminalsHint: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    lineHeight: 20,
+    color: MUTED,
+  },
+  tripTerminalsLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  tripTerminalCards: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  tripTerminalCard: {
+    flexGrow: 1,
+    flexBasis: '46%',
+    minWidth: 140,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: 'rgba(31, 79, 89, 0.18)',
+  },
+  tripTerminalCardKicker: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 10,
+    lineHeight: 14,
+    color: GREEN,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 6,
+  },
+  tripTerminalCardName: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    lineHeight: 19,
+    color: TITLE,
+  },
+  tripTerminalCardMeta: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    lineHeight: 16,
+    color: MUTED,
+    marginTop: 4,
+  },
+  tripTerminalCardCta: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 12,
+    color: TEAL,
+    marginTop: 10,
+  },
+  routeModeSection: {
+    marginBottom: 14,
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(126, 160, 14, 0.28)',
+    backgroundColor: 'rgba(126, 160, 14, 0.06)',
+  },
+  routeModeSectionTitle: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 13,
+    color: TEAL,
+  },
+  routeModeSectionHint: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    lineHeight: 16,
+    color: MUTED,
+    marginTop: 4,
+    marginBottom: 10,
+  },
+  routeModeToggle: {
+    gap: 10,
+  },
+  routeModeOption: {
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(31, 79, 89, 0.2)',
+    backgroundColor: WHITE,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  routeModeOptionOn: {
+    borderColor: GREEN,
+    backgroundColor: 'rgba(126, 160, 14, 0.12)',
+  },
+  routeModeOptionText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: TITLE,
+  },
+  routeModeOptionTextOn: {
+    color: GREEN,
+  },
+  routeModeOptionSub: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    lineHeight: 15,
+    color: MUTED,
+    marginTop: 4,
+  },
+  mapsModeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  mapsModeChip: {
+    minHeight: 28,
+    minWidth: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(31, 79, 89, 0.2)',
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    gap: 4,
+  },
+  mapsModeChipActive: {
+    backgroundColor: 'rgba(118, 214, 255, 0.35)',
+    borderColor: 'rgba(31, 79, 89, 0.3)',
+  },
+  mapsModeChipText: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 11,
+    color: TITLE,
+  },
+  mapsInputCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(31, 79, 89, 0.18)',
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+  },
+  mapsInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+  },
+  mapsInputText: {
+    flex: 1,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: TITLE,
+  },
+  mapsInputDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(122, 120, 120, 0.35)',
+    marginHorizontal: 10,
+  },
+  transportChoiceTitle: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 13,
+    lineHeight: 18,
+    color: TEAL,
+    marginBottom: 8,
+  },
+  transportChoiceRow: {
+    gap: 8,
+    paddingBottom: 10,
+  },
+  transportChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(31, 79, 89, 0.22)',
+    backgroundColor: WHITE,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  transportChipActive: {
+    backgroundColor: 'rgba(126, 160, 14, 0.18)',
+    borderColor: GREEN,
+  },
+  transportChipText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 12,
+    color: TEAL,
+  },
+  transportChipTextActive: {
+    color: GREEN,
+    fontFamily: 'Poppins_700Bold',
   },
   commuterBadge: {
     alignSelf: 'flex-start',
@@ -967,6 +1758,36 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 24,
     color: TITLE,
+  },
+  destinationReachedWrap: {
+    marginTop: 8,
+    marginBottom: 12,
+    paddingHorizontal: 2,
+  },
+  destinationReachedHint: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 18,
+    color: MUTED,
+    marginBottom: 10,
+  },
+  destinationReachedButton: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    minHeight: 52,
+    borderRadius: 14,
+    backgroundColor: TEAL,
+  },
+  destinationReachedButtonDisabled: {
+    opacity: 0.7,
+  },
+  destinationReachedButtonLabel: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 15,
+    color: WHITE,
   },
   directionsButton: {
     marginTop: 20,

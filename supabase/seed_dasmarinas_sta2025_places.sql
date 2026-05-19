@@ -130,7 +130,7 @@ VALUES ('John Cezar Waterfun Resort', 'John Cezar Waterfun Resort, Sampaloc III,
 ON CONFLICT (source_slug) DO UPDATE SET name = EXCLUDED.name, address = EXCLUDED.address, type = EXCLUDED.type, hours = EXCLUDED.hours, latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude, description = EXCLUDED.description, ntdp_category = EXCLUDED.ntdp_category, updated_at = NOW();
 
 INSERT INTO public.places (name, address, type, hours, latitude, longitude, description, ntdp_category, source_slug)
-VALUES ('EML Management Corporation', 'EML Management Corporation, Zone IV, Dasmariñas, Cavite, Philippines', 'Resort Complex', 'Contact venue', 14.325213100000001, 120.9376656, 'NTDP: Leisure and Entertainment Tourism. Barangay: Zone IV. Official STA-v3 inventory (City of Dasmariñas, Cavite, 2025).', 'Leisure and Entertainment Tourism', 'eml-management-corporation')
+VALUES ('EML Events Place', 'EML Events Place, Zone IV, Dasmariñas, Cavite, Philippines', 'Resort Complex', 'Contact venue', 14.325213100000001, 120.9376656, 'NTDP: Leisure and Entertainment Tourism. Barangay: Zone IV. Official STA-v3 inventory (City of Dasmariñas, Cavite, 2025).', 'Leisure and Entertainment Tourism', 'eml-events-place')
 ON CONFLICT (source_slug) DO UPDATE SET name = EXCLUDED.name, address = EXCLUDED.address, type = EXCLUDED.type, hours = EXCLUDED.hours, latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude, description = EXCLUDED.description, ntdp_category = EXCLUDED.ntdp_category, updated_at = NOW();
 
 INSERT INTO public.places (name, address, type, hours, latitude, longitude, description, ntdp_category, source_slug)

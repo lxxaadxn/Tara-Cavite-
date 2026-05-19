@@ -7,6 +7,28 @@ export function isSupabasePlaceId(id: string): boolean {
   return UUID_RE.test(String(id).trim());
 }
 
+async function resolveCanonicalPlaceId(
+  client: SupabaseClient,
+  placeRefId: string
+): Promise<string | null> {
+  const { data: byId, error: byIdError } = await client
+    .from('places')
+    .select('id')
+    .eq('id', placeRefId)
+    .maybeSingle();
+  if (byIdError) throw byIdError;
+  if (byId?.id) return byId.id as string;
+
+  const { data: bySlug, error: bySlugError } = await client
+    .from('places')
+    .select('id')
+    .eq('source_slug', placeRefId)
+    .maybeSingle();
+  if (bySlugError) throw bySlugError;
+  if (bySlug?.id) return bySlug.id as string;
+  return null;
+}
+
 function bump(counts: Record<string, number>, listId: string) {
   counts[listId] = (counts[listId] ?? 0) + 1;
 }
@@ -66,12 +88,14 @@ export async function isPlaceSavedByUser(
   userId: string,
   placeId: string
 ): Promise<boolean> {
+  const canonicalPlaceId = await resolveCanonicalPlaceId(client, placeId);
+  if (!canonicalPlaceId) return false;
   const listIds = await fetchSavedListIdsForUser(client, userId);
   if (listIds.length === 0) return false;
   const { count, error } = await client
     .from('saved_list_items')
     .select('*', { count: 'exact', head: true })
-    .eq('place_id', placeId)
+    .eq('place_id', canonicalPlaceId)
     .in('list_id', listIds);
   if (error) throw error;
   return (count ?? 0) > 0;
@@ -114,9 +138,15 @@ export async function removePlaceFromAllUserLists(
   userId: string,
   placeId: string
 ): Promise<void> {
+  const canonicalPlaceId = await resolveCanonicalPlaceId(client, placeId);
+  if (!canonicalPlaceId) return;
   const listIds = await fetchSavedListIdsForUser(client, userId);
   if (listIds.length === 0) return;
-  const { error } = await client.from('saved_list_items').delete().eq('place_id', placeId).in('list_id', listIds);
+  const { error } = await client
+    .from('saved_list_items')
+    .delete()
+    .eq('place_id', canonicalPlaceId)
+    .in('list_id', listIds);
   if (error) throw error;
 }
 
@@ -155,7 +185,18 @@ export async function addPlaceToSavedList(
   listId: string,
   placeId: string
 ): Promise<{ ok: true } | { ok: false; duplicate: boolean; message?: string }> {
-  const { error } = await client.from('saved_list_items').insert({ list_id: listId, place_id: placeId });
+  const canonicalPlaceId = await resolveCanonicalPlaceId(client, placeId);
+  if (!canonicalPlaceId) {
+    return {
+      ok: false,
+      duplicate: false,
+      message:
+        'This establishment is not linked in the places table yet. Sync v_cavite_establishments into public.places (source_slug = establishment id), then try saving again.',
+    };
+  }
+  const { error } = await client
+    .from('saved_list_items')
+    .insert({ list_id: listId, place_id: canonicalPlaceId });
   if (!error) return { ok: true };
   if (error.code === '23505' || error.message?.includes('duplicate') || error.message?.includes('unique'))
     return { ok: false, duplicate: true };
@@ -191,9 +232,8 @@ export async function addItineraryToSavedList(
 }
 
 export async function placeRowExists(client: SupabaseClient, placeId: string): Promise<boolean> {
-  const { data, error } = await client.from('places').select('id').eq('id', placeId).maybeSingle();
-  if (error) throw error;
-  return data != null;
+  const canonical = await resolveCanonicalPlaceId(client, placeId);
+  return canonical != null;
 }
 
 export async function fetchUserListsForPicker(

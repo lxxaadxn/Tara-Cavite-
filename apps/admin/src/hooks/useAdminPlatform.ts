@@ -1,4 +1,5 @@
 import { useLocation } from 'react-router-dom';
+import { useAdminPathPrefix } from '../contexts/AdminPathPrefixContext';
 
 export type AdminPlatform = 'web' | 'mobile';
 
@@ -8,9 +9,21 @@ export function useAdminPlatform(): {
   path: (segment: string) => string;
 } {
   const { pathname } = useLocation();
+  const routePrefix = useAdminPathPrefix();
+  let effectivePath = pathname;
+  if (routePrefix && pathname.startsWith(routePrefix)) {
+    effectivePath = pathname.slice(routePrefix.length) || '/';
+  }
+  if (!effectivePath.startsWith('/')) {
+    effectivePath = `/${effectivePath}`;
+  }
   const platform: AdminPlatform =
-    pathname.startsWith('/mobile/') || pathname === '/mobile' ? 'mobile' : 'web';
+    effectivePath.startsWith('/mobile/') || effectivePath === '/mobile' ? 'mobile' : 'web';
   const base = platform === 'mobile' ? '/mobile' : '/web';
-  const path = (segment: string) => `${base}/${segment.replace(/^\//, '')}`;
+  const path = (segment: string) => {
+    const rel = `${base}/${segment.replace(/^\//, '')}`;
+    if (!routePrefix) return rel;
+    return `${routePrefix.replace(/\/$/, '')}${rel}`;
+  };
   return { platform, base, path };
 }

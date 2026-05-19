@@ -1,86 +1,340 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  WEB_ACCESS_FILTER_OPTIONS,
+  WEB_AMENITY_FILTER_OPTIONS,
+  WEB_SORT_OPTIONS,
+} from '../lib/placeFilterHelpers';
+
 const olive = '#7ea00e';
-const CATEGORIES = [
-    { label: 'Nature tourism', icon: '🌿' },
-    { label: 'Mice & events', icon: '🥂' },
-    { label: 'Restaurant', icon: '☕' },
-    { label: 'Health, wellness & retirement', icon: '🌈' },
-    { label: 'Cultural tourism', icon: '🏰' },
-    { label: 'Education', icon: '📚' },
-    { label: 'Leisure and entertainment', icon: '👑' },
-    { label: 'Shopping', icon: '🛍️' },
-];
-const CITIES = ['Bacoor City', 'Imus City', 'Tagaytay City', 'Dasmariñas City', 'General Trias City'];
-const MUNICIPALITIES = ['Amadeo', 'Silang', 'Tanza', 'Indang', 'Kawit', 'Maragondon'];
-export function FilterModal({ open, onClose }) {
-    useEffect(() => {
-        if (!open)
-            return;
-        const onKey = (e) => e.key === 'Escape' && onClose();
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
-    }, [open, onClose]);
-    if (!open)
-        return null;
-    return (<div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40" role="dialog" aria-modal="true" aria-labelledby="filters-title">
-      <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto border border-neutral-200">
-        <div className="sticky top-0 bg-white flex items-center justify-between px-6 py-4 border-b border-neutral-100 rounded-t-3xl">
-          <h2 id="filters-title" className="font-['Poppins',sans-serif] font-bold text-xl text-neutral-900">
-            Filters
-          </h2>
-          <button type="button" onClick={onClose} className="w-10 h-10 rounded-xl flex items-center justify-center text-neutral-500 hover:bg-neutral-100" aria-label="Close">
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
+
+/**
+ * @typedef {Object} AppliedPlaceFilters
+ * @property {string[]} selectedNtdpCategories
+ * @property {string[]} selectedTypeCodes
+ * @property {string[]} selectedCities
+ * @property {string[]} selectedLgus
+ * @property {''|'recent'|'top'|'reviewed'} sortMode
+ * @property {string[]} selectedAccessKeys
+ * @property {string[]} selectedAmenityKeys
+ */
+
+function prettySlug(slug) {
+  return String(slug ?? '')
+    .split('-')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function Section({ title, subtitle, children }) {
+  return (
+    <section className="rounded-2xl border border-neutral-200 bg-white p-4">
+      <div className="mb-3">
+        <h3 className="font-['Poppins',sans-serif] text-sm font-semibold text-neutral-900">{title}</h3>
+        {subtitle ? <p className="mt-0.5 text-xs text-neutral-500">{subtitle}</p> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * @param {Object} props
+ * @param {boolean} props.open
+ * @param {() => void} props.onClose
+ * @param {any[]} [props.places]
+ * @param {(filters: AppliedPlaceFilters) => void} [props.onApply] — called with selections when user taps Apply
+ */
+export function FilterModal({ open, onClose, places = [], onApply }) {
+  const [query, setQuery] = useState('');
+  const [sortMode, setSortMode] = useState('');
+  const [selectedNtdpCategories, setSelectedNtdpCategories] = useState(() => new Set());
+  const [selectedTypeCodes, setSelectedTypeCodes] = useState(() => new Set());
+  const [selectedCities, setSelectedCities] = useState(() => new Set());
+  const [selectedLgus, setSelectedLgus] = useState(() => new Set());
+  const [selectedAccess, setSelectedAccess] = useState(() => new Set());
+  const [selectedAmenities, setSelectedAmenities] = useState(() => new Set());
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  const optionSets = useMemo(() => {
+    const taCategories = new Set();
+    const ntdpCategories = new Set();
+    const typeCodes = new Set();
+    const cities = new Set();
+    const lgus = new Set();
+    const years = new Set();
+
+    for (const place of places) {
+      if (place.ta_category) taCategories.add(place.ta_category);
+      else if (place.type) taCategories.add(place.type);
+      if (place.ntdp_category) ntdpCategories.add(place.ntdp_category);
+      if (place.type_code) typeCodes.add(place.type_code);
+      else if (place.type) typeCodes.add(place.type);
+      if (place.city_mun) cities.add(place.city_mun);
+      if (place.lgu_slug) lgus.add(place.lgu_slug);
+      if (place.created_at) {
+        const year = new Date(place.created_at).getFullYear();
+        if (Number.isFinite(year)) years.add(String(year));
+      }
+    }
+
+    const sortAlpha = (a, b) => String(a).localeCompare(String(b));
+    const sortYearDesc = (a, b) => Number(b) - Number(a);
+
+    return {
+      taCategories: Array.from(taCategories).sort(sortAlpha),
+      ntdpCategories: Array.from(ntdpCategories).sort(sortAlpha),
+      typeCodes: Array.from(typeCodes).sort(sortAlpha),
+      cities: Array.from(cities).sort(sortAlpha),
+      lgus: Array.from(lgus).sort(sortAlpha),
+      years: Array.from(years).sort(sortYearDesc),
+    };
+  }, [places]);
+
+  const toggleSet = (setter, value) => {
+    setter((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return next;
+    });
+  };
+
+  const clearAll = () => {
+    setQuery('');
+    setSortMode('');
+    setSelectedNtdpCategories(new Set());
+    setSelectedTypeCodes(new Set());
+    setSelectedCities(new Set());
+    setSelectedLgus(new Set());
+    setSelectedAccess(new Set());
+    setSelectedAmenities(new Set());
+  };
+
+  if (!open) return null;
+
+  const queryLower = query.trim().toLowerCase();
+  const visibleCount = queryLower
+    ? places.filter((p) => `${p.name} ${p.address} ${p.city_mun} ${p.ta_category} ${p.ntdp_category}`.toLowerCase().includes(queryLower)).length
+    : places.length;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="filters-title">
+      <div className="max-h-[92vh] w-full max-w-[860px] overflow-y-auto rounded-3xl border border-neutral-200 bg-[#f8f9f8] shadow-2xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-neutral-200 bg-white/95 px-6 py-4 backdrop-blur">
+          <div>
+            <h2 id="filters-title" className="font-['Poppins',sans-serif] text-xl font-bold text-neutral-900">
+              Filters
+            </h2>
+            <p className="mt-0.5 text-xs text-neutral-500">{visibleCount} Supabase places available</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-neutral-100"
+            aria-label="Close"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        <div className="px-6 py-5 space-y-8">
-          <section>
-            <h3 className="font-['Poppins',sans-serif] font-semibold text-sm text-neutral-800 mb-3 uppercase tracking-wide">
-              Tourism categories
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
-              {CATEGORIES.map(({ label, icon }) => (<button key={label} type="button" className="flex flex-col items-center gap-2 p-4 rounded-2xl border border-neutral-200 hover:border-neutral-300 bg-neutral-50/50 text-center transition-colors">
-                  <span className="text-2xl" aria-hidden>
-                    {icon}
-                  </span>
-                  <span className="text-[10px] leading-tight font-semibold text-neutral-700 uppercase tracking-tight">
-                    {label}
-                  </span>
-                </button>))}
+        <div className="space-y-4 px-6 py-5">
+          <Section title="Searchable Text" subtitle="`name`, `address`, `city_mun`, `ta_category`, `ntdp_category`">
+            <div className="rounded-xl border border-neutral-200 bg-white px-3 py-2.5">
+              <div className="flex items-center gap-2">
+                <svg className="h-4 w-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Filter options by keyword"
+                  className="w-full bg-transparent text-sm text-neutral-700 outline-none placeholder:text-neutral-400"
+                />
+              </div>
             </div>
-          </section>
+          </Section>
 
-          <section>
-            <h3 className="font-['Poppins',sans-serif] font-semibold text-sm text-neutral-800 mb-3">Cities</h3>
-            <div className="flex flex-wrap gap-2">
-              {CITIES.map((c) => (<button key={c} type="button" className="px-4 py-2 rounded-full text-sm border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-700">
-                  {c}
-                </button>))}
-            </div>
-          </section>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <Section title="NTDP Category" subtitle="Supabase column: `ntdp_category`">
+              {optionSets.ntdpCategories.length > 0 ? (
+                <div className="space-y-1.5">
+                  {optionSets.ntdpCategories.map((value) => (
+                    <label key={value} className="flex items-center gap-2 text-xs text-neutral-700">
+                      <input
+                        type="checkbox"
+                        checked={selectedNtdpCategories.has(value)}
+                        onChange={() => toggleSet(setSelectedNtdpCategories, value)}
+                        className="h-3.5 w-3.5 rounded border-neutral-300 text-[--ct-olive] focus:ring-[--ct-olive]"
+                        style={{ accentColor: olive }}
+                      />
+                      {value}
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-neutral-400">No NTDP categories found.</p>
+              )}
+            </Section>
 
-          <section>
-            <h3 className="font-['Poppins',sans-serif] font-semibold text-sm text-neutral-800 mb-3">
-              Municipalities
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {MUNICIPALITIES.map((m) => (<button key={m} type="button" className="px-4 py-2 rounded-full text-sm border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-700">
-                  {m}
-                </button>))}
+            <Section title="Type Code" subtitle="Supabase column: `type_code`">
+              {optionSets.typeCodes.length > 0 ? (
+                <div className="space-y-1.5">
+                  {optionSets.typeCodes.map((value) => (
+                    <label key={value} className="flex items-center gap-2 text-xs text-neutral-700">
+                      <input
+                        type="checkbox"
+                        checked={selectedTypeCodes.has(value)}
+                        onChange={() => toggleSet(setSelectedTypeCodes, value)}
+                        className="h-3.5 w-3.5 rounded border-neutral-300 text-[--ct-olive] focus:ring-[--ct-olive]"
+                        style={{ accentColor: olive }}
+                      />
+                      {value}
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-neutral-400">No type codes found.</p>
+              )}
+            </Section>
+          </div>
+
+          <Section title="Sort by" subtitle="When set, list order follows this instead of nearest-first.">
+            <div className="space-y-2">
+              {WEB_SORT_OPTIONS.map((opt) => (
+                <label key={opt.key || 'default'} className="flex cursor-pointer items-center gap-2 text-xs text-neutral-700">
+                  <input
+                    type="radio"
+                    name="cavitour-sort"
+                    checked={sortMode === opt.key}
+                    onChange={() => setSortMode(opt.key)}
+                    className="h-3.5 w-3.5 border-neutral-300"
+                    style={{ accentColor: olive }}
+                  />
+                  {opt.label}
+                </label>
+              ))}
             </div>
-          </section>
+          </Section>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <Section
+              title="Accessibility & transport"
+              subtitle="Matched against listing text (address, description, searchable_text) — same rules as the mobile app."
+            >
+              <div className="space-y-1.5">
+                {WEB_ACCESS_FILTER_OPTIONS.map((opt) => (
+                  <label key={opt.key} className="flex items-center gap-2 text-xs text-neutral-700">
+                    <input
+                      type="checkbox"
+                      checked={selectedAccess.has(opt.key)}
+                      onChange={() => toggleSet(setSelectedAccess, opt.key)}
+                      className="h-3.5 w-3.5 rounded border-neutral-300"
+                      style={{ accentColor: olive }}
+                    />
+                    {opt.label}
+                  </label>
+                ))}
+              </div>
+            </Section>
+
+            <Section title="Features & amenities" subtitle="Keyword match on listing text.">
+              <div className="space-y-1.5">
+                {WEB_AMENITY_FILTER_OPTIONS.map((opt) => (
+                  <label key={opt.key} className="flex items-center gap-2 text-xs text-neutral-700">
+                    <input
+                      type="checkbox"
+                      checked={selectedAmenities.has(opt.key)}
+                      onChange={() => toggleSet(setSelectedAmenities, opt.key)}
+                      className="h-3.5 w-3.5 rounded border-neutral-300"
+                      style={{ accentColor: olive }}
+                    />
+                    {opt.label}
+                  </label>
+                ))}
+              </div>
+            </Section>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <Section title="City / Municipality" subtitle="Supabase column: `city_mun`">
+              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                {optionSets.cities.map((value) => (
+                  <label key={value} className="flex items-center gap-2 text-xs text-neutral-700">
+                    <input
+                      type="checkbox"
+                      checked={selectedCities.has(value)}
+                      onChange={() => toggleSet(setSelectedCities, value)}
+                      className="h-3.5 w-3.5 rounded border-neutral-300 text-[--ct-olive] focus:ring-[--ct-olive]"
+                      style={{ accentColor: olive }}
+                    />
+                    {value}
+                  </label>
+                ))}
+              </div>
+            </Section>
+
+            <Section title="LGU" subtitle="Supabase column: `lgu_slug`">
+              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                {optionSets.lgus.map((value) => (
+                  <label key={value} className="flex items-center gap-2 text-xs text-neutral-700">
+                    <input
+                      type="checkbox"
+                      checked={selectedLgus.has(value)}
+                      onChange={() => toggleSet(setSelectedLgus, value)}
+                      className="h-3.5 w-3.5 rounded border-neutral-300 text-[--ct-olive] focus:ring-[--ct-olive]"
+                      style={{ accentColor: olive }}
+                    />
+                    {prettySlug(value)}
+                  </label>
+                ))}
+              </div>
+            </Section>
+          </div>
+
         </div>
 
-        <div className="sticky bottom-0 px-6 py-4 border-t border-neutral-100 bg-white rounded-b-3xl flex gap-3 justify-end">
-          <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-xl border border-neutral-300 text-neutral-700 font-medium hover:bg-neutral-50">
-            Clear
-          </button>
-          <button type="button" onClick={onClose} className="px-6 py-2.5 rounded-xl text-white font-semibold" style={{ backgroundColor: olive, border: `1px solid ${olive}` }}>
-            Apply
-          </button>
+        <div className="sticky bottom-0 flex items-center justify-between border-t border-neutral-200 bg-white px-6 py-4">
+          <p className="text-xs text-neutral-500">Supabase schema-aware filter layout</p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={clearAll}
+              className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-xs font-medium text-neutral-700 transition hover:bg-neutral-50"
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onApply?.({
+                  selectedNtdpCategories: Array.from(selectedNtdpCategories),
+                  selectedTypeCodes: Array.from(selectedTypeCodes),
+                  selectedCities: Array.from(selectedCities),
+                  selectedLgus: Array.from(selectedLgus),
+                  sortMode: sortMode || '',
+                  selectedAccessKeys: Array.from(selectedAccess),
+                  selectedAmenityKeys: Array.from(selectedAmenities),
+                });
+                onClose();
+              }}
+              className="rounded-lg px-3.5 py-2 text-xs font-semibold text-white"
+              style={{ backgroundColor: olive }}
+            >
+              Apply
+            </button>
+          </div>
         </div>
       </div>
-    </div>);
+    </div>
+  );
 }

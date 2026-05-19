@@ -11,9 +11,12 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
   avatar_url TEXT,
   city TEXT,
   street TEXT,
+  phone TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS phone TEXT;
 
 -- Saved Lists table
 CREATE TABLE IF NOT EXISTS public.saved_lists (
@@ -41,6 +44,10 @@ CREATE TABLE IF NOT EXISTS public.places (
   description TEXT,
   ntdp_category TEXT,
   source_slug TEXT,
+  type_code TEXT,
+  city_mun TEXT,
+  barangay TEXT,
+  year_est INTEGER,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

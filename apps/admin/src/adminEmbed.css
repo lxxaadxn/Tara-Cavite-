@@ -1,0 +1,39 @@
+/* Scoped admin UI when mounted under /admin on the consumer web app (avoids overriding global html/body). */
+.admin-embed-mount {
+  --primary: #6b8e23;
+  --primary-dark: #5a7a1e;
+  --accent: #9acd32;
+  --bg: #f5f6f7;
+  --card: #ffffff;
+  --text: #2d3748;
+  --text-secondary: #718096;
+  --radius: 18px;
+  --shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  box-sizing: border-box;
+  min-height: 100vh;
+  width: 100%;
+  position: relative;
+  isolation: isolate;
+  font-family: var(--font);  background: var(--bg);
+  color: var(--text);
+}
+
+.admin-embed-mount *,
+.admin-embed-mount *::before,
+.admin-embed-mount *::after {
+  box-sizing: border-box;
+}
+
+.admin-embed-mount button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
+
+.admin-embed-mount input,
+.admin-embed-mount select {
+  font-family: inherit;
+}

@@ -2,12 +2,13 @@
   "name": "cavitour",
   "private": true,
   "version": "1.0.0",
-  "description": "CaviTour monorepo — mobile (Expo), marketing web (Vite), admin (Vite)",
+  "description": "CaviTour monorepo — mobile (Expo), marketing web + embedded admin at /admin (Vite), optional standalone admin on :3001",
   "workspaces": [
     "apps/*"
   ],
   "overrides": {
     "vite": "^7.3.1",
+    "react-router-dom": "^7.13.0",
     "react": "19.1.0",
     "react-dom": "19.1.0"
   },
@@ -27,6 +28,13 @@
     "admin:build": "npm run build --workspace=cavitour-admin",
     "admin:preview": "npm run preview --workspace=cavitour-admin",
     "build:icons": "node scripts/build-jam-svgs.mjs",
-    "reset-project": "node scripts/reset-project.js"
+    "reset-project": "node scripts/reset-project.js",
+    "cavite:import": "node scripts/import-sta-cavite-v3.mjs",
+    "cavite:geocode": "node scripts/geocode-cavite-lgu.mjs",
+    "cavite:seed": "node scripts/generate-cavite-lgu-seed.mjs",
+    "cavite:sql-all": "node scripts/build-cavite-sta-complete-sql.mjs"
+  },
+  "devDependencies": {
+    "xlsx": "^0.18.5"
   }
 }

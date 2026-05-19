@@ -1,22 +1,30 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Place } from '../data/mockData';
+import { enrichPlaceWithLocalEstablishmentMedia } from './establishmentLocalImages';
 import { normalizeNtdpCopy } from './ntdpDisplayLabels';
 
-export type PlaceRow = {
+export type CavitePlaceRow = {
   id: string;
   name: string;
+  ta_name: string;
+  type_code: string | null;
+  ta_category: string | null;
+  ntdp_category: string | null;
+  city_mun: string | null;
   address: string;
-  type: string | null;
-  hours: string | null;
   latitude: string | number | null;
   longitude: string | number | null;
-  image_url: string | null;
   description: string | null;
-  ntdp_category: string | null;
+  searchable_text: string | null;
+  lgu_slug: string | null;
+  created_at?: string | null;
 };
 
-const PLACES_SELECT =
-  'id, name, address, type, hours, latitude, longitude, image_url, description, ntdp_category, created_at';
+/** Alias for screens that still import `PlaceRow`. */
+export type PlaceRow = CavitePlaceRow;
+
+const CAVITE_SELECT =
+  'id, name, ta_name, type_code, ta_category, ntdp_category, city_mun, address, latitude, longitude, description, searchable_text, created_at, lgu_slug';
 
 const KM_PER_DEG_LAT = 111;
 
@@ -56,40 +64,68 @@ export function parseCoord(v: string | number | null | undefined): number | null
   return Number.isFinite(n) ? n : null;
 }
 
-export function rowToPlace(row: PlaceRow): Place | null {
+/** Map Cavite view row → Place (mockData shape). */
+export function rowToPlace(row: CavitePlaceRow): Place | null {
   const lat = parseCoord(row.latitude);
   const lng = parseCoord(row.longitude);
   if (lat == null || lng == null) return null;
   const p: Place = {
     id: row.id,
-    name: row.name,
+    name: row.name ?? row.ta_name,
     address: row.address,
-    type: row.type ?? 'Place',
-    hours: row.hours ?? '',
+    type: row.ta_category || row.type_code || 'Place',
+    hours: '',
     latitude: lat,
     longitude: lng,
   };
-  if (row.image_url) {
-    p.image = { uri: row.image_url };
-  }
   if (row.description) p.description = normalizeNtdpCopy(row.description);
   if (row.ntdp_category) p.ntdp_category = normalizeNtdpCopy(row.ntdp_category);
-  return p;
+  if (row.city_mun) p.city_mun = row.city_mun;
+  if (row.created_at) p.created_at = row.created_at;
+  if (row.searchable_text) p.searchable_text = row.searchable_text;
+  if (row.type_code) p.type_code = row.type_code;
+  if (row.ta_category) p.ta_category = row.ta_category;
+  if (row.lgu_slug) p.lgu_slug = row.lgu_slug;
+  return enrichPlaceWithLocalEstablishmentMedia(p);
 }
 
-/** Strip characters that break PostgREST `ilike` patterns. */
 function sanitizeSearchToken(raw: string): string {
   return raw
     .trim()
-    .replace(/[%_,]/g, ' ')
+    .replace(/[%_,()]/g, ' ')
+    .replace(/['"`]/g, ' ')
+    .replace(/\./g, ' ')
+    .replace(/-/g, ' ')
     .replace(/\s+/g, ' ')
     .slice(0, 120);
 }
 
-/**
- * Search `places` by name or address (case-insensitive). Deduplicates by id;
- * name matches are ordered before address-only matches.
- */
+function foldSearchText(raw: string): string {
+  return raw
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ');
+}
+
+function scoreMatch(place: Place, query: string): number {
+  const q = foldSearchText(query);
+  const name = foldSearchText(place.name);
+  const addr = foldSearchText(place.address);
+  const city = foldSearchText(place.city_mun ?? '');
+  const haystack = `${name} ${addr} ${city}`;
+  if (!q || !haystack.includes(q)) return Number.MAX_SAFE_INTEGER;
+  const inName = name.indexOf(q);
+  if (inName >= 0) return inName;
+  const inAddr = addr.indexOf(q);
+  if (inAddr >= 0) return 100 + inAddr;
+  const inCity = city.indexOf(q);
+  if (inCity >= 0) return 200 + inCity;
+  return 300;
+}
+
 export async function searchPlacesByText(
   client: SupabaseClient,
   rawQuery: string,
@@ -98,60 +134,55 @@ export async function searchPlacesByText(
   const safe = sanitizeSearchToken(rawQuery);
   if (!safe) return [];
 
-  const pattern = `%${safe}%`;
-  const [nameRes, addrRes] = await Promise.all([
-    client
-      .from('places')
-      .select(PLACES_SELECT)
-      .ilike('name', pattern)
-      .not('latitude', 'is', null)
-      .not('longitude', 'is', null)
-      .limit(limit),
-    client
-      .from('places')
-      .select(PLACES_SELECT)
-      .ilike('address', pattern)
-      .not('latitude', 'is', null)
-      .not('longitude', 'is', null)
-      .limit(limit),
-  ]);
+  const fetchCap = 3000;
+  const { data, error } = await client
+    .from('v_cavite_establishments')
+    .select(CAVITE_SELECT)
+    .not('latitude', 'is', null)
+    .not('longitude', 'is', null)
+    .limit(fetchCap);
+  if (error) throw new Error(error.message);
 
-  if (nameRes.error) throw new Error(nameRes.error.message);
-  if (addrRes.error) throw new Error(addrRes.error.message);
+  const q = foldSearchText(safe);
+  const qTokens = q.split(' ').filter(Boolean);
 
-  const nameIds = new Set((nameRes.data ?? []).map((r) => r.id));
-  const byId = new Map<string, Place>();
-
-  for (const row of nameRes.data ?? []) {
-    const p = rowToPlace(row as PlaceRow);
-    if (p) byId.set(p.id, p);
+  const scored: { place: Place; score: number }[] = [];
+  for (const row of (data ?? []) as CavitePlaceRow[]) {
+    const p = rowToPlace(row);
+    if (!p) continue;
+    const searchable = foldSearchText(
+      [
+        row.name,
+        row.ta_name,
+        row.address,
+        row.city_mun ?? '',
+        row.searchable_text ?? '',
+        row.ta_category ?? '',
+        row.ntdp_category ?? '',
+        row.type_code ?? '',
+        row.description ?? '',
+      ]
+        .filter(Boolean)
+        .join(' ')
+    );
+    if (!qTokens.every((tok) => searchable.includes(tok))) continue;
+    const score = scoreMatch(p, safe);
+    scored.push({ place: p, score });
   }
-  for (const row of addrRes.data ?? []) {
-    const p = rowToPlace(row as PlaceRow);
-    if (p) byId.set(p.id, p);
-  }
 
-  const merged = Array.from(byId.values()).sort((a, b) => {
-    const aName = nameIds.has(a.id) ? 0 : 1;
-    const bName = nameIds.has(b.id) ? 0 : 1;
-    if (aName !== bName) return aName - bName;
-    return a.name.localeCompare(b.name);
-  });
-
-  return merged.slice(0, limit);
+  return scored
+    .sort((a, b) => a.score - b.score || a.place.name.localeCompare(b.place.name))
+    .slice(0, limit)
+    .map((x) => x.place);
 }
 
-/**
- * Dashboard “trending”: places in Supabase with coordinates (for detail / maps).
- * Includes rows with `image_url` null — UI should show a placeholder image.
- */
 export async function fetchTrendingPlacesFromSupabase(
   client: SupabaseClient,
   limit = 40
 ): Promise<Place[]> {
   const { data, error } = await client
-    .from('places')
-    .select(PLACES_SELECT)
+    .from('v_cavite_establishments')
+    .select(CAVITE_SELECT)
     .not('latitude', 'is', null)
     .not('longitude', 'is', null)
     .order('created_at', { ascending: false })
@@ -161,16 +192,12 @@ export async function fetchTrendingPlacesFromSupabase(
 
   const out: Place[] = [];
   for (const row of data ?? []) {
-    const p = rowToPlace(row as PlaceRow);
+    const p = rowToPlace(row as CavitePlaceRow);
     if (p) out.push(p);
   }
   return out;
 }
 
-/**
- * Places within `radiusKm` of the user (Haversine), nearest first.
- * Uses a bounding-box prefilter on Supabase, then exact distance in app.
- */
 export async function fetchNearbyPlacesFromSupabase(
   client: SupabaseClient,
   userLat: number,
@@ -182,8 +209,8 @@ export async function fetchNearbyPlacesFromSupabase(
   const bbox = boundingBoxForRadiusKm(userLat, userLng, padKm);
 
   const { data, error } = await client
-    .from('places')
-    .select(PLACES_SELECT)
+    .from('v_cavite_establishments')
+    .select(CAVITE_SELECT)
     .gte('latitude', bbox.latMin)
     .lte('latitude', bbox.latMax)
     .gte('longitude', bbox.lngMin)
@@ -193,7 +220,7 @@ export async function fetchNearbyPlacesFromSupabase(
 
   const scored: { place: Place; km: number }[] = [];
   for (const row of data ?? []) {
-    const p = rowToPlace(row as PlaceRow);
+    const p = rowToPlace(row as CavitePlaceRow);
     if (!p) continue;
     const km = haversineDistanceKm(userLat, userLng, p.latitude, p.longitude);
     if (km <= radiusKm) scored.push({ place: p, km });
@@ -201,4 +228,25 @@ export async function fetchNearbyPlacesFromSupabase(
 
   scored.sort((a, b) => a.km - b.km);
   return scored.slice(0, limit).map(({ place }) => place);
+}
+
+/** Large pool for dashboard filtering (client-side city/category toggles). */
+export async function fetchDashboardPlacesPool(client: SupabaseClient, limit = 1500): Promise<Place[]> {
+  const cap = Math.min(Math.max(limit, 1), 3000);
+  const { data, error } = await client
+    .from('v_cavite_establishments')
+    .select(CAVITE_SELECT)
+    .not('latitude', 'is', null)
+    .not('longitude', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(cap);
+
+  if (error) throw new Error(error.message);
+
+  const out: Place[] = [];
+  for (const row of data ?? []) {
+    const p = rowToPlace(row as CavitePlaceRow);
+    if (p) out.push(p);
+  }
+  return out;
 }

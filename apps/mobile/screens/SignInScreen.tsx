@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
+  Modal,
   View,
   Text,
   StyleSheet,
@@ -16,12 +19,28 @@ import { FontAwesome, Ionicons } from '@expo/vector-icons';
 import { JamIcon } from '../components/JamIcon';
 import { Colors } from '../constants/theme';
 import { Button } from '../components/Button';
-import { supabase } from '../lib/supabase';
+import {
+  isSupabaseConfigured,
+  SUPABASE_ENV_MISSING_MESSAGE,
+  supabase,
+} from '../lib/supabase';
 import { withAuthRetry, isNetworkErrorMsg, NETWORK_ERROR_USER_MESSAGE } from '../lib/authHelpers';
+import { signInWithGoogleMobile } from '../lib/googleAuth';
+import { getAdminReservedEmailMessage, isAdminReservedEmail } from '../lib/adminReservedEmail';
 
 const TURQUOISE = '#54C0CC';
 const MUTED = '#7A7878';
 const LINE = 'rgba(122, 120, 120, 0.45)';
+const AUTH_POPUP_MS = 1200;
+
+function toFriendlyLoginError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  const normalized = message.toLowerCase();
+  if (normalized.includes('invalid login credentials')) {
+    return 'Email or password is incorrect. If this account was created with Google, use Google sign in or reset your password.';
+  }
+  return message || 'Sign in failed.';
+}
 
 const SignInScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
@@ -29,11 +48,16 @@ const SignInScreen: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleAuthInProgress, setGoogleAuthInProgress] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   const handleSignIn = async () => {
     setFormError(null);
-    const trimmedEmail = email.trim();
+    if (!isSupabaseConfigured) {
+      setFormError(SUPABASE_ENV_MISSING_MESSAGE);
+      return;
+    }
+    const trimmedEmail = email.trim().toLowerCase();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!trimmedEmail || !password) {
       setFormError('Please enter your email and password.');
@@ -41,6 +65,10 @@ const SignInScreen: React.FC = () => {
     }
     if (!emailRegex.test(trimmedEmail)) {
       setFormError('Please enter a valid email address.');
+      return;
+    }
+    if (isAdminReservedEmail(trimmedEmail)) {
+      setFormError(getAdminReservedEmailMessage());
       return;
     }
     setLoading(true);
@@ -53,17 +81,65 @@ const SignInScreen: React.FC = () => {
     } catch (error: unknown) {
       const message = isNetworkErrorMsg(error)
         ? NETWORK_ERROR_USER_MESSAGE
-        : error instanceof Error
-          ? error.message
-          : String(error);
+        : toFriendlyLoginError(error);
       setFormError(message);
     } finally {
       setLoading(false);
     }
   };
 
+  const runGoogleSignIn = async () => {
+    setLoading(true);
+    setGoogleAuthInProgress(true);
+    const startedAt = Date.now();
+    try {
+      await signInWithGoogleMobile();
+      await AsyncStorage.setItem('isAuthenticated', 'true');
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'Google sign in failed. Please try again.';
+      setFormError(message);
+    } finally {
+      const elapsed = Date.now() - startedAt;
+      const remaining = Math.max(0, AUTH_POPUP_MS - elapsed);
+      if (remaining > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remaining));
+      }
+      setLoading(false);
+      setGoogleAuthInProgress(false);
+    }
+  };
+
+  const handleGoogleSignIn = () => {
+    setFormError(null);
+    if (!isSupabaseConfigured) {
+      setFormError(SUPABASE_ENV_MISSING_MESSAGE);
+      return;
+    }
+    Alert.alert(
+      'Sign in with Google',
+      'Allow CaviTour to sign you in with Google? You will continue in the Google sign-in window.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Continue', onPress: () => void runGoogleSignIn() },
+      ]
+    );
+  };
+
   return (
     <View style={styles.root}>
+      <Modal visible={googleAuthInProgress} transparent animationType="fade" statusBarTranslucent>
+        <View style={styles.authOverlay}>
+          <View style={styles.authCard}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text style={styles.authTitle}>Authenticating with Google</Text>
+            <Text style={styles.authSubtitle}>Please continue in the Google sign-in window.</Text>
+          </View>
+        </View>
+      </Modal>
+
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.flex}
@@ -84,7 +160,7 @@ const SignInScreen: React.FC = () => {
             <ScrollView
               style={styles.sheetScroll}
               contentContainerStyle={styles.sheetScrollContent}
-              keyboardShouldPersistTaps="handled"
+              keyboardShouldPersistTaps="always"
               showsVerticalScrollIndicator={false}
               bounces={false}
             >
@@ -125,7 +201,15 @@ const SignInScreen: React.FC = () => {
               <TouchableOpacity
                 style={styles.forgotWrap}
                 accessibilityRole="button"
-                onPress={() => {}}
+                hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                onPress={() => {
+                  const parent = navigation.getParent();
+                  if (parent) {
+                    parent.navigate('Auth' as never, { screen: 'ForgotPassword' } as never);
+                  } else {
+                    navigation.navigate('ForgotPassword' as never);
+                  }
+                }}
               >
                 <Text style={styles.forgotText}>Forgot Password?</Text>
               </TouchableOpacity>
@@ -166,7 +250,7 @@ const SignInScreen: React.FC = () => {
                   <TouchableOpacity
                     style={styles.socialBtn}
                     accessibilityLabel="Log in with Google"
-                    onPress={() => {}}
+                    onPress={handleGoogleSignIn}
                   >
                     <JamIcon ionicon="logo-google" size={22} color={Colors.primary} />
                   </TouchableOpacity>
@@ -174,7 +258,7 @@ const SignInScreen: React.FC = () => {
 
                 <View style={styles.footerRow}>
                   <Text style={styles.footerMuted}>{"Don't have an account? "}</Text>
-                  <TouchableOpacity onPress={() => navigation.navigate('SignUp' as never)} accessibilityRole="button">
+                  <TouchableOpacity onPress={() => navigation.navigate('SignUp')} accessibilityRole="button">
                     <Text style={styles.footerLink}>Sign up</Text>
                   </TouchableOpacity>
                 </View>
@@ -390,6 +474,36 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_700Bold',
     fontSize: 14,
     color: Colors.primary,
+  },
+  authOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  authCard: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: Colors.white,
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  authTitle: {
+    marginTop: 12,
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 16,
+    color: Colors.text.primary,
+    textAlign: 'center',
+  },
+  authSubtitle: {
+    marginTop: 6,
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 13,
+    color: MUTED,
+    textAlign: 'center',
   },
 });
 

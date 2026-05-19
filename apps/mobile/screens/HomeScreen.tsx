@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,20 +11,20 @@ import {
   Dimensions,
   Modal,
   ActivityIndicator,
-  RefreshControl,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { JamIcon } from '../components/JamIcon';
 import { DashboardFiltersPanel } from '../components/DashboardFiltersPanel';
 import { Header } from '../components/Header';
-import type { Place } from '../data/mockData';
+import { trendingSpots, nearbyPlaces, type Place } from '../data/mockData';
 import { supabase } from '../lib/supabase';
+import { fetchDashboardPlacesPool, haversineDistanceKm } from '../lib/placesFromSupabase';
 import {
-  fetchTrendingPlacesFromSupabase,
-  fetchNearbyPlacesFromSupabase,
-} from '../lib/placesFromSupabase';
+  placeMatchesDashboardFilters,
+  sortPlacesByDashboardSort,
+} from '../lib/dashboardPlaceFilters';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 /** Max sheet height (shorter sheet); content scrolls inside when tall. */
@@ -47,7 +47,6 @@ const FIGMA = {
 /** Match Itineraries tab search row (filter icon on white circle). */
 const TEAL = '#1F4F59';
 const SEARCH_PLACEHOLDER = '#B3AAAA';
-const NEARBY_RADIUS_KM = 3;
 
 const HomeScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -56,74 +55,79 @@ const HomeScreen: React.FC = () => {
   const filterScrollMaxHeight = FILTER_SHEET_MAX_HEIGHT - filterSheetPadBottom;
   const [searchQuery, setSearchQuery] = useState('');
   const [filtersVisible, setFiltersVisible] = useState(false);
-  const [trendingPlaces, setTrendingPlaces] = useState<Place[]>([]);
-  const [nearbyPlaces, setNearbyPlaces] = useState<Place[]>([]);
-  const [trendingLoading, setTrendingLoading] = useState(true);
-  const [nearbyLoading, setNearbyLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [nearbyStatus, setNearbyStatus] = useState<'ok' | 'no_permission' | 'error' | 'empty'>(
-    'ok'
-  );
+  const [filterToggles, setFilterToggles] = useState<Record<string, boolean>>({});
+  const [catalogPlaces, setCatalogPlaces] = useState<Place[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogFromSupabase, setCatalogFromSupabase] = useState(false);
+  const [userPt, setUserPt] = useState<{ lat: number; lng: number } | null>(null);
 
-  const loadDashboard = useCallback(async (isRefresh = false) => {
-    if (isRefresh) {
-      setRefreshing(true);
-    } else {
-      setTrendingLoading(true);
-      setNearbyLoading(true);
-    }
-    setNearbyStatus('ok');
-
-    try {
-      const trending = await fetchTrendingPlacesFromSupabase(supabase, 40);
-      setTrendingPlaces(trending);
-    } catch {
-      setTrendingPlaces([]);
-    } finally {
-      if (!isRefresh) setTrendingLoading(false);
-    }
-
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setNearbyPlaces([]);
-        setNearbyStatus('no_permission');
-        return;
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setCatalogLoading(true);
+      try {
+        const list = await fetchDashboardPlacesPool(supabase, 1500);
+        if (!cancelled) {
+          setCatalogPlaces(list);
+          setCatalogFromSupabase(true);
+        }
+      } catch {
+        if (!cancelled) {
+          setCatalogPlaces([...trendingSpots, ...nearbyPlaces] as Place[]);
+          setCatalogFromSupabase(false);
+        }
+      } finally {
+        if (!cancelled) setCatalogLoading(false);
       }
-
-      const pos = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      const userLat = pos.coords.latitude;
-      const userLng = pos.coords.longitude;
-
-      const nearby = await fetchNearbyPlacesFromSupabase(
-        supabase,
-        userLat,
-        userLng,
-        NEARBY_RADIUS_KM,
-        40
-      );
-      setNearbyPlaces(nearby);
-      setNearbyStatus(nearby.length ? 'ok' : 'empty');
-    } catch {
-      setNearbyPlaces([]);
-      setNearbyStatus('error');
-    } finally {
-      if (!isRefresh) setNearbyLoading(false);
-      if (isRefresh) setRefreshing(false);
-    }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadDashboard();
-    }, [loadDashboard])
-  );
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (cancelled || status !== 'granted') return;
+      try {
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        if (!cancelled) {
+          setUserPt({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const filteredSorted = useMemo(() => {
+    const matched = catalogPlaces.filter((p) => placeMatchesDashboardFilters(p, filterToggles));
+    return sortPlacesByDashboardSort(matched, filterToggles);
+  }, [catalogPlaces, filterToggles]);
+
+  const trendingRow = useMemo(() => filteredSorted.slice(0, 36), [filteredSorted]);
+
+  const nearbyRow = useMemo(() => {
+    if (!userPt) return filteredSorted.slice(0, 36);
+    const scored = filteredSorted.map((p) => ({
+      place: p,
+      km: haversineDistanceKm(userPt.lat, userPt.lng, p.latitude, p.longitude),
+    }));
+    scored.sort((a, b) => a.km - b.km);
+    return scored.map((s) => s.place).slice(0, 36);
+  }, [filteredSorted, userPt]);
+
+  const onFilterTogglesChange = useCallback((toggles: Record<string, boolean>) => {
+    setFilterToggles(toggles);
+  }, []);
 
   const handleSearch = () => {
     if (searchQuery.trim()) {
-      navigation.navigate('PlaceDetail' as never, { query: searchQuery.trim() } as never);
+      navigation.navigate('PlaceDetail', { query: searchQuery.trim() });
     }
   };
 
@@ -131,7 +135,7 @@ const HomeScreen: React.FC = () => {
     <TouchableOpacity
       key={place.id}
       style={styles.card}
-      onPress={() => navigation.navigate('AboutEstablishment' as never, { place } as never)}
+      onPress={() => navigation.navigate('PlaceDetail', { place })}
       accessibilityLabel={`${place.name}, ${place.address}`}
       accessibilityRole="button"
       activeOpacity={0.9}
@@ -170,7 +174,7 @@ const HomeScreen: React.FC = () => {
         homeBranding
         showNotification
         showFilter={false}
-        onNotificationPress={() => navigation.navigate('Notifications' as never)}
+        onNotificationPress={() => navigation.navigate('Notifications')}
       />
       <View style={styles.searchFilterRow}>
         <View style={styles.searchPill}>
@@ -198,59 +202,47 @@ const HomeScreen: React.FC = () => {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => loadDashboard(true)}
-            tintColor={FIGMA.searchGreen}
-          />
-        }
       >
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Trending Tourist Spots</Text>
-          {trendingLoading ? (
-            <View style={styles.sectionLoading}>
+          {catalogLoading ? (
+            <View style={styles.rowLoading}>
               <ActivityIndicator color={FIGMA.searchGreen} />
             </View>
-          ) : trendingPlaces.length ? (
+          ) : trendingRow.length === 0 ? (
+            <Text style={styles.emptyHint}>No establishments match your filters. Try resetting filters or another city.</Text>
+          ) : (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.hScrollContent}
             >
-              {trendingPlaces.map((spot) => renderPlaceCard(spot))}
+              {trendingRow.map((spot) => renderPlaceCard(spot))}
             </ScrollView>
-          ) : (
-            <Text style={styles.sectionEmpty}>No establishments in the catalog yet.</Text>
           )}
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{`Nearby Places`}</Text>
-          {nearbyLoading ? (
-            <View style={styles.sectionLoading}>
+          <Text style={styles.sectionTitle}>{userPt ? 'Nearby Places' : 'More places'}</Text>
+          {catalogLoading ? (
+            <View style={styles.rowLoading}>
               <ActivityIndicator color={FIGMA.searchGreen} />
             </View>
-          ) : nearbyStatus === 'no_permission' ? (
-            <Text style={styles.sectionEmpty}>
-              Turn on location permission to see places near you.
-            </Text>
-          ) : nearbyStatus === 'error' ? (
-            <Text style={styles.sectionEmpty}>Could not load nearby places. Pull to refresh.</Text>
-          ) : nearbyPlaces.length ? (
+          ) : nearbyRow.length === 0 ? (
+            <Text style={styles.emptyHint}>No establishments match your filters.</Text>
+          ) : (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.hScrollContent}
             >
-              {nearbyPlaces.map((place) => renderPlaceCard(place))}
+              {nearbyRow.map((place) => renderPlaceCard(place))}
             </ScrollView>
-          ) : (
-            <Text style={styles.sectionEmpty}>
-              {`No catalog places within ${NEARBY_RADIUS_KM} km of your location.`}
-            </Text>
           )}
         </View>
+        {!catalogFromSupabase && !catalogLoading ? (
+          <Text style={styles.offlineHint}>Showing sample listings — connect to load full Cavite catalog.</Text>
+        ) : null}
       </ScrollView>
 
       <Modal
@@ -280,6 +272,7 @@ const HomeScreen: React.FC = () => {
               embedded
               sheet
               sheetScrollMaxHeight={filterScrollMaxHeight}
+              onTogglesChange={onFilterTogglesChange}
             />
           </View>
         </View>
@@ -426,18 +419,27 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: FIGMA.textSubtitle,
   },
-  sectionLoading: {
+  rowLoading: {
     paddingVertical: 28,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sectionEmpty: {
+  emptyHint: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-    lineHeight: 22,
+    fontSize: 13,
+    lineHeight: 20,
     color: FIGMA.textMuted,
     paddingHorizontal: H_PAD,
-    paddingBottom: 20,
+    paddingVertical: 8,
+  },
+  offlineHint: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 18,
+    color: FIGMA.textMuted,
+    paddingHorizontal: H_PAD,
+    paddingBottom: 16,
+    textAlign: 'center',
   },
 });
 

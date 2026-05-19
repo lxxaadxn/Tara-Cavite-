@@ -60,6 +60,14 @@ Targets `apps/mobile/` automatically.
 
 ---
 
+## Supabase & Cavite STA-v3 data
+
+The shared **Supabase project URL and anon key** are committed in `apps/web/src/lib/supabase.js` and `apps/mobile/lib/supabase.ts` so anyone who clones the repo can run **web** and **mobile** against the same backend without a local `.env`.
+
+Live listings use **`public.v_cavite_establishments`** (see [`docs/CAVITE_STA_V3_SETUP.md`](docs/CAVITE_STA_V3_SETUP.md)). The one-file SQL bundle is [`supabase/cavite_sta_v3_FULL_for_sql_editor.sql`](supabase/cavite_sta_v3_FULL_for_sql_editor.sql) (run once in the Supabase SQL Editor if you reset the DB).
+
+---
+
 ## Legacy `web/` folder at repo root
 
 If you still see a top-level `web/` directory (e.g. after copying), **stop any Vite dev server**, close processes locking `web/node_modules`, then delete that folder so **only** `apps/web/` remains. See [`docs/REPOSITORY_LAYOUT.md`](docs/REPOSITORY_LAYOUT.md).
