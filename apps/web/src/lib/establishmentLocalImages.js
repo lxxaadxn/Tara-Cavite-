@@ -488,6 +488,351 @@ const tribunalHouseOfNoveletaGallery = [
   u('Tribunal_House_of_Noveleta_3.png'),
 ];
 
+const thirteenMartyrsMonumentGallery = [
+  u('13_MARTYRS_MONUMENT.png'),
+  u('13_MARTYRS_MONUMENT_1.png'),
+  u('13_MARTYRS_MONUMENT_2.png'),
+  u('13_MARTYRS_MONUMENT_3.png'),
+];
+
+const julianFelipeMonumentGallery = [
+  u('JULIAN_FELIPE_MONUMENT.png'),
+  u('JULIAN_FELIPE_MONUMENT_1.png'),
+  u('JULIAN_FELIPE_MONUMENT_2.png'),
+  u('JULIAN_FELIPE_MONUMENT_3.png'),
+];
+
+const sanRoqueChurchGallery = [
+  u('SAN_ROQUE_CHURCH.png'),
+  u('SAN_ROQUE_CHURCH_1.png'),
+  u('SAN_ROQUE_CHURCH_2.png'),
+  u('SAN_ROQUE_CHURCH_3.png'),
+];
+
+const ladislaoDiwaMonumentGallery = [
+  u('LADISLAO_DIWA_MONUMENT.png'),
+  u('LADISLAO_DIWA_MONUMENT_1.png'),
+  u('LADISLAO_DIWA_MONUMENT_2.png'),
+  u('LADISLAO_DIWA_MONUMENT_3.png'),
+];
+
+const fortSanFelipeGallery = [
+  u('FORT_SAN_FELIPE.png'),
+  u('FORT_SAN_FELIPE_1.png'),
+  u('FORT_SAN_FELIPE_2.png'),
+  u('FORT_SAN_FELIPE_3.png'),
+];
+
+const southwoodsSportsGallery = [
+  u('Southwoods_Sports_and_Country_Club.png'),
+  u('Southwoods_Sports_and_Country_Club_1.png'),
+  u('Southwoods_Sports_and_Country_Club_2.png'),
+  u('Southwoods_Sports_and_Country_Club_3.png'),
+];
+
+const manilaSouthwoodsGolfGallery = [
+  u('Manila_Southwoods_Golf_and_Country_Club.png'),
+  u('Manila_Southwoods_Golf_and_Country_Club_1.png'),
+  u('Manila_Southwoods_Golf_and_Country_Club_2.png'),
+  u('Manila_Southwoods_Golf_and_Country_Club_3.png'),
+];
+
+const stNinoDeMolinoParishChurchGallery = [
+  u('St._Ni_o_de_Molino_Parish_Church.png'),
+  u('St._Ni_o_de_Molino_Parish_Church_1.png'),
+  u('St._Ni_o_de_Molino_Parish_Church_2.png'),
+  u('St._Ni_o_de_Molino_Parish_Church_3.png'),
+];
+
+const communityFishLandingCenterGallery = [
+  u('Community_Fish_Landing_Center.png'),
+  u('Community_Fish_Landing_Center_1.png'),
+  u('Community_Fish_Landing_Center_2.png'),
+  u('Community_Fish_Landing_Center_3.png'),
+];
+
+const ourLadyOfQueenOfPeaceParishChurchGallery = [
+  u('Our_Lady_of_Queen_of_Peace_Parish_Church.png'),
+  u('Our_Lady_of_Queen_of_Peace_Parish_Church_1.png'),
+  u('Our_Lady_of_Queen_of_Peace_Parish_Church_2.png'),
+  u('Our_Lady_of_Queen_of_Peace_Parish_Church_3.png'),
+];
+
+const senyongsMuseumGallery = [u('Senyong_s_Museum.png'), u('Senyong_s_Museum_1.png')];
+
+const evangelicalChristianChurchBacoorGallery = [
+  u('Evangelical_Christian_Church_-_Bacoor.png'),
+  u('Evangelical_Christian_Church_-_Bacoor_1.png'),
+  u('Evangelical_Christian_Church_-_Bacoor_2.png'),
+  u('Evangelical_Christian_Church_-_Bacoor_3.png'),
+];
+
+const iglesiaFilipinaIndependenteGallery = [
+  u('Iglesia_Filipina_Independente_-_Cathedral_of_St._Michael_the_Archangel.png'),
+  u('Iglesia_Filipina_Independente_-_Cathedral_of_St._Michael_the_Archangel_1.png'),
+  u('Iglesia_Filipina_Independente_-_Cathedral_of_St._Michael_the_Archangel_2.png'),
+  u('Iglesia_Filipina_Independente_-_Cathedral_of_St._Michael_the_Archangel_3.png'),
+];
+
+const ginintuangKasaysayanNgLungsodNgBacoorGallery = [
+  u('Ginintuang_Kasaysayan_ng_Lungsod_ng_Bacoor.png'),
+  u('Ginintuang_Kasaysayan_ng_Lungsod_ng_Bacoor_1.png'),
+  u('Ginintuang_Kasaysayan_ng_Lungsod_ng_Bacoor_2.png'),
+  u('Ginintuang_Kasaysayan_ng_Lungsod_ng_Bacoor_3.png'),
+];
+
+const justiceBuenaventuraOcampoAncestralHouseGallery = [
+  u('Justice_Buenaventura_A._Ocampo_Ancestral_House.png'),
+  u('Justice_Buenaventura_A._Ocampo_Ancestral_House_1.png'),
+  u('Justice_Buenaventura_A._Ocampo_Ancestral_House_2.png'),
+  u('Justice_Buenaventura_A._Ocampo_Ancestral_House_3.png'),
+];
+
+const kademyahanNgAnakZapoteBandGallery = [
+  u('Kademyahan_ng_Anak_Zapote_Band.png'),
+  u('Kademyahan_ng_Anak_Zapote_Band_1.png'),
+  u('Kademyahan_ng_Anak_Zapote_Band_2.png'),
+  u('Kademyahan_ng_Anak_Zapote_Band_3.png'),
+];
+
+const ricardoFernandezAncestralHouseGallery = [
+  u('Ricardo_Fernandez_Ancestral_House.png'),
+  u('Ricardo_Fernandez_Ancestral_House_1.png'),
+  u('Ricardo_Fernandez_Ancestral_House_2.png'),
+  u('Ricardo_Fernandez_Ancestral_House_3.png'),
+];
+
+const immaculateConceptionChurchGallery = [
+  u('Immaculate_Conception_Church.png'),
+  u('Immaculate_Conception_Church_1.png'),
+  u('Immaculate_Conception_Church_2.png'),
+  u('Immaculate_Conception_Church_3.png'),
+];
+
+const museoDeLaSalleGallery = [
+  u('Museo_De_La_Salle.png'),
+  u('Museo_De_La_Salle_1.png'),
+  u('Museo_De_La_Salle_2.png'),
+  u('Museo_De_La_Salle_3.png'),
+];
+
+const promenadeDesDasmarinasGallery = [
+  u('Promenade_Des_Dasmari_as.png'),
+  u('Promenade_Des_Dasmari_as_1.png'),
+  u('Promenade_Des_Dasmari_as_2.png'),
+  u('Promenade_Des_Dasmari_as_3.png'),
+];
+
+const blumenResortGallery = [
+  u('Blumen_Resort.png'),
+  u('Blumen_Resort_1.png'),
+  u('Blumen_Resort_2.png'),
+  u('Blumen_Resort_3.png'),
+];
+
+const cocovalleyRichnezWaterparkGallery = [
+  u('Cocovalley_Richnez_Waterpark.png'),
+  u('Cocovalley_Richnez_Waterpark_1.png'),
+  u('Cocovalley_Richnez_Waterpark_2.png'),
+  u('Cocovalley_Richnez_Waterpark_3.png'),
+];
+
+const jardinDeDasmarinasResortRestaurantGallery = [
+  u('Jardin_De_Dasmari_as_Resort___Restaurant.png'),
+  u('Jardin_De_Dasmari_as_Resort___Restaurant_1.png'),
+  u('Jardin_De_Dasmari_as_Resort___Restaurant_2.png'),
+  u('Jardin_De_Dasmari_as_Resort___Restaurant_3.png'),
+];
+
+const kalipayanResortIncGallery = [
+  u('Kalipayan_Resort_Inc..png'),
+  u('Kalipayan_Resort_Inc._1.png'),
+  u('Kalipayan_Resort_Inc._2.png'),
+  u('Kalipayan_Resort_Inc._3.png'),
+];
+
+const leviaGardenResortGallery = [
+  u('Levia_Garden_Resort.png'),
+  u('Levia_Garden_Resort_1.png'),
+  u('Levia_Garden_Resort_2.png'),
+  u('Levia_Garden_Resort_3.png'),
+];
+
+const stEzekielMorenoParkGallery = [
+  u('St._Ezekiel_Moreno_Park.png'),
+  u('St._Ezekiel_Moreno_Park_1.png'),
+  u('St._Ezekiel_Moreno_Park_2.png'),
+  u('St._Ezekiel_Moreno_Park_3.png'),
+];
+
+const generalEdilbertoEvangelistaMonumentGallery = [
+  u('General_Edilberto_Evangelista_Monument.png'),
+  u('General_Edilberto_Evangelista_Monument_1.png'),
+  u('General_Edilberto_Evangelista_Monument_2.png'),
+  u('General_Edilberto_Evangelista_Monument_3.png'),
+];
+
+const tulayZapoteGallery = [
+  u('Tulay_Zapote.png'),
+  u('Tulay_Zapote_1.png'),
+  u('Tulay_Zapote_2.png'),
+  u('Tulay_Zapote_3.png'),
+];
+
+const monumentOfLoveGallery = [
+  u('Monument_of_Love.png'),
+  u('Monument_of_Love_1.png'),
+  u('Monument_of_Love_2.png'),
+  u('Monument_of_Love_3.png'),
+];
+
+const canariaResortGallery = [
+  u('Canaria_Resort.png'),
+  u('Canaria_Resort_1.png'),
+  u('Canaria_Resort_2.png'),
+  u('Canaria_Resort_3.png'),
+];
+
+const eagleRidgeGolfAndCountryClubGallery = [
+  u('Eagle_Ridge_Golf_and_Country_Club.png'),
+  u('Eagle_Ridge_Golf_and_Country_Club_1.png'),
+  u('Eagle_Ridge_Golf_and_Country_Club_2.png'),
+  u('Eagle_Ridge_Golf_and_Country_Club_3.png'),
+];
+
+const edensPastillasPasalubongCenterGallery = [
+  u('Eden_s_Pastillas_Pasalubong_Center.png'),
+  u('Eden_s_Pastillas_Pasalubong_Center_1.png'),
+  u('Eden_s_Pastillas_Pasalubong_Center_2.png'),
+  u('Eden_s_Pastillas_Pasalubong_Center_3.png'),
+];
+
+const felizeCafeGallery = [
+  u('Felize_Cafe.png'),
+  u('Felize_Cafe_1.png'),
+  u('Felize_Cafe_2.png'),
+  u('Felize_Cafe_3.png'),
+];
+
+const gbrMuseumGallery = [
+  u('GBR_Museum.png'),
+  u('GBR_Museum_1.png'),
+  u('GBR_Museum_2.png'),
+  u('GBR_Museum_3.png'),
+];
+
+const generalTriasCityParkGallery = [
+  u('General_Trias_City_Park.png'),
+  u('General_Trias_City_Park_1.png'),
+  u('General_Trias_City_Park_2.png'),
+  u('General_Trias_City_Park_3.png'),
+];
+
+const generalTriasPlazaRizalGallery = [
+  u('General_Trias_Plaza_Rizal.png'),
+  u('General_Trias_Plaza_Rizal_1.png'),
+  u('General_Trias_Plaza_Rizal_2.png'),
+  u('General_Trias_Plaza_Rizal_3.png'),
+];
+
+const generalTriasCulturalAndConventionCenterGallery = [
+  u('General_Trias_Cultural_and_Convention_Center.png'),
+  u('General_Trias_Cultural_and_Convention_Center_1.png'),
+  u('General_Trias_Cultural_and_Convention_Center_2.png'),
+  u('General_Trias_Cultural_and_Convention_Center_3.png'),
+];
+
+const generalTriasDairyGallery = [
+  u('General_Trias_Dairy.png'),
+  u('General_Trias_Dairy_1.png'),
+  u('General_Trias_Dairy_2.png'),
+  u('General_Trias_Dairy_3.png'),
+];
+
+const generalTriasSportsComplexGallery = [
+  u('General_Trias_Sports_Complex.png'),
+  u('General_Trias_Sports_Complex_1.png'),
+  u('General_Trias_Sports_Complex_2.png'),
+  u('General_Trias_Sports_Complex_3.png'),
+];
+
+const generalTriasPeoplesParkGallery = [
+  u('General_Trias_People_s_Park.png'),
+  u('General_Trias_People_s_Park_1.png'),
+  u('General_Trias_People_s_Park_2.png'),
+  u('General_Trias_People_s_Park_3.png'),
+];
+
+const hiddenVegaResortGallery = [
+  u('Hidden_Vega_Resort.png'),
+  u('Hidden_Vega_Resort_1.png'),
+  u('Hidden_Vega_Resort_2.png'),
+  u('Hidden_Vega_Resort_3.png'),
+];
+
+const jamsCafeGallery = [
+  u('Jams_Cafe.png'),
+  u('Jams_Cafe_1.png'),
+  u('Jams_Cafe_2.png'),
+  u('Jams_Cafe_3.png'),
+];
+
+const lawiswisKawayanGallery = [
+  u('Lawiswis_Kawayan.png'),
+  u('Lawiswis_Kawayan_1.png'),
+  u('Lawiswis_Kawayan_2.png'),
+  u('Lawiswis_Kawayan_3.png'),
+];
+
+const mangMikesValencianaGallery = [
+  u('Mang_Mike_s_Valenciana.png'),
+  u('Mang_Mike_s_Valenciana_1.png'),
+  u('Mang_Mike_s_Valenciana_2.png'),
+  u('Mang_Mike_s_Valenciana_3.png'),
+];
+
+const mapleGroveByMegaworldGallery = [
+  u('Maple_Grove_by_Megaworld.png'),
+  u('Maple_Grove_by_Megaworld_1.png'),
+  u('Maple_Grove_by_Megaworld_2.png'),
+  u('Maple_Grove_by_Megaworld_3.png'),
+];
+
+const mikaysRestaurantGallery = [
+  u('Mikay_s_Restaurant.png'),
+  u('Mikay_s_Restaurant_1.png'),
+  u('Mikay_s_Restaurant_2.png'),
+  u('Mikay_s_Restaurant_3.png'),
+];
+
+const ourLadyOfGuadalupeParishGallery = [
+  u('Our_Lady_of_Guadalupe_Parish.png'),
+  u('Our_Lady_of_Guadalupe_Parish_1.png'),
+  u('Our_Lady_of_Guadalupe_Parish_2.png'),
+  u('Our_Lady_of_Guadalupe_Parish_3.png'),
+];
+
+const servilleAnasResortGallery = [
+  u('Serville_Ana_s_Resort.png'),
+  u('Serville_Ana_s_Resort_1.png'),
+  u('Serville_Ana_s_Resort_2.png'),
+  u('Serville_Ana_s_Resort_3.png'),
+];
+
+const soakNSwimResortGallery = [
+  u('Soak__N_Swim_Resort.png'),
+  u('Soak__N_Swim_Resort_1.png'),
+  u('Soak__N_Swim_Resort_2.png'),
+  u('Soak__N_Swim_Resort_3.png'),
+];
+
+const stFrancisOfAssisiParishGallery = [
+  u('St._Francis_of_Assisi_Parish.png'),
+  u('St._Francis_of_Assisi_Parish_1.png'),
+  u('St._Francis_of_Assisi_Parish_2.png'),
+  u('St._Francis_of_Assisi_Parish_3.png'),
+];
+
 const LOCAL_MEDIA = {
   Asador: asadorGallery,
   Arocarria: arocarriaGallery,
@@ -558,6 +903,57 @@ const LOCAL_MEDIA = {
   'GOV. SAMONTE CIRCLE/SASH': govSamonteCircleGallery,
   "ALING IKA'S CARINDERIA": alingIkasCarinderiaGallery,
   'Tribunal House of Noveleta': tribunalHouseOfNoveletaGallery,
+  '13 MARTYRS MONUMENT': thirteenMartyrsMonumentGallery,
+  'JULIAN FELIPE MONUMENT': julianFelipeMonumentGallery,
+  'SAN ROQUE CHURCH': sanRoqueChurchGallery,
+  'LADISLAO DIWA MONUMENT': ladislaoDiwaMonumentGallery,
+  'FORT SAN FELIPE': fortSanFelipeGallery,
+  'Southwoods Sports and Country Club': southwoodsSportsGallery,
+  'Manila Southwoods Golf and Country Club': manilaSouthwoodsGolfGallery,
+  'St. Niño de Molino Parish Church': stNinoDeMolinoParishChurchGallery,
+  'Community Fish Landing Center': communityFishLandingCenterGallery,
+  'Our Lady of Queen of Peace Parish Church': ourLadyOfQueenOfPeaceParishChurchGallery,
+  'Senyong\u2019s Museum': senyongsMuseumGallery,
+  'Evangelical Christian Church - Bacoor': evangelicalChristianChurchBacoorGallery,
+  'Iglesia Filipina Independente - Cathedral of St. Michael the Archangel':
+    iglesiaFilipinaIndependenteGallery,
+  'Ginintuang Kasaysayan ng Lungsod ng Bacoor': ginintuangKasaysayanNgLungsodNgBacoorGallery,
+  'Justice Buenaventura A. Ocampo Ancestral House': justiceBuenaventuraOcampoAncestralHouseGallery,
+  'Kademyahan ng Anak Zapote Band': kademyahanNgAnakZapoteBandGallery,
+  'Ricardo Fernandez Ancestral House': ricardoFernandezAncestralHouseGallery,
+  'Immaculate Conception Church': immaculateConceptionChurchGallery,
+  'Museo De La Salle': museoDeLaSalleGallery,
+  'Promenade Des Dasmariñas': promenadeDesDasmarinasGallery,
+  'Blumen Resort': blumenResortGallery,
+  'Cocovalley Richnez Waterpark': cocovalleyRichnezWaterparkGallery,
+  'Jardin De Dasmariñas Resort & Restaurant': jardinDeDasmarinasResortRestaurantGallery,
+  'Kalipayan Resort Inc.': kalipayanResortIncGallery,
+  'Levia Garden Resort': leviaGardenResortGallery,
+  'St. Ezekiel Moreno Park': stEzekielMorenoParkGallery,
+  'General Edilberto Evangelista Monument': generalEdilbertoEvangelistaMonumentGallery,
+  'Tulay Zapote': tulayZapoteGallery,
+  'Monument of Love': monumentOfLoveGallery,
+  'Canaria Resort': canariaResortGallery,
+  'Eagle Ridge Golf and Country Club': eagleRidgeGolfAndCountryClubGallery,
+  "Eden's Pastillas Pasalubong Center": edensPastillasPasalubongCenterGallery,
+  'Felize Cafe': felizeCafeGallery,
+  'GBR Museum': gbrMuseumGallery,
+  'General Trias City Park': generalTriasCityParkGallery,
+  'General Trias Plaza Rizal': generalTriasPlazaRizalGallery,
+  'General Trias Cultural and Convention Center': generalTriasCulturalAndConventionCenterGallery,
+  'General Trias Dairy': generalTriasDairyGallery,
+  'General Trias Sports Complex': generalTriasSportsComplexGallery,
+  "General Trias People's Park": generalTriasPeoplesParkGallery,
+  'Hidden Vega Resort': hiddenVegaResortGallery,
+  'Jams Cafe': jamsCafeGallery,
+  'Lawiswis Kawayan': lawiswisKawayanGallery,
+  "Mang Mike's Valenciana": mangMikesValencianaGallery,
+  'Maple Grove by Megaworld': mapleGroveByMegaworldGallery,
+  "Mikay's Restaurant": mikaysRestaurantGallery,
+  'Our Lady of Guadalupe Parish': ourLadyOfGuadalupeParishGallery,
+  "Serville Ana's Resort": servilleAnasResortGallery,
+  "Soak 'N Swim Resort": soakNSwimResortGallery,
+  'St. Francis of Assisi Parish': stFrancisOfAssisiParishGallery,
 };
 
 function lookupLocalEstablishmentUrls(name) {
