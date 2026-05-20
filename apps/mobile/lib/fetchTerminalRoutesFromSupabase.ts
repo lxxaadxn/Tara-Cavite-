@@ -1,3 +1,4 @@
+import { isCommuteTourRouteId, isMallTerminalId } from 'cavitour-shared/terminalCatalogPolicy';
 import { isSupabaseConfigured, supabase } from './supabase';
 import { getRoutesForTerminalId, type TerminalRouteRow } from './caviteRouteCatalog';
 
@@ -27,10 +28,14 @@ function mapRpcRow(r: RpcRow): TerminalRouteRow {
  * Loads routes for a terminal from Supabase RPC `cavitour_routes_for_terminal`.
  * Falls back to bundled JSON if RPC fails, returns empty, or anon lacks permission.
  */
+function filterShowcasedRoutes(rows: TerminalRouteRow[]): TerminalRouteRow[] {
+  return rows.filter((r) => isCommuteTourRouteId(r.routeId));
+}
+
 export async function fetchRoutesForTerminalId(terminalId: string): Promise<TerminalRouteRow[]> {
-  const local = getRoutesForTerminalId(terminalId);
   const n = parseInt(terminalId, 10);
-  if (!Number.isFinite(n)) return local;
+  if (!Number.isFinite(n) || !isMallTerminalId(n)) return [];
+  const local = filterShowcasedRoutes(getRoutesForTerminalId(terminalId));
   if (!isSupabaseConfigured) return local;
 
   try {
@@ -43,7 +48,7 @@ export async function fetchRoutesForTerminalId(terminalId: string): Promise<Term
     }
     if (!Array.isArray(data)) return local;
     /** Live rows from Postgres replace bundled JSON when at least one row exists. */
-    if (data.length > 0) return (data as RpcRow[]).map(mapRpcRow);
+    if (data.length > 0) return filterShowcasedRoutes((data as RpcRow[]).map(mapRpcRow));
     return local;
   } catch (e) {
     console.warn('[fetchRoutesForTerminalId]', e);

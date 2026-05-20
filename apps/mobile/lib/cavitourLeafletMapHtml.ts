@@ -1,3 +1,5 @@
+import { LEAFLET_GREEN_PIN_SNIPPET } from './leafletGreenPinSnippet';
+
 /**
  * Single Leaflet + OSM map document for WebView (iOS/Android) and iframe (Expo web).
  * Host updates: native uses injectJavaScript(__cavitourUpdateMap); web uses postMessage.
@@ -26,16 +28,6 @@ export const CAVITOUR_LEAFLET_HTML = `<!DOCTYPE html>
     }
     /* Keep OSM attribution clear of zoom stack */
     .leaflet-bottom.leaflet-left { bottom: calc(8px + env(safe-area-inset-bottom, 0px)) !important; }
-    .cavitour-place-marker { background: none; border: none; }
-    .cavitour-place-pin {
-      width: 26px; height: 34px;
-      background: #7EA00E;
-      border-radius: 50% 50% 50% 0;
-      transform: rotate(-45deg);
-      margin: -17px 0 0 -13px;
-      box-shadow: 0 2px 6px rgba(31, 79, 89, 0.28);
-      border: 2px solid #fff;
-    }
   </style>
 </head>
 <body>
@@ -89,11 +81,7 @@ export const CAVITOUR_LEAFLET_HTML = `<!DOCTYPE html>
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
       }).addTo(map);
 
-      L.Icon.Default.mergeOptions({
-        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png'
-      });
+      ${LEAFLET_GREEN_PIN_SNIPPET}
 
       var markersLayer = L.layerGroup().addTo(map);
       var terminalsLayer = L.layerGroup().addTo(map);
@@ -102,13 +90,6 @@ export const CAVITOUR_LEAFLET_HTML = `<!DOCTYPE html>
       var didFitPlaces = false;
       var activePreviewId = null;
       var activePreviewMarker = null;
-
-      var placeIcon = L.divIcon({
-        className: 'cavitour-place-marker',
-        html: '<motion class="cavitour-place-pin" aria-hidden="true"></motion>',
-        iconSize: [26, 34],
-        iconAnchor: [13, 34]
-      });
 
       function postMarkerPreview(marker, id) {
         var pt = map.latLngToContainerPoint(marker.getLatLng());
@@ -158,7 +139,7 @@ export const CAVITOUR_LEAFLET_HTML = `<!DOCTYPE html>
 
           markers.forEach(function (p) {
             if (p.lat == null || p.lng == null || isNaN(p.lat) || isNaN(p.lng)) return;
-            var m = L.marker([p.lat, p.lng], { icon: placeIcon });
+            var m = L.marker([p.lat, p.lng], { icon: greenPinIcon });
             m.on('click', function (ev) {
               L.DomEvent.stopPropagation(ev);
               postMarkerPreview(m, p.id);
@@ -175,14 +156,7 @@ export const CAVITOUR_LEAFLET_HTML = `<!DOCTYPE html>
 
           terminals.forEach(function (p) {
             if (p.lat == null || p.lng == null || isNaN(p.lat) || isNaN(p.lng)) return;
-            var t = L.circleMarker([p.lat, p.lng], {
-              radius: 8,
-              fillColor: '#7EA00E',
-              color: '#ffffff',
-              weight: 2,
-              opacity: 1,
-              fillOpacity: 0.95
-            });
+            var t = L.marker([p.lat, p.lng], { icon: greenPinIcon });
             t.on('click', function () {
               postToHost({ type: 'markerPress', id: String(p.id), name: String(p.name || '') });
             });

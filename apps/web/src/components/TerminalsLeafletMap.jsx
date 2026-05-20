@@ -9,6 +9,7 @@ import {
   CAVITE_MAP_MAX_ZOOM,
   lockMapToCaviteViewport,
 } from '../lib/caviteMapBounds';
+import { greenLeafletPinIcon } from '../lib/leafletGreenPin';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -18,7 +19,7 @@ L.Icon.Default.mergeOptions({
 });
 
 /**
- * User location + nearby terminals as circle markers; classic pin only for the selected terminal.
+ * User location dot + terminal pins (green); selected terminal uses the default blue pin.
  * @param {{ id: string; name: string; lat: number; lng: number }[]} terminals
  * @param {string | null} selectedId
  * @param {{ lat: number; lng: number } | null} userLocation
@@ -82,22 +83,13 @@ export function TerminalsLeafletMap({ terminals, selectedId, userLocation, onSel
 
     valid.forEach((t) => {
       const idStr = String(t.id);
-      if (sel && idStr === sel) {
-        const m = L.marker([t.lat, t.lng]).addTo(layer);
-        m.bindPopup(String(t.name || 'Terminal'));
-        m.on('click', () => selectRef.current?.(idStr));
-        return;
-      }
-      const c = L.circleMarker([t.lat, t.lng], {
-        radius: 7,
-        fillColor: '#7EA00E',
-        color: '#ffffff',
-        weight: 2,
-        opacity: 1,
-        fillOpacity: 0.92,
-      }).addTo(layer);
-      c.bindPopup(String(t.name || 'Terminal'));
-      c.on('click', () => selectRef.current?.(idStr));
+      const isSelected = sel != null && idStr === sel;
+      const m = L.marker(
+        [t.lat, t.lng],
+        isSelected ? { zIndexOffset: 1000 } : { icon: greenLeafletPinIcon }
+      ).addTo(layer);
+      m.bindPopup(String(t.name || 'Terminal'));
+      m.on('click', () => selectRef.current?.(idStr));
     });
 
     const boundsPoints = valid.map((t) => [t.lat, t.lng]);

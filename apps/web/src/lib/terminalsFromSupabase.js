@@ -1,3 +1,11 @@
+import { getMallTerminalSeedRows } from 'cavitour-shared/mallTerminalsSeed';
+import terminalCoordinates from 'cavitour-shared/terminalCoordinates.json';
+import {
+  isCommuteTourRouteId,
+  isMallTerminalRow,
+  isShowcasedTerminalRouteLink,
+} from 'cavitour-shared/terminalCatalogPolicy';
+
 const CITY_CENTERS = {
   Dasmarinas: [14.3297, 120.9367],
   Bacoor: [14.4594, 120.9597],
@@ -49,9 +57,18 @@ function operatingStatus(firstTrip, lastTrip) {
   return 'Active';
 }
 
-function coordsForTerminal(terminalId, city) {
-  const base = CITY_CENTERS[String(city ?? '').trim()] ?? DEFAULT_CENTER;
-  const idNum = Number(terminalId) || 1;
+function coordsForTerminal(row) {
+  const lat = row.latitude;
+  const lng = row.longitude;
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    return { lat, lng };
+  }
+  const cached = terminalCoordinates[String(row.terminal_id)];
+  if (cached && Number.isFinite(cached.latitude) && Number.isFinite(cached.longitude)) {
+    return { lat: cached.latitude, lng: cached.longitude };
+  }
+  const base = CITY_CENTERS[String(row.terminal_city ?? '').trim()] ?? DEFAULT_CENTER;
+  const idNum = Number(row.terminal_id) || 1;
   const t = idNum * 2.4;
   const r = 0.004 + (idNum % 7) * 0.0014;
   return {
@@ -60,30 +77,80 @@ function coordsForTerminal(terminalId, city) {
   };
 }
 
-function toTerminalCard(row) {
+function toTerminalCard(row, routeCount = 0) {
   const city = cityLabel(row.terminal_city);
-  const { lat, lng } = coordsForTerminal(row.terminal_id, row.terminal_city);
+  const { lat, lng } = coordsForTerminal(row);
   return {
     id: String(row.terminal_id),
     name: row.terminal_name || 'Terminal',
     subtitle: `${city}, Cavite`,
     image: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=900&q=80',
-    blurb: `Public transport terminal serving ${city} and nearby routes.`,
+    blurb: `Mall transport terminal serving ${city} and nearby commuter routes.`,
     city,
-    routes: 0,
+    routes: routeCount,
     lat,
     lng,
     status: operatingStatus(row.first_trip, row.last_trip),
   };
 }
 
+function routeCountByMallTerminal(links) {
+  const counts = new Map();
+  for (const row of links ?? []) {
+    if (!isShowcasedTerminalRouteLink(row)) continue;
+    const id = String(row.terminal_id);
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/** Full Cavite mall terminal list (25) for initial UI before / without Supabase. */
+export function buildMallTerminalCatalog(routeCounts = new Map()) {
+  return getMallTerminalSeedRows()
+    .map((row) => toTerminalCard(row, routeCounts.get(String(row.terminal_id)) ?? 0))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function mergeWithSeedCatalog(liveCards, routeCounts) {
+  const byId = new Map(buildMallTerminalCatalog(routeCounts).map((c) => [c.id, c]));
+  for (const card of liveCards) {
+    byId.set(card.id, {
+      ...card,
+      routes: routeCounts.get(card.id) ?? card.routes ?? byId.get(card.id)?.routes ?? 0,
+    });
+  }
+  return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export async function fetchTerminalsFromSupabase(client) {
-  const { data, error } = await client
-    .from('cavitour_terminals')
-    .select('terminal_id, terminal_name, terminal_city, first_trip, last_trip')
-    .order('terminal_name', { ascending: true });
-  if (error) throw new Error(error.message);
-  return (data ?? []).map(toTerminalCard);
+  let routeCounts = new Map();
+  try {
+    const { data: routeLinks, error: linksError } = await client
+      .from('cavitour_terminal_routes')
+      .select('terminal_id, route_id');
+    if (!linksError) routeCounts = routeCountByMallTerminal(routeLinks);
+  } catch {
+    /* route counts optional */
+  }
+
+  let liveCards = [];
+  try {
+    const { data, error } = await client
+      .from('cavitour_terminals')
+      .select(
+        'terminal_id, terminal_name, terminal_city, first_trip, last_trip, latitude, longitude'
+      )
+      .order('terminal_name', { ascending: true });
+    if (!error) {
+      liveCards = (data ?? [])
+        .filter(isMallTerminalRow)
+        .map((row) => toTerminalCard(row, routeCounts.get(String(row.terminal_id)) ?? 0));
+    }
+  } catch {
+    /* use seed only */
+  }
+
+  return mergeWithSeedCatalog(liveCards, routeCounts);
 }
 
 /** Route rows linked to one terminal (for detail page). */
@@ -97,5 +164,5 @@ export async function fetchRouteRowsForTerminal(client, terminalId) {
     )
     .eq('terminal_id', tid);
   if (error) throw new Error(error.message);
-  return data ?? [];
+  return (data ?? []).filter((row) => isCommuteTourRouteId(row.route_id));
 }

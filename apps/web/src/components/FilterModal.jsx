@@ -65,8 +65,18 @@ function LocationPill({ label, selected, onClick }) {
  * @param {AppliedPlaceFilters | null} [props.appliedFilters]
  * @param {(filters: AppliedPlaceFilters) => void} [props.onApply]
  * @param {any[]} [props.places] — current search list for live result count
+ * @param {boolean} [props.hideCategories] — hide category grid (e.g. terminals page)
+ * @param {string} [props.resultNoun] — label for apply button preview count
  */
-export function FilterModal({ open, onClose, appliedFilters = null, onApply, places = [] }) {
+export function FilterModal({
+  open,
+  onClose,
+  appliedFilters = null,
+  onApply,
+  places = [],
+  hideCategories = false,
+  resultNoun = 'place',
+}) {
   const [categories, setCategories] = useState(() => new Set());
   const [cities, setCities] = useState(() => new Set());
   const [municipalities, setMunicipalities] = useState(() => new Set());
@@ -121,7 +131,9 @@ export function FilterModal({ open, onClose, appliedFilters = null, onApply, pla
     return places.filter((p) => placePassesAppliedFilters(p, pending)).length;
   }, [places, pending]);
 
-  const activeSelectionCount = selectionCount(categories, cities, municipalities);
+  const activeSelectionCount = hideCategories
+    ? cities.size + municipalities.size
+    : selectionCount(categories, cities, municipalities);
 
   const handleApply = () => {
     onApply?.(pending);
@@ -130,12 +142,14 @@ export function FilterModal({ open, onClose, appliedFilters = null, onApply, pla
 
   if (!open) return null;
 
+  const noun = resultNoun;
+  const nounPlural = `${noun}${noun.endsWith('s') ? '' : 's'}`;
   const applyLabel =
     previewCount != null
-      ? `Show ${previewCount} place${previewCount === 1 ? '' : 's'}`
+      ? `Show ${previewCount} ${previewCount === 1 ? noun : nounPlural}`
       : activeSelectionCount > 0
         ? 'Apply filters'
-        : 'Show all places';
+        : `Show all ${nounPlural}`;
 
   return (
     <div
@@ -186,6 +200,7 @@ export function FilterModal({ open, onClose, appliedFilters = null, onApply, pla
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-3">
+          {hideCategories ? null : (
           <section>
             <SectionLabel>Category</SectionLabel>
             <div className="grid grid-cols-4 gap-2.5">
@@ -217,8 +232,9 @@ export function FilterModal({ open, onClose, appliedFilters = null, onApply, pla
               })}
             </div>
           </section>
+          )}
 
-          <section className="mt-6">
+          <section className={hideCategories ? '' : 'mt-6'}>
             <div className="mb-3">
               <p className="mb-2 text-xs font-medium text-neutral-500">Cities</p>
               <div className="flex flex-wrap gap-2">

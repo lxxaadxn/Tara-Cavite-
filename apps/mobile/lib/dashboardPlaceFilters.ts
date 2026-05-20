@@ -1,5 +1,20 @@
 import type { Place } from '../data/mockData';
-import { FILTER_OPTION_LABEL_BY_KEY } from '../components/DashboardFiltersPanel';
+import { FILTER_OPTION_LABEL_BY_KEY } from './dashboardFilterOptions';
+
+export type AppliedPlaceFilters = {
+  selectedCategoryKeys: string[];
+  selectedCityKeys: string[];
+  selectedMunicipalityKeys: string[];
+};
+
+export function countActiveFilters(f: AppliedPlaceFilters | null): number {
+  if (!f) return 0;
+  return (
+    (f.selectedCategoryKeys?.length ?? 0) +
+    (f.selectedCityKeys?.length ?? 0) +
+    (f.selectedMunicipalityKeys?.length ?? 0)
+  );
+}
 
 function fold(s: string): string {
   return s
@@ -70,6 +85,15 @@ function placeMatchesCategoryKeys(place: Place, keys: string[]): boolean {
     if (!words?.length) return false;
     return words.some((w) => blob.includes(w));
   });
+}
+
+export function placePassesAppliedFilters(place: Place, f: AppliedPlaceFilters | null): boolean {
+  if (!f) return true;
+  const catKeys = f.selectedCategoryKeys ?? [];
+  if (catKeys.length && !placeMatchesCategoryKeys(place, catKeys)) return false;
+  const locKeys = [...(f.selectedCityKeys ?? []), ...(f.selectedMunicipalityKeys ?? [])];
+  if (locKeys.length && !placeMatchesLocationKeys(place, locKeys)) return false;
+  return true;
 }
 
 /** Any keyword match satisfies this access dimension (OR within the list). */

@@ -1,5 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { getMallTerminalSeedRows } from 'cavitour-shared/mallTerminalsSeed';
+import {
+  isMallTerminalRow,
+  isShowcasedTerminalRouteLink,
+} from 'cavitour-shared/terminalCatalogPolicy';
 import type { Terminal } from '../data/mockData';
+import terminalCoordinates from 'cavitour-shared/terminalCoordinates.json';
 
 type TerminalRow = {
   terminal_id: number;
@@ -9,6 +15,8 @@ type TerminalRow = {
   terminal_brgy: string | null;
   first_trip: string | null;
   last_trip: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 type TerminalRouteTypeRow = {
@@ -79,6 +87,17 @@ const CITY_CENTERS: Record<string, [number, number]> = {
 const DEFAULT_CENTER: [number, number] = [14.33, 120.94];
 
 function coordsForRow(row: TerminalRow): { latitude: number; longitude: number } {
+  const lat = row.latitude;
+  const lng = row.longitude;
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    return { latitude: lat as number, longitude: lng as number };
+  }
+  const cached = terminalCoordinates[String(row.terminal_id) as keyof typeof terminalCoordinates] as
+    | { latitude: number; longitude: number }
+    | undefined;
+  if (cached && Number.isFinite(cached.latitude) && Number.isFinite(cached.longitude)) {
+    return { latitude: cached.latitude, longitude: cached.longitude };
+  }
   const city = row.terminal_city?.trim() ?? '';
   const base = CITY_CENTERS[city] ?? DEFAULT_CENTER;
   const idNum = row.terminal_id;
@@ -109,7 +128,23 @@ function mapTransportByTerminal(rows: TerminalRouteTypeRow[]): Map<number, strin
   return normalized;
 }
 
-function rowToTerminal(row: TerminalRow, transportTypes: string[]): Terminal | null {
+function routeCountByMallTerminal(
+  links: { terminal_id: number; route_id: number }[]
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const row of links ?? []) {
+    if (!isShowcasedTerminalRouteLink(row)) continue;
+    const id = String(row.terminal_id);
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return counts;
+}
+
+function rowToTerminal(
+  row: TerminalRow,
+  transportTypes: string[],
+  routeCount = 0
+): Terminal | null {
   const coords = coordsForRow(row);
   return {
     id: String(row.terminal_id),
@@ -127,30 +162,86 @@ function rowToTerminal(row: TerminalRow, transportTypes: string[]): Terminal | n
     reminders: [],
     latitude: coords.latitude,
     longitude: coords.longitude,
+    routeCount,
   };
 }
 
-export async function fetchTerminalsFromSupabase(client: SupabaseClient): Promise<Terminal[]> {
-  const { data: terminals, error: terminalsError } = await client
-    .from('cavitour_terminals')
-    .select(
-      'terminal_id, terminal_name, terminal_province, terminal_city, terminal_brgy, first_trip, last_trip'
-    )
-    .order('terminal_name', { ascending: true });
-  if (terminalsError) throw new Error(terminalsError.message);
+function seedRowsAsTerminalRows(): TerminalRow[] {
+  return getMallTerminalSeedRows().map((row) => ({
+    terminal_id: row.terminal_id,
+    terminal_name: row.terminal_name,
+    terminal_province: 'Cavite',
+    terminal_city: row.terminal_city,
+    terminal_brgy: '',
+    first_trip: row.first_trip,
+    last_trip: row.last_trip,
+  }));
+}
 
-  const { data: routeTypes, error: routeTypesError } = await client
-    .from('cavitour_terminal_routes')
-    .select('terminal_id, cavitour_transport_types(transport_name)');
-  if (routeTypesError) throw new Error(routeTypesError.message);
-
-  const ttByTerminal = mapTransportByTerminal((routeTypes ?? []) as TerminalRouteTypeRow[]);
-  const out: Terminal[] = [];
-  for (const row of (terminals ?? []) as TerminalRow[]) {
-    const t = rowToTerminal(row, ttByTerminal.get(row.terminal_id) ?? []);
-    if (t) out.push(t);
+function mergeMallTerminals(live: Terminal[], routeCounts: Map<string, number>): Terminal[] {
+  const byId = new Map<string, Terminal>();
+  for (const row of seedRowsAsTerminalRows()) {
+    const id = String(row.terminal_id);
+    const t = rowToTerminal(row, [], routeCounts.get(id) ?? 0);
+    if (t) byId.set(t.id, t);
   }
-  return out;
+  for (const t of live) {
+    const count = routeCounts.get(t.id) ?? t.routeCount ?? byId.get(t.id)?.routeCount ?? 0;
+    byId.set(t.id, { ...t, routeCount: count });
+  }
+  return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function fetchTerminalsFromSupabase(client: SupabaseClient): Promise<Terminal[]> {
+  let routeCounts = new Map<string, number>();
+  let ttByTerminal = new Map<number, string[]>();
+  try {
+    const { data: routeLinks, error: linksError } = await client
+      .from('cavitour_terminal_routes')
+      .select('terminal_id, route_id');
+    if (!linksError) {
+      routeCounts = routeCountByMallTerminal(
+        (routeLinks ?? []) as { terminal_id: number; route_id: number }[]
+      );
+    }
+  } catch {
+    /* optional */
+  }
+  try {
+    const { data: routeTypes, error: routeTypesError } = await client
+      .from('cavitour_terminal_routes')
+      .select('terminal_id, route_id, cavitour_transport_types(transport_name)');
+    if (!routeTypesError) {
+      const showcasedRouteTypes = ((routeTypes ?? []) as (TerminalRouteTypeRow & { route_id: number })[]).filter(
+        (row) => isShowcasedTerminalRouteLink(row)
+      );
+      ttByTerminal = mapTransportByTerminal(showcasedRouteTypes);
+    }
+  } catch {
+    /* optional */
+  }
+
+  const live: Terminal[] = [];
+  try {
+    const { data: terminals, error: terminalsError } = await client
+      .from('cavitour_terminals')
+      .select(
+        'terminal_id, terminal_name, terminal_province, terminal_city, terminal_brgy, first_trip, last_trip, latitude, longitude'
+      )
+      .order('terminal_name', { ascending: true });
+    if (!terminalsError) {
+      const mallRows = ((terminals ?? []) as TerminalRow[]).filter(isMallTerminalRow);
+      for (const row of mallRows) {
+        const id = String(row.terminal_id);
+        const t = rowToTerminal(row, ttByTerminal.get(row.terminal_id) ?? [], routeCounts.get(id) ?? 0);
+        if (t) live.push(t);
+      }
+    }
+  } catch {
+    /* use seed only */
+  }
+
+  return mergeMallTerminals(live, routeCounts);
 }
 
 export function filterTerminalsByText(terminals: Terminal[], rawQuery: string, limit = 25): Terminal[] {

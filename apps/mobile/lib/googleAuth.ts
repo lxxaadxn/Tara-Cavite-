@@ -1,48 +1,46 @@
-import * as Linking from 'expo-linking';
+import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase } from './supabase';
+import {
+  buildOAuthRedirectUrl,
+  createSessionFromOAuthUrl,
+  getDevOAuthBridgeBaseUrl,
+  getRedirectToFromAuthorizeUrl,
+  isLocalhostAuthUrl,
+  OAuthLocalhostRedirectError,
+  OAuthRedirectMode,
+  patchOAuthAuthorizeUrl,
+  persistOAuthRedirectMode,
+  resolveOAuthRedirectModes,
+} from './authOAuth';
 
 WebBrowser.maybeCompleteAuthSession();
 
-const AUTH_CALLBACK_PATH = 'auth/callback';
+const SUPABASE_PROJECT_REF = 'bmsftpvixpvtjrlclnlz';
 
-/**
- * OAuth redirect must match Supabase → Authentication → URL Configuration → Redirect URLs.
- *
- * Always use Expo’s resolved URL (Expo Go → exp://…, dev client / release → cavitour://…).
- * In Supabase add wildcard patterns once so every device/session works without Metro:
- * - cavitour://**
- * - exp://**
- *
- * @see https://supabase.com/docs/guides/auth/redirect-urls
- */
-function getOAuthRedirectTo(): string {
-  return Linking.createURL(AUTH_CALLBACK_PATH);
+export function getSupabaseAuthConfigUrl(): string {
+  return `https://supabase.com/dashboard/project/${SUPABASE_PROJECT_REF}/auth/url-configuration`;
 }
 
-function pickFirst(value: string | string[] | undefined): string {
-  if (Array.isArray(value)) {
-    return value[0] ?? '';
+function getOAuthSetupHint(mode: OAuthRedirectMode): string {
+  const bridgeBase = getDevOAuthBridgeBaseUrl();
+  if (mode === 'bridge' && bridgeBase) {
+    return (
+      `Google sign-in needs the web dev server.\n\n` +
+      `1. Run: npm run web\n` +
+      `2. In Supabase Redirect URLs add: ${bridgeBase}/**\n` +
+      `3. Set Site URL to ${bridgeBase} (not localhost)`
+    );
   }
-  return value ?? '';
+  return 'Add exp://** and cavitour://** under Supabase → Authentication → Redirect URLs.';
 }
 
-function getHashParams(url: string): Record<string, string> {
-  const hash = url.split('#')[1];
-  if (!hash) {
-    return {};
+async function runGoogleOAuthWithMode(mode: OAuthRedirectMode): Promise<void> {
+  const redirectTo = buildOAuthRedirectUrl(mode);
+
+  if (__DEV__) {
+    console.info(`[authOAuth] mode=${mode} redirectTo=`, redirectTo.split('?')[0]);
   }
-
-  const hashParams = new URLSearchParams(hash);
-  const result: Record<string, string> = {};
-  hashParams.forEach((value, key) => {
-    result[key] = value;
-  });
-  return result;
-}
-
-export async function signInWithGoogleMobile(): Promise<void> {
-  const redirectTo = getOAuthRedirectTo();
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
@@ -59,43 +57,76 @@ export async function signInWithGoogleMobile(): Promise<void> {
     throw new Error('Unable to start Google sign in.');
   }
 
-  const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-  if (result.type !== 'success') {
+  const authorizeUrl = patchOAuthAuthorizeUrl(data.url, redirectTo);
+  const redirectInUrl = getRedirectToFromAuthorizeUrl(authorizeUrl);
+
+  if (isLocalhostAuthUrl(redirectInUrl)) {
+    throw new OAuthLocalhostRedirectError();
+  }
+
+  if (Platform.OS === 'web') {
+    if (typeof window === 'undefined') {
+      throw new Error('Google sign in is not available in this environment.');
+    }
+    window.location.assign(authorizeUrl);
+    return;
+  }
+
+  const result = await WebBrowser.openAuthSessionAsync(authorizeUrl, redirectTo);
+
+  if (result.type === 'success' && result.url) {
+    if (isLocalhostAuthUrl(result.url)) {
+      throw new OAuthLocalhostRedirectError();
+    }
+    await createSessionFromOAuthUrl(result.url);
+    return;
+  }
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (sessionData.session) {
+    return;
+  }
+
+  if (result.type === 'cancel' || result.type === 'dismiss') {
     throw new Error('Google sign in was cancelled.');
   }
 
-  const parsed = Linking.parse(result.url);
-  const query = parsed.queryParams ?? {};
-  const hash = getHashParams(result.url);
-
-  const authCode = pickFirst(query.code);
-  const accessToken = hash.access_token ?? pickFirst(query.access_token);
-  const refreshToken = hash.refresh_token ?? pickFirst(query.refresh_token);
-  const oauthError = hash.error ?? pickFirst(query.error);
-  const oauthErrorDescription = hash.error_description ?? pickFirst(query.error_description);
-
-  if (oauthError) {
-    throw new Error(oauthErrorDescription || oauthError);
-  }
-
-  if (authCode) {
-    const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(authCode);
-    if (exchangeError) {
-      throw exchangeError;
-    }
-    return;
-  }
-
-  if (accessToken && refreshToken) {
-    const { error: sessionError } = await supabase.auth.setSession({
-      access_token: accessToken,
-      refresh_token: refreshToken,
-    });
-    if (sessionError) {
-      throw sessionError;
-    }
-    return;
-  }
-
   throw new Error('Google sign in did not return a valid session.');
+}
+
+export async function signInWithGoogleMobile(): Promise<void> {
+  const modes = await resolveOAuthRedirectModes();
+  let lastError: Error | null = null;
+
+  for (let i = 0; i < modes.length; i++) {
+    const mode = modes[i];
+    const hasFallback = i < modes.length - 1;
+
+    try {
+      await runGoogleOAuthWithMode(mode);
+      await persistOAuthRedirectMode(mode);
+      if (__DEV__ && mode === 'bridge') {
+        console.info('[authOAuth] Using LAN bridge (saved for next sign-in). Keep npm run web running.');
+      }
+      return;
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      lastError = error;
+
+      const localhostFailure = err instanceof OAuthLocalhostRedirectError;
+      if (localhostFailure && hasFallback && mode === 'expo') {
+        if (__DEV__) {
+          console.info('[authOAuth] exp:// blocked by Supabase — retrying via LAN bridge…');
+        }
+        continue;
+      }
+
+      if (localhostFailure) {
+        lastError = new Error(getOAuthSetupHint(mode));
+      }
+      break;
+    }
+  }
+
+  throw lastError ?? new Error('Google sign in failed.');
 }

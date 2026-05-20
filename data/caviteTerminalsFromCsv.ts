@@ -1,4 +1,5 @@
 import type { Terminal } from '../lib/terminalTypes';
+import terminalCoordinates from '../apps/shared/terminalCoordinates.json';
 import terminalRows from './terminals_cavite_rows.json';
 
 type CsvRow = {
@@ -47,6 +48,12 @@ const CITY_CENTERS: Record<string, [number, number]> = {
 const DEFAULT_CENTER: [number, number] = [14.33, 120.94];
 
 function coordsForRow(city: string, idNum: number): { latitude: number; longitude: number } {
+  const cached = terminalCoordinates[String(idNum) as keyof typeof terminalCoordinates] as
+    | { latitude: number; longitude: number }
+    | undefined;
+  if (cached && Number.isFinite(cached.latitude) && Number.isFinite(cached.longitude)) {
+    return { latitude: cached.latitude, longitude: cached.longitude };
+  }
   const key = city.trim();
   const base = CITY_CENTERS[key] ?? DEFAULT_CENTER;
   const t = idNum * 2.3999632297286533;

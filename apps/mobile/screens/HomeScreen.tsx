@@ -1,22 +1,20 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Pressable,
   TextInput,
   Image,
   Dimensions,
-  Modal,
   ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { JamIcon } from '../components/JamIcon';
-import { DashboardFiltersPanel } from '../components/DashboardFiltersPanel';
+import { FilterModal } from '../components/FilterModal';
 import { Header } from '../components/Header';
 import type { Place } from '../data/mockData';
 import { supabase } from '../lib/supabase';
@@ -27,13 +25,11 @@ import {
 } from '../lib/placesFromSupabase';
 import { placeImageSource } from '../lib/placeImageSource';
 import {
-  placeMatchesDashboardFilters,
-  sortPlacesByDashboardSort,
+  placePassesAppliedFilters,
+  type AppliedPlaceFilters,
 } from '../lib/dashboardPlaceFilters';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-/** Max sheet height (shorter sheet); content scrolls inside when tall. */
-const FILTER_SHEET_MAX_HEIGHT = Math.round(SCREEN_HEIGHT * 0.5);
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const H_PAD = 16;
 const CARD_GAP = 40;
 const CARD_WIDTH = Math.min(320, Math.round(SCREEN_WIDTH * 0.74));
@@ -55,12 +51,9 @@ const SEARCH_PLACEHOLDER = '#B3AAAA';
 
 const HomeScreen: React.FC = () => {
   const navigation = useNavigation();
-  const insets = useSafeAreaInsets();
-  const filterSheetPadBottom = Math.max(insets.bottom, 10);
-  const filterScrollMaxHeight = FILTER_SHEET_MAX_HEIGHT - filterSheetPadBottom;
   const [searchQuery, setSearchQuery] = useState('');
   const [filtersVisible, setFiltersVisible] = useState(false);
-  const [filterToggles, setFilterToggles] = useState<Record<string, boolean>>({});
+  const [appliedFilters, setAppliedFilters] = useState<AppliedPlaceFilters | null>(null);
   const [catalogPlaces, setCatalogPlaces] = useState<Place[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogFromSupabase, setCatalogFromSupabase] = useState(false);
@@ -114,9 +107,8 @@ const HomeScreen: React.FC = () => {
   }, []);
 
   const filteredSorted = useMemo(() => {
-    const matched = catalogPlaces.filter((p) => placeMatchesDashboardFilters(p, filterToggles));
-    return sortPlacesByDashboardSort(matched, filterToggles);
-  }, [catalogPlaces, filterToggles]);
+    return catalogPlaces.filter((p) => placePassesAppliedFilters(p, appliedFilters));
+  }, [catalogPlaces, appliedFilters]);
 
   const trendingRow = useMemo(() => filteredSorted.slice(0, 36), [filteredSorted]);
 
@@ -129,10 +121,6 @@ const HomeScreen: React.FC = () => {
     scored.sort((a, b) => a.km - b.km);
     return scored.map((s) => s.place).slice(0, 36);
   }, [filteredSorted, userPt]);
-
-  const onFilterTogglesChange = useCallback((toggles: Record<string, boolean>) => {
-    setFilterToggles(toggles);
-  }, []);
 
   const handleSearch = () => {
     if (searchQuery.trim()) {
@@ -178,13 +166,7 @@ const HomeScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <Header
-        title=""
-        homeBranding
-        showNotification
-        showFilter={false}
-        onNotificationPress={() => navigation.navigate('Notifications')}
-      />
+      <Header title="" homeBranding showFilter={false} />
       <View style={styles.searchFilterRow}>
         <View style={styles.searchPill}>
           <JamIcon name="search" size={18} color={FIGMA.searchGreen} />
@@ -258,38 +240,14 @@ const HomeScreen: React.FC = () => {
         ) : null}
       </ScrollView>
 
-      <Modal
+      <FilterModal
         visible={filtersVisible}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        onRequestClose={() => setFiltersVisible(false)}
-      >
-        <View style={styles.filterModalRoot} accessibilityViewIsModal>
-          <Pressable
-            style={styles.filterModalDismiss}
-            onPress={() => setFiltersVisible(false)}
-            accessibilityLabel="Dismiss filters"
-            accessibilityRole="button"
-          />
-          <View
-            style={[
-              styles.filterSheet,
-              {
-                maxHeight: FILTER_SHEET_MAX_HEIGHT,
-                paddingBottom: filterSheetPadBottom,
-              },
-            ]}
-          >
-            <DashboardFiltersPanel
-              embedded
-              sheet
-              sheetScrollMaxHeight={filterScrollMaxHeight}
-              onTogglesChange={onFilterTogglesChange}
-            />
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setFiltersVisible(false)}
+        appliedFilters={appliedFilters}
+        onApply={setAppliedFilters}
+        places={catalogPlaces}
+        resultNoun="place"
+      />
     </SafeAreaView>
   );
 };
@@ -354,23 +312,6 @@ const styles = StyleSheet.create({
   },
   section: {
     marginBottom: 8,
-  },
-  /** Single flat tint (no elevation) so edges match the center — full window via Modal */
-  filterModalRoot: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.22)',
-    flexDirection: 'column',
-    justifyContent: 'flex-end',
-  },
-  filterModalDismiss: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  filterSheet: {
-    width: '100%',
-    backgroundColor: FIGMA.white,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    overflow: 'hidden',
   },
   sectionTitle: {
     fontFamily: 'Poppins_700Bold',

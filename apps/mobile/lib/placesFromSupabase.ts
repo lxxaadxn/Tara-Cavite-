@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { getDemoEstablishmentById } from 'cavitour-shared/demoPlaces';
 import type { Place } from '../data/mockData';
 import { enrichPlaceWithLocalEstablishmentMedia } from './establishmentLocalImages';
 import { normalizeNtdpCopy } from './ntdpDisplayLabels';
@@ -309,7 +310,46 @@ export async function fetchDashboardPlacesPool(client: SupabaseClient, limit = 1
   return out;
 }
 
+/** Full published catalog (paginated) — use for demo browse / about every establishment. */
+export async function fetchAllPlacesFromSupabase(
+  client: SupabaseClient,
+  pageSize = 1000
+): Promise<Place[]> {
+  const size = Math.min(Math.max(pageSize, 100), 1000);
+  const seen = new Map<string, Place>();
+  let from = 0;
+
+  while (true) {
+    const to = from + size - 1;
+    const data = await queryPublishedPlaces(client, (q) =>
+      q.order('name', { ascending: true }).range(from, to)
+    );
+    for (const row of data as PlacesCatalogRow[]) {
+      const p = rowToPlace(row);
+      if (p && !seen.has(p.id)) seen.set(p.id, p);
+    }
+    if (data.length < size) break;
+    from += size;
+  }
+
+  return Array.from(seen.values());
+}
+
 export async function fetchPlaceById(client: SupabaseClient, id: string): Promise<Place | null> {
-  const data = await queryPublishedPlaces(client, (q) => q.eq('id', id).limit(1));
-  return data[0] ? rowToPlace(data[0] as PlacesCatalogRow) : null;
+  const key = String(id ?? '').trim();
+  if (!key) return null;
+
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key);
+  if (isUuid) {
+    try {
+      const data = await queryPublishedPlaces(client, (q) => q.eq('id', key).limit(1));
+      if (data[0]) return rowToPlace(data[0] as PlacesCatalogRow);
+    } catch {
+      /* demo fallback below */
+    }
+  }
+
+  const demoRow = getDemoEstablishmentById(key);
+  if (!demoRow) return null;
+  return rowToPlace(demoRow as PlacesCatalogRow);
 }

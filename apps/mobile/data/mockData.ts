@@ -99,6 +99,8 @@ export interface Terminal {
   reminders: string[];
   latitude: number;
   longitude: number;
+  /** Showcased route count (mall terminals list, matches web). */
+  routeCount?: number;
 }
 
 // Recent searches (empty initially, will be populated from user's search history)
@@ -277,118 +279,14 @@ export const mockNotifications: Notification[] = [
 ];
 
 /** Optional link to a row in `public.places` (UUID). */
-export type ItineraryStopEstablishmentRef = {
-  placeId: string;
-};
-
-/** Leg / stop copy for itinerary detail screen */
-export interface ItineraryStopContent {
-  name: string;
-  description: string;
-  leg?: string;
-  /** Featured establishment for this stop (detail screen + “Places in this route”). */
-  establishment?: ItineraryStopEstablishmentRef;
-}
-
-/** Saved / featured itineraries (Itineraries tab — Figma) */
-export interface ItineraryCard {
-  id: string;
-  title: string;
-  subtitle: string;
-  image: any;
-  stops?: number;
-  durationLabel?: string;
-  tags?: string[];
-  summary?: string;
-  highlights?: string[];
-  stopList?: ItineraryStopContent[];
-  tips?: string[];
-  bestTime?: string;
-}
-
-export const mockItineraries: ItineraryCard[] = [
-  {
-    id: '1',
-    title: 'Highlands Getaway',
-    subtitle: 'Silang → Tagaytay ridge',
-    image: require('../assets/images/itinerary-green-hills.png'),
-    stops: 5,
-    durationLabel: '1 day',
-    tags: ['Views', 'Food'],
-    summary:
-      'Upland cafés and ridge views — cool air, slow mornings, and easy hops by bus or trike. Built for photos and long chats.',
-    highlights: [
-      'Alfresco coffee with Taal-leaning vistas',
-      'Flexible pacing for half- or full-day',
-      'Mix of bus + tricycle last mile',
-    ],
-    stopList: [
-      {
-        name: 'Silang town proper',
-        description: 'Meet the route, grab water, confirm trike fares upland.',
-        leg: 'Jeepneys from Dasma / Aguinaldo Hwy often pass through.',
-      },
-      {
-        name: 'Garden café strip',
-        description: 'Patios and local roasters — ideal first meal.',
-        leg: 'Short trike hops; agree return if late.',
-      },
-      {
-        name: 'Ridge approach',
-        description: 'Climb with lookout pockets; weekend traffic builds noon–4pm.',
-        leg: 'Bus or van along the highway spine.',
-      },
-      {
-        name: 'Tagaytay viewpoint',
-        description: 'Classic panorama — mist after rain is normal.',
-        leg: 'Walk from drop-offs; bring a wind layer.',
-      },
-      {
-        name: 'Sunset dinner',
-        description: 'West-facing grills and bistros — book on holidays.',
-        leg: 'Vans early evening; ride-apps after dark.',
-      },
-    ],
-    tips: ['Light jacket after 4pm', 'Cash for trikes', 'Long weekends = heavier traffic'],
-    bestTime: 'Weekday mornings · clearer Dec–May',
-  },
-  {
-    id: '2',
-    title: 'Highlands & Hidden Gems',
-    subtitle: 'Alfonso – Magallanes – Maragondon',
-    image: require('../assets/images/itinerary-cycling-vista.png'),
-    stops: 4,
-    durationLabel: 'Full day',
-    tags: ['Nature', 'Cycling'],
-    summary:
-      'A longer loop for riders and road-trippers — inland breeze, smaller towns, and quieter roads than the main Tagaytay strip.',
-    highlights: ['Mix of inland greenery and town stops', 'Good for bikes or a hired van', 'Less mall-heavy than ridge-only days'],
-    stopList: [
-      {
-        name: 'Alfonso jump-off',
-        description: 'Coffee, tires/air check, and route briefing.',
-        leg: 'Private car or van from Silang / Tagaytay access roads.',
-      },
-      {
-        name: 'Magallanes sidestreets',
-        description: 'Low-traffic pockets; respect local school zones.',
-        leg: 'Rolling segments — hydrate every hour.',
-      },
-      {
-        name: 'Maragondon approach',
-        description: 'Greener stretch; photo stops off the shoulder only.',
-        leg: 'Narrow lanes — single-file if cycling.',
-      },
-      {
-        name: 'Late lunch bayan',
-        description: 'Carinderia or small grill before the return climb.',
-        leg: 'Jeepney connections toward coastal roads if extending the trip.',
-      },
-    ],
-    tips: ['Helmet + lights if biking', 'Check weather for afternoon storms', 'Carry repair kit on long rides'],
-    bestTime: 'Start at dawn on weekends',
-  },
-];
+export type {
+  ItineraryStopEstablishmentRef,
+  ItineraryStopContent,
+  PublishedItinerary as ItineraryCard,
+} from './publishedItineraries';
+export { publishedItineraries as mockItineraries } from './publishedItineraries';
+import { publishedItineraries } from './publishedItineraries';
+import type { ItineraryStopEstablishmentRef } from './publishedItineraries';
 
 /** Resolve a featured establishment from the live catalog (`public.places`). */
 export function resolveItineraryEstablishment(
@@ -400,7 +298,7 @@ export function resolveItineraryEstablishment(
 
 /** Unique establishments linked from itinerary stops (requires catalog from Supabase). */
 export function getItineraryEstablishments(itineraryRefId: string, catalog: Place[]): Place[] {
-  const it = mockItineraries.find((x) => x.id === itineraryRefId);
+  const it = publishedItineraries.find((x) => x.id === itineraryRefId);
   if (!it?.stopList?.length || !catalog.length) return [];
   const seen = new Set<string>();
   const out: Place[] = [];

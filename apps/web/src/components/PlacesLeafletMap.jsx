@@ -9,32 +9,39 @@ import {
   CAVITE_MAP_MAX_ZOOM,
   lockMapToCaviteViewport,
 } from '../lib/caviteMapBounds';
-
-/** Reliable marker assets (avoids Vite path issues with leaflet images) */
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-});
+import { greenLeafletPinIcon } from '../lib/leafletGreenPin';
 
 /**
  * @param {{ id: string; name: string; lat: number; lng: number }[]} places
  * @param {{ lat: number; lng: number } | null} [userLocation]
  * @param {(p: { id: string; name: string; lat: number; lng: number }) => void} [onMarkerClick]
+ * @param {(p: { id: string; name: string; lat: number; lng: number }) => void} [onMarkerHover]
+ * @param {() => void} [onMarkerHoverEnd]
  */
-export function PlacesLeafletMap({ places, userLocation, onMarkerClick }) {
+export function PlacesLeafletMap({ places, userLocation, onMarkerClick, onMarkerHover, onMarkerHoverEnd }) {
   const containerRef = useRef(null);
   const clickRef = useRef(onMarkerClick);
+  const hoverRef = useRef(onMarkerHover);
+  const hoverEndRef = useRef(onMarkerHoverEnd);
 
   useEffect(() => {
     clickRef.current = onMarkerClick;
   }, [onMarkerClick]);
 
   useEffect(() => {
+    hoverRef.current = onMarkerHover;
+  }, [onMarkerHover]);
+
+  useEffect(() => {
+    hoverEndRef.current = onMarkerHoverEnd;
+  }, [onMarkerHoverEnd]);
+
+  useEffect(() => {
     if (!containerRef.current) return;
 
-    const valid = (places ?? []).filter((p) => p.lat != null && p.lng != null && Number.isFinite(p.lat) && Number.isFinite(p.lng));
+    const valid = (places ?? []).filter(
+      (p) => p.lat != null && p.lng != null && Number.isFinite(p.lat) && Number.isFinite(p.lng)
+    );
     const map = L.map(containerRef.current, {
       scrollWheelZoom: true,
       zoomControl: false,
@@ -58,8 +65,11 @@ export function PlacesLeafletMap({ places, userLocation, onMarkerClick }) {
       map.setView(CAVITE_MAP_CENTER, CAVITE_MAP_DEFAULT_ZOOM);
     } else {
       valid.forEach((p) => {
-        const m = L.marker([p.lat, p.lng]).addTo(layer);
+        const m = L.marker([p.lat, p.lng], { icon: greenLeafletPinIcon }).addTo(layer);
+        m.bindPopup(String(p.name || 'Establishment'));
         m.on('click', () => clickRef.current?.(p));
+        m.on('mouseover', () => hoverRef.current?.(p));
+        m.on('mouseout', () => hoverEndRef.current?.());
       });
 
       if (hasUserLocation) {
@@ -98,5 +108,5 @@ export function PlacesLeafletMap({ places, userLocation, onMarkerClick }) {
     };
   }, [places, userLocation]);
 
-  return <div ref={containerRef} className="absolute inset-0 w-full h-full min-h-[320px] z-0" />;
+  return <div ref={containerRef} className="absolute inset-0 z-0 h-full w-full min-h-[320px]" />;
 }

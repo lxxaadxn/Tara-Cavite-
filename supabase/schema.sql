@@ -54,6 +54,19 @@ CREATE TABLE IF NOT EXISTS public.places (
 
 CREATE UNIQUE INDEX IF NOT EXISTS places_source_slug_uidx ON public.places (source_slug);
 
+-- Place reviews (one review per user per establishment in public.places)
+CREATE TABLE IF NOT EXISTS public.place_reviews (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  place_id UUID NOT NULL REFERENCES public.places(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  rating SMALLINT NOT NULL CHECK (rating >= 1 AND rating <= 5),
+  body TEXT NOT NULL CHECK (char_length(trim(body)) >= 1 AND char_length(body) <= 4000),
+  is_published BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(place_id, user_id)
+);
+
 -- Saved List Items (many-to-many relationship between lists and places)
 CREATE TABLE IF NOT EXISTS public.saved_list_items (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -107,6 +120,9 @@ CREATE TABLE IF NOT EXISTS public.user_preferences (
 );
 
 -- Indexes for better query performance
+CREATE INDEX IF NOT EXISTS idx_place_reviews_place_id ON public.place_reviews(place_id);
+CREATE INDEX IF NOT EXISTS idx_place_reviews_user_id ON public.place_reviews(user_id);
+CREATE INDEX IF NOT EXISTS idx_place_reviews_place_published ON public.place_reviews(place_id, created_at DESC) WHERE is_published = true;
 CREATE INDEX IF NOT EXISTS idx_saved_lists_user_id ON public.saved_lists(user_id);
 CREATE INDEX IF NOT EXISTS idx_saved_list_items_list_id ON public.saved_list_items(list_id);
 CREATE INDEX IF NOT EXISTS idx_saved_list_items_place_id ON public.saved_list_items(place_id);
@@ -122,6 +138,7 @@ CREATE INDEX IF NOT EXISTS idx_user_preferences_user_id ON public.user_preferenc
 
 -- Enable RLS on all tables
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.place_reviews ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.saved_lists ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.saved_list_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.places ENABLE ROW LEVEL SECURITY;
@@ -142,6 +159,28 @@ CREATE POLICY "Users can update their own profile"
 CREATE POLICY "Users can insert their own profile"
   ON public.user_profiles FOR INSERT
   WITH CHECK (auth.uid() = id);
+
+-- Place reviews policies
+CREATE POLICY "Anyone can read published place reviews"
+  ON public.place_reviews FOR SELECT
+  USING (is_published = true);
+
+CREATE POLICY "Users can read own place reviews"
+  ON public.place_reviews FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can create place reviews"
+  ON public.place_reviews FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own place reviews"
+  ON public.place_reviews FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own place reviews"
+  ON public.place_reviews FOR DELETE
+  USING (auth.uid() = user_id);
 
 -- Saved Lists policies
 CREATE POLICY "Users can view their own lists"
@@ -227,6 +266,9 @@ $$ language 'plpgsql';
 
 -- Triggers for updated_at
 CREATE TRIGGER update_user_profiles_updated_at BEFORE UPDATE ON public.user_profiles
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_place_reviews_updated_at BEFORE UPDATE ON public.place_reviews
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_saved_lists_updated_at BEFORE UPDATE ON public.saved_lists

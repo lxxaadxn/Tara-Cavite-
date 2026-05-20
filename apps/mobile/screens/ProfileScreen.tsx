@@ -1,8 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BottomTabBarHeightContext } from '@react-navigation/bottom-tabs';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { User } from '@supabase/supabase-js';
-import React, { useContext, useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   Alert,
   Image,
@@ -13,230 +12,584 @@ import {
   TouchableOpacity,
   View,
   DeviceEventEmitter,
+  RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { JamIcon } from '../components/JamIcon';
-import type { JamIconName } from '../lib/jamSvgMap';
-import { Colors } from '../constants/theme';
 import { supabase } from '../lib/supabase';
 import {
   DESTINATION_REACHED_UPDATED_EVENT,
-  getThisMonthDestinationReachedCount,
+  getAllDestinationReachedEntries,
+  getThisMonthDestinationReachedEntries,
+  type DestinationReachedEntry,
 } from '../lib/destinationReachedActivity';
+import { fetchSavedItemCountsByListId } from '../lib/savedListItems';
+import {
+  hasCustomAvatarFromSources,
+  resolveAvatarFromSources,
+} from 'cavitour-shared/defaultAvatar';
 
-const HEADER_GREEN = '#7EA00E';
-const MENU_TEXT = '#241D13';
-const LOGOUT_TEXT = '#213502';
-const EMAIL_MUTED = '#AFA7A7';
-const ICON_TEAL = '#1F4F59';
-const AVATAR_SIZE = 136;
-const AVATAR_HALF = AVATAR_SIZE / 2;
-/** Extra green below title before the curved bottom / avatar overlap */
-const HEADER_SPACE_BELOW_TITLE = 40;
-/** Extends the green block further down (beyond half-avatar overlap) */
-const HEADER_EXTEND_PAST_AVATAR = 40;
-/** Extra overlap into the green (larger = avatar sits higher on screen) */
-const AVATAR_PULLUP = 45;
+const PAGE_BG = '#f4f7f9';
+const CARD_WHITE = '#ffffff';
+const TITLE = '#171717';
+const MUTED = '#737373';
+const TEAL = '#1f4f59';
+const OLIVE = '#7ea00e';
+const SIGN_OUT_RED = '#b91c1c';
 
-const defaultAvatar = require('../assets/images/cavitour-logo.png');
+const ACCENT = {
+  pink: '#f4b0b0',
+  teal: '#98d8d1',
+  green: '#d4ed91',
+};
 
-interface MenuItem {
+const PLACEHOLDER_VISIT_IMG =
+  'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&q=80';
+
+type ProfileView = {
+  name: string;
+  nickname: string;
+  roleLabel: string;
+  city: string;
+  email: string;
+  avatarUri: string;
+  hasCustomPhoto: boolean;
+};
+
+type SavedListRow = {
   id: string;
-  title: string;
-  icon: JamIconName;
-  screen: string;
+  name: string;
+  place_count: number;
+  updated_at?: string;
+  type: 'private' | 'shared';
+};
+
+function deriveProfile(user: User | null, profileRow: Record<string, unknown> | null): ProfileView {
+  const meta = (user?.user_metadata ?? {}) as Record<string, unknown>;
+  const nickname =
+    (profileRow?.username as string) ||
+    (meta.nickname as string) ||
+    (meta.username as string) ||
+    (user?.email ? user.email.split('@')[0] : '') ||
+    'CaviTour User';
+  const fullName =
+    (meta.full_name as string) ||
+    (meta.name as string) ||
+    [meta.first_name, meta.last_name].filter(Boolean).join(' ') ||
+    nickname;
+  const created = user?.created_at ? new Date(user.created_at) : null;
+  const daysOnPlatform = created
+    ? Math.max(1, Math.floor((Date.now() - created.getTime()) / 86400000))
+    : 0;
+  return {
+    name: fullName,
+    nickname,
+    roleLabel: daysOnPlatform
+      ? `Traveler · ${daysOnPlatform} days on the platform`
+      : 'Traveler',
+    city: (profileRow?.city as string) || (meta.city as string) || '',
+    email: user?.email || 'No email on account',
+    avatarUri: resolveAvatarFromSources(
+      profileRow as { avatar_url?: string | null },
+      meta
+    ),
+    hasCustomPhoto: hasCustomAvatarFromSources(
+      profileRow as { avatar_url?: string | null },
+      meta
+    ),
+  };
 }
 
-const menuItems: (MenuItem & { sub: string })[] = [
-  { id: '1', title: 'User Details', sub: 'Name & contact', icon: 'user', screen: 'UserDetails' },
-  { id: '2', title: 'History', sub: 'Past routes', icon: 'clock', screen: 'History' },
-  { id: '3', title: 'Saved lists', sub: 'Bookmarks & places', icon: 'bookmark', screen: 'SavedList' },
-  { id: '4', title: 'Preferences', sub: 'Notifications & app', icon: 'cog', screen: 'Preferences' },
-];
+function formatUpdatedLabel(iso?: string | null): string {
+  if (!iso) return 'No recent activity';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 'No recent activity';
+  const date = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  const time = d
+    .toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true })
+    .toLowerCase();
+  return `Update: ${date}, ${time}`;
+}
 
-const menuCardShadow = Platform.select({
-  ios: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 2,
-  },
-  android: { elevation: 3 },
-  default: {},
-});
+function latestIsoFromEntries(entries: DestinationReachedEntry[]): string | null {
+  let latest: string | null = null;
+  for (const e of entries) {
+    if (!e.savedAt) continue;
+    if (!latest || e.savedAt > latest) latest = e.savedAt;
+  }
+  return latest;
+}
+
+function latestIsoFromLists(lists: SavedListRow[]): string | null {
+  let latest: string | null = null;
+  for (const list of lists) {
+    if (list.updated_at && (!latest || list.updated_at > latest)) latest = list.updated_at;
+  }
+  return latest;
+}
+
+function ProfileStatBar({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <View style={styles.statBar}>
+      <Text style={styles.statBarLabel} numberOfLines={2}>
+        {label}
+      </Text>
+      <Text style={styles.statBarValue}>{value}</Text>
+      <View style={[styles.statBarLine, { backgroundColor: color }]} />
+    </View>
+  );
+}
+
+function SummaryCard({
+  title,
+  count,
+  bg,
+  updatedLabel,
+  onPress,
+}: {
+  title: string;
+  count: number;
+  bg: string;
+  updatedLabel: string;
+  onPress?: () => void;
+}) {
+  const inner = (
+    <View style={[styles.summaryCard, { backgroundColor: bg }]}>
+      <Text style={styles.summaryCardTitle}>{title}</Text>
+      <View style={styles.summaryCardFooter}>
+        <Text style={styles.summaryCardUpdated} numberOfLines={2}>
+          {updatedLabel}
+        </Text>
+        <View style={styles.summaryCardBadge}>
+          <Text style={styles.summaryCardBadgeText}>{count}</Text>
+        </View>
+      </View>
+    </View>
+  );
+  if (onPress) {
+    return (
+      <TouchableOpacity onPress={onPress} activeOpacity={0.88} accessibilityRole="button">
+        {inner}
+      </TouchableOpacity>
+    );
+  }
+  return inner;
+}
+
+function RecentVisitCard({
+  card,
+  onPress,
+}: {
+  card: DestinationReachedEntry;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      style={styles.visitCard}
+      onPress={onPress}
+      activeOpacity={0.88}
+      accessibilityRole="button"
+      accessibilityLabel={card.name}
+    >
+      <View style={styles.visitCardImageWrap}>
+        <Image
+          source={{ uri: card.image || PLACEHOLDER_VISIT_IMG }}
+          style={styles.visitCardImage}
+          resizeMode="cover"
+        />
+        <View style={styles.visitCardBadge}>
+          <Text style={styles.visitCardBadgeText}>Visited</Text>
+        </View>
+      </View>
+      <View style={styles.visitCardBody}>
+        <Text style={styles.visitCardName} numberOfLines={1}>
+          {card.name}
+        </Text>
+        <Text style={styles.visitCardSub} numberOfLines={2}>
+          Destination reached this month
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+function PublicListCard({
+  list,
+  onPress,
+}: {
+  list: SavedListRow;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      style={styles.visitCard}
+      onPress={onPress}
+      activeOpacity={0.88}
+      accessibilityRole="button"
+      accessibilityLabel={list.name}
+    >
+      <View style={[styles.visitCardImageWrap, styles.publicListCover]}>
+        <JamIcon ionicon="bookmark" size={32} color={TEAL} />
+        <View style={[styles.visitCardBadge, styles.publicListBadge]}>
+          <Text style={[styles.visitCardBadgeText, styles.publicListBadgeText]}>Public</Text>
+        </View>
+      </View>
+      <View style={styles.visitCardBody}>
+        <Text style={styles.visitCardName} numberOfLines={1}>
+          {list.name}
+        </Text>
+        <Text style={styles.visitCardSub}>
+          {list.place_count} {list.place_count === 1 ? 'place' : 'places'}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
 
 const ProfileScreen: React.FC = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
   const [user, setUser] = useState<User | null>(null);
-  const [displayName, setDisplayName] = useState('Username');
-  const [phoneDisplay, setPhoneDisplay] = useState('');
-  const [activityMonthCount, setActivityMonthCount] = useState(0);
+  const [profile, setProfile] = useState<ProfileView>(() => deriveProfile(null, null));
+  const [lists, setLists] = useState<SavedListRow[]>([]);
+  const [monthVisits, setMonthVisits] = useState<DestinationReachedEntry[]>([]);
+  const [allTimeVisitCount, setAllTimeVisitCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const loadUserAndStats = useCallback(async () => {
-    const {
-      data: { user: u },
-    } = await supabase.auth.getUser();
-    setUser(u);
+  const loadProfileData = useCallback(async (isRefresh = false) => {
+    try {
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
 
-    if (u) {
-      const { data: profile } = await supabase
+      const {
+        data: { user: u },
+      } = await supabase.auth.getUser();
+      setUser(u);
+
+      if (!u) {
+        setProfile(deriveProfile(null, null));
+        setLists([]);
+        setMonthVisits([]);
+        setAllTimeVisitCount(0);
+        return;
+      }
+
+      const { data: profileRow } = await supabase
         .from('user_profiles')
-        .select('username, phone')
+        .select('username, avatar_url, city, phone')
         .eq('id', u.id)
-        .single();
+        .maybeSingle();
 
-      const name =
-        profile?.username ||
-        (u.user_metadata?.username as string) ||
-        u.email?.split('@')[0] ||
-        'Username';
-      setDisplayName(name);
-      const metaPhone = (u.user_metadata?.phone as string) || '';
-      setPhoneDisplay(profile?.phone || metaPhone || '');
+      setProfile(deriveProfile(u, profileRow ?? null));
 
-      const visitCount = await getThisMonthDestinationReachedCount(u.id);
-      setActivityMonthCount(visitCount);
-    } else {
-      setDisplayName('Username');
-      setPhoneDisplay('');
-      setActivityMonthCount(0);
+      const [monthEntries, allEntries] = await Promise.all([
+        getThisMonthDestinationReachedEntries(u.id),
+        getAllDestinationReachedEntries(u.id),
+      ]);
+      setMonthVisits(monthEntries);
+      setAllTimeVisitCount(allEntries.length);
+
+      const { data: listRows, error } = await supabase
+        .from('saved_lists')
+        .select('id, name, type, updated_at, created_at')
+        .eq('user_id', u.id)
+        .order('updated_at', { ascending: false });
+
+      if (error || !listRows?.length) {
+        setLists([]);
+        return;
+      }
+
+      const listIds = listRows.map((l) => l.id);
+      let counts: Record<string, number> = {};
+      try {
+        counts = await fetchSavedItemCountsByListId(supabase, listIds);
+      } catch {
+        counts = {};
+      }
+
+      setLists(
+        listRows.map((l) => ({
+          id: l.id,
+          name: l.name,
+          type: l.type as 'private' | 'shared',
+          place_count: counts[l.id] ?? 0,
+          updated_at: l.updated_at ?? l.created_at,
+        }))
+      );
+    } catch (e) {
+      console.error('Profile load error:', e);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
   useFocusEffect(
-    React.useCallback(() => {
-      loadUserAndStats();
-    }, [loadUserAndStats])
+    useCallback(() => {
+      void loadProfileData(false);
+    }, [loadProfileData])
   );
 
   useEffect(() => {
     const sub = DeviceEventEmitter.addListener(DESTINATION_REACHED_UPDATED_EVENT, () => {
-      void loadUserAndStats();
+      void loadProfileData(true);
     });
     return () => sub.remove();
-  }, [loadUserAndStats]);
+  }, [loadProfileData]);
 
-  const handleLogout = async () => {
-    Alert.alert('Log Out', 'Are you sure you want to log out?', [
+  const savedPlaceCount = useMemo(
+    () => lists.reduce((sum, l) => sum + l.place_count, 0),
+    [lists]
+  );
+  const publicLists = useMemo(() => lists.filter((l) => l.type === 'shared'), [lists]);
+  const recentVisits = useMemo(() => monthVisits.slice(0, 6), [monthVisits]);
+
+  const summaryMeta = useMemo(
+    () => ({
+      monthUpdated: formatUpdatedLabel(latestIsoFromEntries(monthVisits)),
+      savedUpdated: formatUpdatedLabel(latestIsoFromLists(lists)),
+      publicUpdated: formatUpdatedLabel(latestIsoFromLists(publicLists)),
+    }),
+    [monthVisits, lists, publicLists]
+  );
+
+  const handleLogout = () => {
+    Alert.alert('Sign out?', 'You will need to sign in again to access your profile and saved lists.', [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Log Out',
+        text: 'Sign out',
         style: 'destructive',
         onPress: async () => {
           try {
             await supabase.auth.signOut();
             await AsyncStorage.removeItem('isAuthenticated');
-          } catch (error) {
-            console.error('Error during logout:', error);
-            Alert.alert('Error', 'Failed to log out. Please try again.');
+          } catch {
+            Alert.alert('Error', 'Could not sign out. Please try again.');
           }
         },
       },
     ]);
   };
 
-  const scrollBottom = tabBarHeight + Math.max(insets.bottom, 12) + 24;
+  const openPlace = (placeId: string) => {
+    (navigation as { navigate: (name: string, params: object) => void }).navigate('AboutEstablishment', {
+      placeId,
+    });
+  };
+
+  const openList = (list: SavedListRow) => {
+    (navigation as { navigate: (name: string, params: object) => void }).navigate('SavedListDetail', {
+      listId: list.id,
+      list: {
+        id: list.id,
+        name: list.name,
+        icon_name: 'bookmark',
+        type: list.type,
+      },
+    });
+  };
+
+  const scrollBottom = Math.max(insets.bottom, 12) + 24;
+  const showAvatarImage = profile.hasCustomPhoto && profile.avatarUri.startsWith('http');
+
+  if (loading && !refreshing) {
+    return (
+      <View style={[styles.root, styles.centered]}>
+        <ActivityIndicator size="large" color={OLIVE} />
+        <Text style={styles.loadingText}>Loading profile…</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.root}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottom }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: insets.top + 12, paddingBottom: scrollBottom },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void loadProfileData(true)}
+            tintColor={OLIVE}
+            colors={[OLIVE]}
+          />
+        }
       >
-        <View
-          style={[
-            styles.headerGreen,
-            {
-              paddingTop: insets.top + 20,
-              paddingBottom: AVATAR_HALF + HEADER_EXTEND_PAST_AVATAR,
-            },
-          ]}
-        >
-          <Text style={styles.headerTitle} pointerEvents="none">
-            Profile Settings
-          </Text>
-          <View style={styles.headerSpacerBelowTitle} />
+        <Text style={styles.screenTitle}>Profile</Text>
+
+        {/* Header card — matches web mobile profile */}
+        <View style={styles.card}>
+          <View style={styles.headerRow}>
+            <View style={styles.avatarBlock}>
+              {showAvatarImage ? (
+                <Image
+                  source={{ uri: profile.avatarUri }}
+                  style={styles.avatar}
+                  resizeMode="cover"
+                  accessibilityLabel="Profile picture"
+                />
+              ) : (
+                <View style={styles.avatarPlaceholder} accessibilityLabel="Default profile picture">
+                  <JamIcon ionicon="person" size={40} color="#b8c4ce" />
+                </View>
+              )}
+              <TouchableOpacity
+                style={styles.avatarEditBtn}
+                onPress={() => navigation.navigate('UserDetails' as never)}
+                accessibilityRole="button"
+                accessibilityLabel="Edit profile"
+              >
+                <JamIcon name="pencil" size={14} color={MUTED} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.headerTextCol}>
+              <View style={styles.headerTitleRow}>
+                <View style={styles.headerTitleWrap}>
+                  <Text style={styles.nickname} numberOfLines={2}>
+                    {profile.nickname || 'Add nickname in Edit profile'}
+                  </Text>
+                  <Text style={styles.roleLabel}>{profile.roleLabel}</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.headerEditIcon}
+                  onPress={() => navigation.navigate('UserDetails' as never)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Edit profile"
+                >
+                  <JamIcon name="pencil" size={16} color={TITLE} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.infoGrid}>
+            <View style={styles.infoRow}>
+              <JamIcon ionicon="person-outline" size={16} color="#a3a3a3" />
+              <Text style={styles.infoText} numberOfLines={2}>
+                {profile.name}
+              </Text>
+            </View>
+            <View style={styles.infoRow}>
+              <JamIcon name="document" size={16} color="#a3a3a3" />
+              <Text style={styles.infoText} numberOfLines={1}>
+                {profile.email}
+              </Text>
+            </View>
+            <View style={styles.infoRow}>
+              <JamIcon ionicon="location-outline" size={16} color="#a3a3a3" />
+              <Text style={styles.infoText}>{profile.city || 'Cavite, Philippines'}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <JamIcon name="world" size={16} color="#a3a3a3" />
+              <Text style={styles.infoText}>CaviTour traveler</Text>
+            </View>
+          </View>
+
+          <View style={styles.statsRow}>
+            <ProfileStatBar label="Saved places" value={savedPlaceCount} color={ACCENT.pink} />
+            <ProfileStatBar label="Destinations reached" value={allTimeVisitCount} color={ACCENT.teal} />
+            <ProfileStatBar label="Public collections" value={publicLists.length} color={ACCENT.green} />
+          </View>
         </View>
 
-        <View style={[styles.avatarOverlap, { marginTop: -(AVATAR_HALF + AVATAR_PULLUP) }]}>
-          {user?.user_metadata?.avatar_url || user?.user_metadata?.picture ? (
-            <Image
-              source={{ uri: String(user.user_metadata.avatar_url ?? user.user_metadata.picture) }}
-              style={styles.avatar}
-              resizeMode="cover"
-              accessibilityLabel="Profile picture"
+        {/* My Summary */}
+        <View style={styles.card}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>My Summary</Text>
+            <View style={styles.sectionPill}>
+              <Text style={styles.sectionPillText}>This month</Text>
+            </View>
+          </View>
+          <View style={styles.summaryGrid}>
+            <SummaryCard
+              title="Visits this month"
+              count={monthVisits.length}
+              bg={ACCENT.green}
+              updatedLabel={summaryMeta.monthUpdated}
             />
+            <SummaryCard
+              title="Saved places"
+              count={savedPlaceCount}
+              bg={ACCENT.teal}
+              updatedLabel={summaryMeta.savedUpdated}
+              onPress={() => navigation.navigate('SavedList' as never)}
+            />
+            <SummaryCard
+              title="Public collections"
+              count={publicLists.length}
+              bg={ACCENT.pink}
+              updatedLabel={summaryMeta.publicUpdated}
+              onPress={() => navigation.navigate('SavedList' as never)}
+            />
+          </View>
+        </View>
+
+        {/* Recent visits */}
+        <View style={styles.card}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recent visits ({monthVisits.length})</Text>
+            <View style={styles.sectionPill}>
+              <Text style={styles.sectionPillText}>This month</Text>
+            </View>
+          </View>
+          {recentVisits.length > 0 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.visitScroll}
+            >
+              {recentVisits.map((card) => (
+                <RecentVisitCard key={card.id} card={card} onPress={() => openPlace(card.id)} />
+              ))}
+            </ScrollView>
           ) : (
-            <Image
-              source={defaultAvatar}
-              style={styles.avatar}
-              resizeMode="cover"
-              accessibilityLabel="Default profile logo"
-            />
+            <Text style={styles.emptyHint}>
+              You haven&apos;t reached a destination yet. After a trip, open Directions and tap
+              &quot;Destination Reached&quot;.
+            </Text>
           )}
         </View>
 
-        <View style={styles.identityBlock}>
-          <Text style={styles.username}>{displayName}</Text>
-          <Text style={styles.email}>{user?.email ?? 'username@gmail.com'}</Text>
-          {phoneDisplay ? <Text style={styles.phoneLine}>{phoneDisplay}</Text> : null}
-        </View>
-
-        <TouchableOpacity
-          style={styles.editProfileBtn}
-          onPress={() => navigation.navigate('UserDetails' as never)}
-          accessibilityRole="button"
-          accessibilityLabel="Edit profile"
-        >
-          <Text style={styles.editProfileBtnText}>Edit profile</Text>
-        </TouchableOpacity>
-
-        <View style={styles.activityCard}>
-          <Text style={styles.activityTitle}>Activity this month</Text>
-          <Text style={styles.activityCount}>{activityMonthCount}</Text>
-          <Text style={styles.activityCaption}>destinations reached (this month)</Text>
-          {activityMonthCount === 0 ? (
-            <Text style={styles.activityHint}>
-              After a trip, open a place → Directions → tap “Destination Reached” (above See full map). Opening the map
-              alone does not count.
-            </Text>
-          ) : null}
-        </View>
-
-        <View style={styles.menuList}>
-          {menuItems.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={styles.menuCard}
-              onPress={() => navigation.navigate(item.screen as never)}
-              activeOpacity={0.75}
-              accessibilityLabel={`Navigate to ${item.title}`}
-              accessibilityRole="button"
+        {publicLists.length > 0 ? (
+          <View style={styles.card}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Public collections ({publicLists.length})</Text>
+              <TouchableOpacity
+                onPress={() => navigation.navigate('SavedList' as never)}
+                style={styles.manageLink}
+                accessibilityRole="button"
+              >
+                <Text style={styles.manageLinkText}>Manage saved</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.visitScroll}
             >
-              <View style={styles.menuIconWrap}>
-                <JamIcon name={item.icon} size={22} color={ICON_TEAL} />
-              </View>
-              <View style={styles.menuTextCol}>
-                <Text style={styles.menuItemText}>{item.title}</Text>
-                <Text style={styles.menuItemSub}>{item.sub}</Text>
-              </View>
-              <JamIcon ionicon="chevron-forward" size={22} color={MENU_TEXT} />
-            </TouchableOpacity>
-          ))}
-        </View>
+              {publicLists.map((list) => (
+                <PublicListCard key={list.id} list={list} onPress={() => openList(list)} />
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
 
         <TouchableOpacity
-          style={styles.logoutRow}
+          style={styles.signOutBtn}
           onPress={handleLogout}
-          accessibilityLabel="Log out"
           accessibilityRole="button"
+          accessibilityLabel="Sign out"
         >
-          <JamIcon name="log-out" size={24} color={LOGOUT_TEXT} />
-          <Text style={styles.logoutText}>Log out</Text>
+          <Text style={styles.signOutBtnText}>Sign out</Text>
         </TouchableOpacity>
 
         <Text style={styles.footerTag}>CaviTour · Explore Cavite & beyond</Text>
@@ -245,190 +598,361 @@ const ProfileScreen: React.FC = () => {
   );
 };
 
+const cardShadow = Platform.select({
+  ios: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.05,
+    shadowRadius: 15,
+  },
+  android: { elevation: 3 },
+  default: {},
+});
+
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: Colors.white,
+    backgroundColor: PAGE_BG,
+  },
+  centered: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    color: MUTED,
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
+    paddingHorizontal: 16,
     flexGrow: 1,
   },
-  headerGreen: {
-    backgroundColor: HEADER_GREEN,
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
-    alignItems: 'center',
+  screenTitle: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 22,
+    color: TITLE,
+    marginBottom: 14,
   },
-  headerTitle: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 20,
-    lineHeight: 24,
-    color: Colors.white,
-    textAlign: 'center',
+  card: {
+    backgroundColor: CARD_WHITE,
+    borderRadius: 28,
+    padding: 20,
+    marginBottom: 14,
+    ...cardShadow,
   },
-  headerSpacerBelowTitle: {
-    height: HEADER_SPACE_BELOW_TITLE,
-    width: '100%',
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 16,
   },
-  avatarOverlap: {
-    alignSelf: 'center',
-    zIndex: 2,
-    borderRadius: AVATAR_HALF,
-    backgroundColor: Colors.white,
-    padding: 3,
+  avatarBlock: {
+    position: 'relative',
   },
   avatar: {
-    width: AVATAR_SIZE,
-    height: AVATAR_SIZE,
-    borderRadius: AVATAR_HALF,
-    backgroundColor: Colors.white,
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+    backgroundColor: '#e8ecef',
   },
-  identityBlock: {
+  avatarPlaceholder: {
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+    backgroundColor: '#e8ecef',
     alignItems: 'center',
-    marginTop: 12,
-    paddingHorizontal: 24,
-    marginBottom: 16,
+    justifyContent: 'center',
+  },
+  avatarEditBtn: {
+    position: 'absolute',
+    right: -4,
+    bottom: -4,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: CARD_WHITE,
+    borderWidth: 1,
+    borderColor: '#e5e5e5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.08,
+        shadowRadius: 3,
+      },
+      android: { elevation: 2 },
+      default: {},
+    }),
+  },
+  headerTextCol: {
+    flex: 1,
+    minWidth: 0,
+    paddingTop: 4,
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: 8,
   },
-  username: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 24,
-    lineHeight: 28,
-    color: LOGOUT_TEXT,
-    textAlign: 'center',
+  headerTitleWrap: {
+    flex: 1,
+    minWidth: 0,
   },
-  email: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-    lineHeight: 24,
-    color: EMAIL_MUTED,
-    textAlign: 'center',
-  },
-  phoneLine: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-    color: ICON_TEAL,
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  editProfileBtn: {
-    alignSelf: 'center',
-    marginTop: 14,
-    marginBottom: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 28,
-    borderRadius: 999,
-    backgroundColor: HEADER_GREEN,
-  },
-  editProfileBtnText: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 14,
-    color: Colors.white,
-  },
-  activityCard: {
-    marginHorizontal: 16,
-    marginBottom: 20,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-    backgroundColor: '#f4f6ec',
+  headerEditIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(31, 79, 89, 0.1)',
+    borderColor: '#e5e5e5',
+    backgroundColor: CARD_WHITE,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  activityTitle: {
+  nickname: {
     fontFamily: 'Poppins_700Bold',
-    fontSize: 16,
-    color: ICON_TEAL,
-    marginBottom: 4,
+    fontSize: 22,
+    lineHeight: 28,
+    color: TITLE,
   },
-  activityCount: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 40,
-    lineHeight: 44,
-    color: HEADER_GREEN,
+  roleLabel: {
     marginTop: 4,
-  },
-  activityCaption: {
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
-    color: EMAIL_MUTED,
-    marginTop: 4,
+    color: MUTED,
   },
-  activityHint: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    lineHeight: 18,
-    color: ICON_TEAL,
-    marginTop: 10,
-    opacity: 0.9,
-  },
-  menuList: {
-    paddingHorizontal: 16,
-    gap: 11,
-  },
-  menuCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    gap: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(31, 79, 89, 0.1)',
-    ...menuCardShadow,
-  },
-  menuIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: 'rgba(31, 79, 89, 0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  menuTextCol: {
-    flex: 1,
-    gap: 2,
-  },
-  menuItemText: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 16,
-    lineHeight: 22,
-    color: MENU_TEXT,
-  },
-  menuItemSub: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    lineHeight: 16,
-    color: EMAIL_MUTED,
-  },
-  logoutRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+  infoGrid: {
+    marginTop: 18,
     gap: 10,
-    alignSelf: 'center',
-    width: '100%',
-    paddingTop: 28,
-    paddingBottom: 12,
   },
-  logoutText: {
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minHeight: 24,
+  },
+  infoText: {
+    flex: 1,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    color: '#525252',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 20,
+    paddingTop: 18,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#f0f0f0',
+  },
+  statBar: {
+    flex: 1,
+    minWidth: 0,
+  },
+  statBarLabel: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    lineHeight: 14,
+    color: MUTED,
+    minHeight: 28,
+  },
+  statBarValue: {
+    marginTop: 6,
     fontFamily: 'Poppins_700Bold',
-    fontSize: 16,
-    lineHeight: 24,
-    color: LOGOUT_TEXT,
+    fontSize: 24,
+    lineHeight: 30,
+    color: TITLE,
+  },
+  statBarLine: {
+    marginTop: 8,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'stretch',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 14,
+  },
+  sectionTitle: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 18,
+    color: TITLE,
+    flexShrink: 1,
+  },
+  sectionPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#e5e5e5',
+    backgroundColor: '#fafafa',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  sectionPillText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#525252',
+  },
+  summaryGrid: {
+    gap: 10,
+  },
+  summaryCard: {
+    minHeight: 130,
+    borderRadius: 22,
+    padding: 16,
+    justifyContent: 'space-between',
+  },
+  summaryCardTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: '#262626',
+  },
+  summaryCardFooter: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginTop: 16,
+  },
+  summaryCardUpdated: {
+    flex: 1,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    color: 'rgba(38, 38, 38, 0.75)',
+  },
+  summaryCardBadge: {
+    minWidth: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  summaryCardBadgeText: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 14,
+    color: TITLE,
+  },
+  visitScroll: {
+    gap: 12,
+    paddingRight: 4,
+  },
+  visitCard: {
+    width: 168,
+    borderRadius: 22,
+    backgroundColor: CARD_WHITE,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+      },
+      android: { elevation: 2 },
+      default: {},
+    }),
+  },
+  visitCardImageWrap: {
+    aspectRatio: 4 / 3,
+    backgroundColor: '#f5f5f5',
+    position: 'relative',
+  },
+  visitCardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  visitCardBadge: {
+    position: 'absolute',
+    left: 10,
+    top: 10,
+    backgroundColor: OLIVE,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  visitCardBadgeText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+    color: '#fff',
+  },
+  visitCardBody: {
+    padding: 12,
+  },
+  visitCardName: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: TITLE,
+  },
+  visitCardSub: {
+    marginTop: 4,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    color: MUTED,
+    lineHeight: 15,
+  },
+  publicListCover: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#eef4f6',
+  },
+  publicListBadge: {
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  publicListBadgeText: {
+    color: TEAL,
+  },
+  emptyHint: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    color: MUTED,
+  },
+  manageLink: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#d4d4d4',
+    backgroundColor: CARD_WHITE,
+  },
+  manageLinkText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+    color: '#404040',
+  },
+  signOutBtn: {
+    alignSelf: 'flex-end',
+    marginTop: 4,
+    marginBottom: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    backgroundColor: '#fef2f2',
+  },
+  signOutBtnText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: SIGN_OUT_RED,
   },
   footerTag: {
     fontFamily: 'Inter_400Regular',
     fontSize: 12,
-    lineHeight: 18,
-    color: EMAIL_MUTED,
+    color: MUTED,
     textAlign: 'center',
-    paddingHorizontal: 24,
-    paddingBottom: 8,
+    marginBottom: 8,
   },
 });
 

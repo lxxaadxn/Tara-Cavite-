@@ -1,6 +1,13 @@
 import { Colors } from '../constants/Colors';
 
 /** Floating pill tab bar — shared so nested screens can restore after hiding it. */
+/** Space to reserve below scroll content when the floating tab bar is visible. */
+export function getFloatingTabBarScrollPadding(bottomInset: number): number {
+  const bottomPad = Math.max(bottomInset, 10);
+  const barHeight = 64 + Math.min(bottomInset, 8);
+  return bottomPad + barHeight + 16;
+}
+
 export function getMainFloatingTabBarStyle(bottomInset: number) {
   const bottomPad = Math.max(bottomInset, 10);
   return {
@@ -8,7 +15,7 @@ export function getMainFloatingTabBarStyle(bottomInset: number) {
     left: 16,
     right: 16,
     bottom: bottomPad,
-    height: 56 + Math.min(bottomInset, 8),
+    height: 64 + Math.min(bottomInset, 8),
     paddingTop: 8,
     paddingBottom: Math.min(bottomInset, 12) || 8,
     borderRadius: 30,

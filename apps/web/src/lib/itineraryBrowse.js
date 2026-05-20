@@ -1,4 +1,5 @@
 import { publishedItineraries } from '../data/mockItineraries';
+import { catalogPlaceToFeatured, resolveEstablishment } from './itineraryPlaces';
 import { cityMunMatchesFilter } from './placeFilterHelpers';
 
 const PLACEHOLDER_IMG = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&q=80';
@@ -16,33 +17,39 @@ export function extractMunicipalityFromStopPlace(place) {
   return parts[0] || null;
 }
 
-export function buildRouteEstablishmentRows() {
+/**
+ * @param {object[]} [catalog] places from Supabase
+ */
+export function buildRouteEstablishmentRows(catalog = []) {
   const rows = [];
   const seen = new Set();
   for (const itinerary of publishedItineraries) {
     for (const stop of itinerary.stopList || []) {
-      if (!stop.place?.name) continue;
-      const key = `${stop.place.name}::${stop.place.address || ''}`;
+      const catalogPlace = resolveEstablishment(stop.establishment, catalog);
+      const featured = catalogPlaceToFeatured(catalogPlace);
+      if (!featured?.name) continue;
+      const key = featured.id || `${featured.name}::${featured.address || ''}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      const city_mun = extractMunicipalityFromStopPlace(stop.place);
+      const city_mun = extractMunicipalityFromStopPlace(featured);
       rows.push({
         key: `route-${key}`,
         kind: 'route',
-        name: stop.place.name,
-        address: stop.place.address || 'Cavite, Philippines',
-        image: stop.place.image || itinerary.image,
+        name: featured.name,
+        address: featured.address || 'Cavite, Philippines',
+        image: featured.image || itinerary.image,
         city_mun,
-        type: stop.place.type || 'Featured stop',
-        ntdp_category: stop.place.ntdp_category ?? null,
-        type_code: stop.place.type_code ?? null,
-        ta_category: stop.place.ta_category ?? null,
-        lgu_slug: stop.place.lgu_slug ?? null,
-        description: stop.place.description ?? null,
-        searchable_text: stop.place.searchable_text ?? null,
-        created_at: stop.place.created_at ?? null,
-        lat: stop.place.lat ?? null,
-        lng: stop.place.lng ?? null,
+        type: featured.type || 'Featured stop',
+        ntdp_category: featured.ntdp_category ?? null,
+        type_code: featured.type_code ?? null,
+        ta_category: featured.ta_category ?? null,
+        lgu_slug: featured.lgu_slug ?? null,
+        description: featured.description ?? null,
+        searchable_text: featured.searchable_text ?? null,
+        created_at: featured.created_at ?? null,
+        lat: featured.lat ?? null,
+        lng: featured.lng ?? null,
+        placeId: featured.id,
         itineraryId: itinerary.id,
         itineraryTitle: itinerary.title,
       });
@@ -51,16 +58,11 @@ export function buildRouteEstablishmentRows() {
   return rows;
 }
 
-function findHostItineraryForMunicipality(cityMun) {
-  if (!cityMun) return null;
-  return (
-    publishedItineraries.find((it) =>
-      (it.stopList || []).some((stop) => {
-        const cm = extractMunicipalityFromStopPlace(stop.place);
-        return cm && cityMunMatchesFilter(cityMun, cm);
-      })
-    ) ?? null
-  );
+function findHostItineraryForMunicipality(cityMun, routeRows) {
+  if (!cityMun || !routeRows?.length) return null;
+  const row = routeRows.find((r) => r.city_mun && cityMunMatchesFilter(cityMun, r.city_mun));
+  if (!row?.itineraryId) return null;
+  return publishedItineraries.find((it) => it.id === row.itineraryId) ?? null;
 }
 
 /**
@@ -80,7 +82,7 @@ export function mergeSupabaseIntoItineraryBrowse(routeRows, supabasePlaces) {
     const ok = munLabels.some((m) => cityMunMatchesFilter(p.city_mun, m));
     if (!ok) continue;
     if (out.some((r) => r.kind === 'supabase' && r.placeId === p.id)) continue;
-    const hostIt = findHostItineraryForMunicipality(p.city_mun);
+    const hostIt = findHostItineraryForMunicipality(p.city_mun, routeRows);
     out.push({
       key: `sb-${p.id}`,
       kind: 'supabase',
@@ -105,4 +107,3 @@ export function mergeSupabaseIntoItineraryBrowse(routeRows, supabasePlaces) {
   }
   return out;
 }
-

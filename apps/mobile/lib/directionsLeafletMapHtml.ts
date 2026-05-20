@@ -1,3 +1,5 @@
+import { LEAFLET_GREEN_PIN_SNIPPET } from './leafletGreenPinSnippet';
+
 /**
  * Directions-only map: route polyline, origin (you), destination. Same Cavite bounds as main map.
  * Embedded in a card — zoom controls sit just inside the map (no tab-bar offset).
@@ -58,11 +60,7 @@ export const DIRECTIONS_LEAFLET_HTML = `<!DOCTYPE html>
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
       }).addTo(map);
 
-      L.Icon.Default.mergeOptions({
-        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png'
-      });
+      ${LEAFLET_GREEN_PIN_SNIPPET}
 
       var routeLayer = L.layerGroup().addTo(map);
       var markersLayer = L.layerGroup().addTo(map);
@@ -90,7 +88,7 @@ export const DIRECTIONS_LEAFLET_HTML = `<!DOCTYPE html>
 
           if (dLat == null || dLng == null || isNaN(dLat) || isNaN(dLng)) return;
 
-          L.marker([dLat, dLng]).bindPopup('Destination').addTo(markersLayer);
+          L.marker([dLat, dLng], { icon: greenPinIcon }).bindPopup('Destination').addTo(markersLayer);
 
           if (uLat != null && uLng != null && !isNaN(uLat) && !isNaN(uLng)) {
             L.circleMarker([uLat, uLng], {

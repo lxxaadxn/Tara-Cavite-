@@ -1,6 +1,7 @@
 /**
  * Cavite establishments via public.places (synced from STA inventory + admin destinations).
  */
+import { getDemoEstablishmentById } from 'cavitour-shared/demoPlaces';
 import { enrichPlaceWithLocalEstablishmentMedia } from './establishmentLocalImages';
 
 /** Log PostgREST errors in dev (missing table, RLS, column mismatch). */
@@ -191,6 +192,20 @@ export async function fetchAllPlacesFromSupabase(client, pageSize = 1000) {
 }
 
 export async function fetchPlaceById(client, id) {
-  const rows = await queryPublishedPlaces(client, (q) => q.eq('id', id).limit(1));
-  return rows[0] ? rowToPlace(rows[0]) : null;
+  const key = String(id ?? '').trim();
+  if (!key) return null;
+
+  const isUuid =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key);
+  if (isUuid) {
+    try {
+      const rows = await queryPublishedPlaces(client, (q) => q.eq('id', key).limit(1));
+      if (rows[0]) return rowToPlace(rows[0]);
+    } catch {
+      /* fall through to bundled demo */
+    }
+  }
+
+  const demoRow = getDemoEstablishmentById(key);
+  return demoRow ? rowToPlace(demoRow) : null;
 }

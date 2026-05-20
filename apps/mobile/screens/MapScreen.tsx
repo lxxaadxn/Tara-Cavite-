@@ -382,6 +382,17 @@ export default function MapScreen() {
                     <Text style={styles.closesText}>{selectedSpot.closesAtLabel ?? selectedSpot.hours}</Text>
                   </View>
                   <TouchableOpacity
+                    style={styles.aboutCta}
+                    onPress={() => {
+                      closeSheet();
+                      navigation.navigate('AboutEstablishment' as never, { place: selectedSpot } as never);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="About establishment"
+                  >
+                    <Text style={styles.aboutCtaLabel}>ABOUT ESTABLISHMENT</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
                     style={styles.directionsCta}
                     onPress={() => setSheetMode('routes')}
                     accessibilityRole="button"
@@ -663,6 +674,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: MUTED,
     flex: 1,
+  },
+  aboutCta: {
+    marginBottom: 10,
+    borderRadius: 999,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: TEAL,
+    backgroundColor: '#FFFFFF',
+  },
+  aboutCtaLabel: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 14,
+    color: TEAL,
+    letterSpacing: 0.4,
   },
   directionsCta: {
     backgroundColor: GREEN,

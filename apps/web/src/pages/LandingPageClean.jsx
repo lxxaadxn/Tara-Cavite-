@@ -1,6 +1,18 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { LogoWordmark } from '../components/LogoWordmark';
+import { publishedItineraries } from '../data/mockItineraries';
+import { buildEnrichedItinerary } from '../lib/itineraryPlaces';
+import {
+  MARKETING_PLACEHOLDER_IMG,
+  buildDestinationFilters,
+  buildMarketingStats,
+  fetchPlacesWithMedia,
+  formatStatCount,
+  pickFeaturedDestinations,
+  pickHeroPlace,
+} from '../lib/marketingPlaces';
+import { supabase } from '../lib/supabase';
 
 const palette = {
   ink: 'var(--ct-ink)',
@@ -14,71 +26,19 @@ const palette = {
 const TRUST_CARDS = [
   {
     icon: 'guide',
-    title: 'Local Expertise',
-    body: 'Built with local routes, practical commute details, and trusted destination notes.',
+    title: 'NTDP Cavite catalog',
+    body: 'Browse officially classified tourism establishments across Cavite municipalities.',
   },
   {
     icon: 'booking',
-    title: 'All-in-One Booking',
-    body: 'Plan destinations, save favorites, and shape your itinerary without switching tools.',
+    title: 'Saved lists & itineraries',
+    body: 'Save favorites, build day plans, and follow curated routes from the catalog.',
   },
   {
     icon: 'support',
-    title: '24/7 Trip Support',
-    body: 'Quick assistance while planning and while traveling around Cavite.',
+    title: 'Maps & terminal guides',
+    body: 'Find establishments on the map and check jeepney and bus terminal details.',
   },
-];
-
-const DESTINATIONS = [
-  {
-    name: 'Tagaytay Ridge',
-    image: 'https://images.unsplash.com/photo-1528127269322-539801943592?w=1000&q=80',
-    category: 'nature',
-    price: 'PHP 1,499',
-    meta: 'Cool breeze, scenic views',
-  },
-  {
-    name: 'Silang Cafe Row',
-    image: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=1000&q=80',
-    category: 'cafe',
-    price: 'PHP 1,200',
-    meta: 'Coffee spots and pastry bars',
-  },
-  {
-    name: 'Maragondon Coast',
-    image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1000&q=80',
-    category: 'beach',
-    price: 'PHP 1,650',
-    meta: 'Sea breeze and sunset points',
-  },
-  {
-    name: 'Kawit Heritage Walk',
-    image: 'https://images.unsplash.com/photo-1590736969955-71cc94901144?w=1000&q=80',
-    category: 'heritage',
-    price: 'PHP 980',
-    meta: 'Historic houses and museums',
-  },
-];
-
-const PACKAGES = [
-  {
-    title: 'Island Hopper Adventure',
-    image: 'https://images.unsplash.com/photo-1473116763249-2faaef81ccda?w=900&q=80',
-    body: 'Beach tour plus island stops and guided snorkeling options.',
-  },
-  {
-    title: 'Northern Highland Escape',
-    image: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=900&q=80',
-    body: 'Highland cafes, ridge views, and cozy food spots.',
-  },
-];
-
-const DESTINATION_FILTERS = [
-  { label: 'All', value: 'all' },
-  { label: 'Nature', value: 'nature' },
-  { label: 'Cafe', value: 'cafe' },
-  { label: 'Beach', value: 'beach' },
-  { label: 'Heritage', value: 'heritage' },
 ];
 
 function TrustIcon({ icon }) {
@@ -109,12 +69,91 @@ function TrustIcon({ icon }) {
   }
 }
 
+function HeroSkeleton() {
+  return <div className="h-[420px] w-full animate-pulse bg-neutral-200 md:h-[520px]" />;
+}
+
+function DestinationCardSkeleton() {
+  return <div className="h-56 animate-pulse rounded-2xl bg-neutral-200" />;
+}
+
+function ItineraryCardSkeleton() {
+  return <div className="h-[240px] animate-pulse rounded-3xl bg-neutral-200" />;
+}
+
 export function LandingPageClean() {
   const [activeDestinationFilter, setActiveDestinationFilter] = useState('all');
+  const [loading, setLoading] = useState(true);
+  const [destinations, setDestinations] = useState([]);
+  const [destinationFilters, setDestinationFilters] = useState([{ label: 'All', value: 'all' }]);
+  const [heroPlace, setHeroPlace] = useState(null);
+  const [stats, setStats] = useState(null);
+  const [itineraries, setItineraries] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      setLoading(true);
+      try {
+        const places = await fetchPlacesWithMedia(supabase);
+        if (cancelled) return;
+
+        setDestinations(pickFeaturedDestinations(places, { limit: 8 }));
+        setDestinationFilters(buildDestinationFilters(places));
+        setHeroPlace(pickHeroPlace(places));
+        setStats(buildMarketingStats(places));
+        setItineraries(
+          publishedItineraries
+            .slice(0, 2)
+            .map((template) => buildEnrichedItinerary(template, places))
+            .filter(Boolean)
+        );
+      } catch {
+        if (cancelled) return;
+        setDestinations([]);
+        setDestinationFilters([{ label: 'All', value: 'all' }]);
+        setHeroPlace(null);
+        setStats(null);
+        setItineraries([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const filteredDestinations = useMemo(() => {
-    if (activeDestinationFilter === 'all') return DESTINATIONS;
-    return DESTINATIONS.filter((d) => d.category === activeDestinationFilter);
-  }, [activeDestinationFilter]);
+    if (activeDestinationFilter === 'all') return destinations;
+    return destinations.filter((d) => d.categoryKey === activeDestinationFilter);
+  }, [activeDestinationFilter, destinations]);
+
+  const heroImage =
+    heroPlace?.imageUrl?.trim() ||
+    heroPlace?.galleryUrls?.[0] ||
+    MARKETING_PLACEHOLDER_IMG;
+  const heroAlt = heroPlace?.name
+    ? `${heroPlace.name}${heroPlace.city_mun ? `, ${heroPlace.city_mun}` : ''}`
+    : 'Cavite establishment';
+
+  const statItems = useMemo(() => {
+    if (!stats) return [];
+    const items = [];
+    const establishments = formatStatCount(stats.establishmentCount);
+    const municipalities = formatStatCount(stats.municipalityCount);
+    if (establishments) items.push({ value: establishments, label: 'Establishments' });
+    if (municipalities) items.push({ value: municipalities, label: 'Municipalities' });
+    if (itineraries.length > 0) {
+      items.push({ value: String(itineraries.length), label: 'Curated routes' });
+    }
+    return items;
+  }, [stats, itineraries.length]);
+
+  const displayDestinations = loading ? [] : filteredDestinations;
 
   return (
     <div className="relative min-h-screen overflow-hidden font-['Inter',sans-serif] text-neutral-900" style={{ backgroundColor: palette.cream }}>
@@ -148,48 +187,71 @@ export function LandingPageClean() {
       <main className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6 lg:px-8">
         <section id="top" className="overflow-hidden rounded-[28px] bg-white p-4 shadow-[0_18px_60px_rgba(16,36,58,0.10)] sm:p-6">
           <div className="relative overflow-hidden rounded-3xl">
-            <img src="https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=1600&q=80" alt="Scenic Cavite landscape" className="h-[420px] w-full object-cover md:h-[520px]" />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/65 via-black/35 to-transparent" />
-            <div className="absolute inset-0 flex items-end p-6 md:p-10">
-              <div className="max-w-2xl text-white">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/80 md:text-sm">Your Cavite travel companion</p>
-                <h1 className="mt-3 font-['Poppins',sans-serif] text-4xl font-extrabold leading-[1.04] md:text-6xl">CAVITE TOUR</h1>
-                <p className="mt-4 max-w-xl text-sm text-white/90 md:text-base">
-                  Discover breathtaking destinations, smart itineraries, commute routes, and local food stops in one sleek travel guide.
-                </p>
-                <div className="mt-6 flex flex-wrap gap-3">
-                  <Link to="/search" className="rounded-xl px-5 py-3 text-sm font-semibold text-white md:px-6" style={{ backgroundColor: palette.lime }}>
-                    Plan Your Trip
-                  </Link>
-                  <a href="#destinations" className="rounded-xl border border-white/70 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10 md:px-6">
-                    Explore Destinations
-                  </a>
+            {loading ? (
+              <HeroSkeleton />
+            ) : (
+              <>
+                <img src={heroImage} alt={heroAlt} className="h-[420px] w-full object-cover md:h-[520px]" />
+                <div className="absolute inset-0 bg-gradient-to-r from-black/65 via-black/35 to-transparent" />
+                <div className="absolute inset-0 flex items-end p-6 md:p-10">
+                  <div className="max-w-2xl text-white">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/80 md:text-sm">
+                      Explore Cavite establishments
+                    </p>
+                    <h1 className="mt-3 font-['Poppins',sans-serif] text-4xl font-extrabold leading-[1.04] md:text-6xl">
+                      CAVITE TOUR
+                    </h1>
+                    <p className="mt-4 max-w-xl text-sm text-white/90 md:text-base">
+                      Search the NTDP catalog, browse maps, save lists, follow curated routes, and check terminal
+                      guides — your Cavite travel companion in one place.
+                    </p>
+                    {heroPlace?.name ? (
+                      <p className="mt-3 text-xs font-medium text-white/75 md:text-sm">
+                        Featured: {heroPlace.name}
+                        {heroPlace.city_mun ? ` · ${heroPlace.city_mun}` : ''}
+                      </p>
+                    ) : null}
+                    <div className="mt-6 flex flex-wrap gap-3">
+                      <Link
+                        to="/search"
+                        className="rounded-xl px-5 py-3 text-sm font-semibold text-white md:px-6"
+                        style={{ backgroundColor: palette.lime }}
+                      >
+                        Search establishments
+                      </Link>
+                      <a
+                        href="#destinations"
+                        className="rounded-xl border border-white/70 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10 md:px-6"
+                      >
+                        Browse destinations
+                      </a>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
+              </>
+            )}
           </div>
         </section>
 
         <section id="features" className="mt-8 grid gap-6 lg:grid-cols-[1.25fr_1fr]">
           <div className="rounded-[26px] bg-white p-6 shadow-[0_14px_40px_rgba(16,36,58,0.08)] sm:p-8">
             <h2 className="font-['Poppins',sans-serif] text-3xl font-bold leading-tight md:text-4xl" style={{ color: palette.ink }}>
-              Why travelers choose CaviTour for every Cavite adventure
+              Plan Cavite trips with real catalog data
             </h2>
             <p className="mt-4 max-w-2xl text-base leading-relaxed text-neutral-600">
-              From itinerary creation to commute guidance, CaviTour helps you move faster and plan better with local-first insights.
+              CaviTour connects you to verified establishments, commute-friendly maps, saved lists, and ready-made
+              day routes — built for exploring the province, not booking packages.
             </p>
-            <div className="mt-8 grid grid-cols-3 gap-3 sm:gap-4">
-              {[
-                { value: '12k+', label: 'Happy Travelers' },
-                { value: '10yrs', label: 'Tour Experience' },
-                { value: '50+', label: 'Destinations Covered' },
-              ].map((item) => (
-                <div key={item.label} className="rounded-2xl border border-neutral-200 bg-white p-4 text-center">
-                  <p className="text-2xl font-bold" style={{ color: palette.ink }}>{item.value}</p>
-                  <p className="mt-1 text-xs text-neutral-500">{item.label}</p>
-                </div>
-              ))}
-            </div>
+            {statItems.length > 0 ? (
+              <div className={`mt-8 grid gap-3 sm:gap-4 ${statItems.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                {statItems.map((item) => (
+                  <div key={item.label} className="rounded-2xl border border-neutral-200 bg-white p-4 text-center">
+                    <p className="text-2xl font-bold" style={{ color: palette.ink }}>{item.value}</p>
+                    <p className="mt-1 text-xs text-neutral-500">{item.label}</p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
           <div className="space-y-4">
             {TRUST_CARDS.map((card) => (
@@ -213,40 +275,59 @@ export function LandingPageClean() {
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.16em]" style={{ color: palette.lime }}>Top Destinations</p>
               <h2 className="mt-2 font-['Poppins',sans-serif] text-3xl font-bold md:text-4xl" style={{ color: palette.ink }}>
-                Discover where your next journey begins
+                From the Cavite NTDP catalog
               </h2>
             </div>
           </div>
-          <div className="mt-6 flex flex-wrap gap-2.5">
-            {DESTINATION_FILTERS.map((filter) => (
-              <button
-                key={filter.value}
-                type="button"
-                onClick={() => setActiveDestinationFilter(filter.value)}
-                className="rounded-full px-4 py-2 text-sm font-medium transition"
-                style={
-                  activeDestinationFilter === filter.value
-                    ? { backgroundColor: palette.lime, color: '#fff' }
-                    : { backgroundColor: palette.cloud, color: palette.teal }
-                }
-              >
-                {filter.label}
-              </button>
-            ))}
-          </div>
+          {destinationFilters.length > 1 ? (
+            <div className="mt-6 flex flex-wrap gap-2.5">
+              {destinationFilters.map((filter) => (
+                <button
+                  key={filter.value}
+                  type="button"
+                  onClick={() => setActiveDestinationFilter(filter.value)}
+                  className="rounded-full px-4 py-2 text-sm font-medium transition"
+                  style={
+                    activeDestinationFilter === filter.value
+                      ? { backgroundColor: palette.lime, color: '#fff' }
+                      : { backgroundColor: palette.cloud, color: palette.teal }
+                  }
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {filteredDestinations.map((d) => (
-              <Link key={d.name} to="/search" className="group overflow-hidden rounded-2xl border border-neutral-200 bg-white">
-                <div className="relative h-56 overflow-hidden">
-                  <img src={d.image} alt={d.name} className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3">
-                    <p className="font-['Poppins',sans-serif] text-lg font-semibold text-white">{d.name}</p>
-                    <p className="text-xs text-white/80">{d.meta}</p>
-                  </div>
-                </div>
-              </Link>
-            ))}
+            {loading
+              ? Array.from({ length: 4 }, (_, i) => <DestinationCardSkeleton key={i} />)
+              : displayDestinations.map((d) => (
+                  <Link
+                    key={d.id}
+                    to={`/search?q=${encodeURIComponent(d.name)}`}
+                    className="group overflow-hidden rounded-2xl border border-neutral-200 bg-white"
+                  >
+                    <div className="relative h-56 overflow-hidden">
+                      <img
+                        src={d.image}
+                        alt={d.name}
+                        className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                      />
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3">
+                        <p className="font-['Poppins',sans-serif] text-lg font-semibold text-white">{d.name}</p>
+                        <p className="text-xs text-white/80">{d.meta}</p>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
           </div>
+          {!loading && displayDestinations.length === 0 ? (
+            <p className="mt-4 text-sm text-neutral-500">
+              {destinations.length === 0
+                ? 'Establishment highlights will appear here once the catalog loads.'
+                : 'No destinations match this category. Try another filter.'}
+            </p>
+          ) : null}
         </section>
 
         <section id="itineraries" className="mt-8 grid gap-4 lg:grid-cols-[1.2fr_1fr_1fr]">
@@ -255,27 +336,42 @@ export function LandingPageClean() {
             style={{ background: `linear-gradient(135deg, ${palette.teal}, ${palette.lime})` }}
           >
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-white/85">Itineraries</p>
-            <h3 className="mt-2 font-['Poppins',sans-serif] text-3xl font-bold">Flexible plans for every traveler</h3>
-            <p className="mt-3 max-w-md text-sm text-white/90">Affordable day tours, barkada escapes, and family-ready plans curated for Cavite routes.</p>
+            <h3 className="mt-2 font-['Poppins',sans-serif] text-3xl font-bold">Curated day routes</h3>
+            <p className="mt-3 max-w-md text-sm text-white/90">
+              Ready-made plans linking real catalog stops — open an account to save, edit, and follow them on the map.
+            </p>
+            <Link
+              to="/itinerary"
+              className="mt-5 inline-block rounded-xl bg-white/20 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/30"
+            >
+              View itineraries
+            </Link>
           </article>
-          {PACKAGES.map((pkg) => (
-            <article key={pkg.title} className="relative overflow-hidden rounded-3xl">
-              <img src={pkg.image} alt={pkg.title} className="h-[240px] w-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent p-5">
-                <div className="mt-auto flex h-full flex-col justify-end">
-                  <h4 className="font-['Poppins',sans-serif] text-2xl font-bold text-white">{pkg.title}</h4>
-                  <p className="mt-2 text-sm text-white/90">{pkg.body}</p>
-                </div>
-              </div>
-            </article>
-          ))}
+          {loading
+            ? Array.from({ length: 2 }, (_, i) => <ItineraryCardSkeleton key={i} />)
+            : itineraries.map((itin) => (
+                <Link key={itin.id} to="/itinerary" className="group relative block overflow-hidden rounded-3xl">
+                  <img
+                    src={itin.image || MARKETING_PLACEHOLDER_IMG}
+                    alt={itin.title}
+                    className="h-[240px] w-full object-cover transition duration-300 group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent p-5">
+                    <div className="mt-auto flex h-full flex-col justify-end">
+                      <h4 className="font-['Poppins',sans-serif] text-2xl font-bold text-white">{itin.title}</h4>
+                      <p className="mt-1 text-xs font-medium text-white/80">{itin.route}</p>
+                      <p className="mt-2 text-sm text-white/90">{itin.summary}</p>
+                    </div>
+                  </div>
+                </Link>
+              ))}
         </section>
       </main>
       <footer className="border-t border-white/70 py-8" style={{ backgroundColor: 'rgba(255,255,255,0.9)' }}>
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-4 text-center sm:px-6 md:flex-row md:text-left lg:px-8">
           <div>
             <LogoWordmark className="text-base" />
-            <p className="mt-1 text-xs text-neutral-500">Sleek travel planning for Cavite explorers.</p>
+            <p className="mt-1 text-xs text-neutral-500">Cavite establishment search, maps, and curated routes.</p>
           </div>
           <nav className="flex flex-wrap items-center justify-center gap-4 text-sm text-neutral-600">
             <a href="#destinations" className="hover:text-neutral-900">Top Destinations</a>

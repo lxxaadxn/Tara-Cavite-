@@ -4,6 +4,7 @@
  * - Dijkstra on distance-weighted edges + multi-candidate origin/destination terminals near user/place.
  */
 import { haversineDistanceKm } from './placesFromSupabase';
+import { isCommuteTourRouteId } from 'cavitour-shared/terminalCatalogPolicy';
 import { fetchTerminalsFromSupabase } from './terminalsFromSupabase';
 
 const TRANSFER_BASE_KM = 5;
@@ -138,6 +139,7 @@ async function buildGraphAndNodes(client) {
     const route = extractOne(row.cavitour_routes);
     const transport = extractOne(row.cavitour_transport_types);
     if (!route) continue;
+    if (!isCommuteTourRouteId(row.route_id)) continue;
     if (isExcludedTransferRoute(route.route_name)) continue;
 
     const terminalId = String(row.terminal_id);
@@ -238,6 +240,47 @@ export async function planNearestTerminalsForPlaceCommute(client, userPt, destPt
     originTerminal,
     destinationTerminal,
     legs: [],
+  };
+}
+
+const NEARBY_USER_TERMINALS = 3;
+
+/**
+ * Commuter guide: boarding at terminal nearest the user, alight near destination, graph legs between them.
+ * @returns {Promise<{
+ *   originTerminal: object;
+ *   destinationTerminal: object;
+ *   legs: object[];
+ *   nearbyUserTerminals: { id: string; name: string; municipality: string; latitude: number; longitude: number; distanceKm: number }[];
+ * } | null>}
+ */
+export async function planCommuterGuideForPlace(client, userPt, destPt) {
+  const terminalsRaw = await fetchTerminalsFromSupabase(client);
+  const terminals = terminalsRaw.map(cardToNode);
+  if (!terminals.length) return null;
+
+  const nearbyUserTerminals = topNearestTerminals(terminals, userPt.lat, userPt.lng, NEARBY_USER_TERMINALS).map(
+    (t) => ({
+      ...t,
+      distanceKm: haversineDistanceKm(userPt.lat, userPt.lng, t.latitude, t.longitude),
+    })
+  );
+  const originTerminal = nearbyUserTerminals[0] ?? nearestTerminal(terminals, userPt.lat, userPt.lng);
+  const destinationTerminal = nearestTerminal(terminals, destPt.lat, destPt.lng);
+  if (!originTerminal || !destinationTerminal) return null;
+
+  let legs = [];
+  if (originTerminal.id !== destinationTerminal.id) {
+    const { graph, terminalById } = await buildGraphAndNodes(client);
+    const rawPath = dijkstraPath(graph, originTerminal.id, destinationTerminal.id, terminalById);
+    if (rawPath) legs = legsFromPath(originTerminal, rawPath, terminalById);
+  }
+
+  return {
+    originTerminal,
+    destinationTerminal,
+    legs,
+    nearbyUserTerminals,
   };
 }
 

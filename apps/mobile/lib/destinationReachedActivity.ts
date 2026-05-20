@@ -94,3 +94,30 @@ export async function getThisMonthDestinationReachedCount(userId: string | null 
   const entries = await getThisMonthDestinationReachedEntries(userId);
   return entries.length;
 }
+
+/** Unique destinations reached across all months for a user. */
+export async function getAllDestinationReachedEntries(
+  userId: string | null | undefined
+): Promise<DestinationReachedEntry[]> {
+  const uid = String(userId ?? '').trim();
+  if (!uid) return [];
+  const all = await readAll();
+  const prefix = `${uid}:`;
+  const byId = new Map<string, DestinationReachedEntry>();
+  for (const [key, raw] of Object.entries(all)) {
+    if (!key.startsWith(prefix) || !Array.isArray(raw)) continue;
+    for (const row of raw) {
+      const entry = normalizeEntry(row);
+      if (!entry.id) continue;
+      const prev = byId.get(entry.id);
+      if (!prev || (entry.savedAt && (!prev.savedAt || entry.savedAt > prev.savedAt))) {
+        byId.set(entry.id, entry);
+      }
+    }
+  }
+  return [...byId.values()].sort((a, b) => {
+    const ta = a.savedAt ? Date.parse(a.savedAt) : 0;
+    const tb = b.savedAt ? Date.parse(b.savedAt) : 0;
+    return tb - ta;
+  });
+}

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { haversineDistanceKm } from './placesFromSupabase';
+import { isCommuteTourRouteId } from 'cavitour-shared/terminalCatalogPolicy';
 import { fetchTerminalsFromSupabase } from './terminalsFromSupabase';
 
 type RouteJoin = {
@@ -239,6 +240,7 @@ async function buildGraph(client: SupabaseClient): Promise<BuiltGraph | null> {
     const route = extractOne(row.cavitour_routes);
     const transport = extractOne(row.cavitour_transport_types);
     if (!route) continue;
+    if (!isCommuteTourRouteId(row.route_id)) continue;
     if (isExcludedTransferRoute(route.route_name)) continue;
 
     const terminalId = String(row.terminal_id);
@@ -302,6 +304,62 @@ async function buildGraph(client: SupabaseClient): Promise<BuiltGraph | null> {
  * terminal to the destination (typical alight / transfer area). Does not run terminal-to-terminal
  * graph routing — OSRM already covers user → place on the map.
  */
+const NEARBY_USER_TERMINALS = 3;
+
+export type TerminalWithDistance = TerminalNode & { distanceKm: number };
+
+export type CommuterGuideTerminalPlan = TerminalTransitPlan & {
+  nearbyUserTerminals: TerminalWithDistance[];
+};
+
+/** Board at nearest terminal to user; route graph to destination-area terminal when different. */
+export async function planCommuterGuideForPlace(
+  client: SupabaseClient,
+  userPt: { lat: number; lng: number },
+  destPt: { lat: number; lng: number }
+): Promise<CommuterGuideTerminalPlan | null> {
+  const terminalsRaw = await fetchTerminalsFromSupabase(client);
+  const terminals: TerminalNode[] = terminalsRaw.map((t) => ({
+    id: t.id,
+    name: t.name,
+    municipality: t.municipality,
+    latitude: t.latitude,
+    longitude: t.longitude,
+  }));
+  if (!terminals.length) return null;
+
+  const nearbyUserTerminals: TerminalWithDistance[] = topNearestTerminals(
+    terminals,
+    userPt.lat,
+    userPt.lng,
+    NEARBY_USER_TERMINALS
+  ).map((t) => ({
+    ...t,
+    distanceKm: haversineDistanceKm(userPt.lat, userPt.lng, t.latitude, t.longitude),
+  }));
+
+  const originTerminal = nearbyUserTerminals[0] ?? nearestTerminal(terminals, userPt.lat, userPt.lng);
+  const destinationTerminal = nearestTerminal(terminals, destPt.lat, destPt.lng);
+  if (!originTerminal || !destinationTerminal) return null;
+
+  let legs: TerminalTransitLeg[] = [];
+  if (originTerminal.id !== destinationTerminal.id) {
+    const built = await buildGraph(client);
+    if (built) {
+      const { graph, terminalById } = built;
+      const rawPath = dijkstraPath(graph, originTerminal.id, destinationTerminal.id, terminalById);
+      if (rawPath) legs = legsFromPath(originTerminal, rawPath, terminalById);
+    }
+  }
+
+  return {
+    originTerminal,
+    destinationTerminal,
+    legs,
+    nearbyUserTerminals,
+  };
+}
+
 export async function planNearestTerminalsForPlaceCommute(
   client: SupabaseClient,
   userPt: { lat: number; lng: number },

@@ -57,6 +57,7 @@ export function SearchPage() {
   const [dataSource, setDataSource] = useState('loading');
   const [fetchError, setFetchError] = useState('');
   const [userCoords, setUserCoords] = useState(null);
+  const [previewPlaceId, setPreviewPlaceId] = useState(null);
   const trendingRef = useRef([]);
 
   useEffect(() => {
@@ -150,6 +151,11 @@ export function SearchPage() {
     [filteredPlaces]
   );
 
+  const previewPlace = useMemo(
+    () => (previewPlaceId ? filteredPlaces.find((p) => String(p.id) === String(previewPlaceId)) : null),
+    [previewPlaceId, filteredPlaces]
+  );
+
   return (
     <div className="min-h-screen bg-[#efefec] font-['Inter',sans-serif] text-neutral-900">
       <AppHeader />
@@ -215,11 +221,45 @@ export function SearchPage() {
 
       <div className="w-full px-3 pb-2 sm:px-4 lg:px-8">
         <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2 lg:gap-4">
-          <section className="relative min-h-[62vh] min-w-0 overflow-hidden rounded-[20px] border border-neutral-200 bg-[#e8ebe6] shadow-[0_10px_28px_rgba(0,0,0,0.08)] lg:order-2 lg:sticky lg:top-[128px] lg:self-start lg:min-h-[calc(100vh-144px)]">
-            <PlacesLeafletMap places={mapPlaces} userLocation={userCoords} />
+          <section
+            className="relative min-h-[62vh] min-w-0 overflow-hidden rounded-[20px] border border-neutral-200 bg-[#e8ebe6] shadow-[0_10px_28px_rgba(0,0,0,0.08)] lg:order-2 lg:sticky lg:top-[128px] lg:self-start lg:min-h-[calc(100vh-144px)]"
+            onMouseLeave={() => setPreviewPlaceId(null)}
+          >
+            <PlacesLeafletMap
+              places={mapPlaces}
+              userLocation={userCoords}
+              onMarkerClick={(p) => navigate(`/place/${p.id}`)}
+              onMarkerHover={(p) => setPreviewPlaceId(p.id)}
+            />
 
             <div className="pointer-events-none absolute inset-0 z-[450] bg-[radial-gradient(circle_at_20%_10%,rgba(255,255,255,0.45),transparent_42%)]" />
 
+            {previewPlace ? (
+              <button
+                type="button"
+                onClick={() => navigate(`/place/${previewPlace.id}`)}
+                className="absolute left-4 top-4 z-[500] max-w-[280px] overflow-hidden rounded-xl border border-neutral-200 bg-white/95 text-left shadow-[0_12px_30px_rgba(0,0,0,0.15)] backdrop-blur-sm transition hover:border-[#7ea00e]/40 sm:left-5 sm:top-5 sm:max-w-[300px]"
+                aria-label={`About ${previewPlace.name}`}
+              >
+                <img
+                  src={previewPlace.imageUrl || PLACEHOLDER_IMG}
+                  alt=""
+                  className="h-28 w-full object-cover"
+                />
+                <div className="p-3">
+                  <p className="font-['Poppins',sans-serif] text-base font-semibold text-neutral-900">{previewPlace.name}</p>
+                  <p className="mt-0.5 line-clamp-2 text-xs text-neutral-500">
+                    {sanitizeAddress(previewPlace.address, previewPlace.name)}
+                  </p>
+                  {previewPlace.ntdp_category ? (
+                    <p className="mt-2 text-[11px] font-medium uppercase tracking-wide text-[#7EA00E]">
+                      {previewPlace.ntdp_category}
+                    </p>
+                  ) : null}
+                  <p className="mt-2 text-xs font-semibold text-[#7ea00e]">View establishment →</p>
+                </div>
+              </button>
+            ) : null}
           </section>
 
           <section className="min-w-0 lg:order-1 lg:self-start">
@@ -227,7 +267,16 @@ export function SearchPage() {
               {filteredPlaces.map((place, idx) => (
                 <article
                   key={place.id}
-                  className="flex h-full min-h-[280px] flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white p-2 text-left sm:p-2.5"
+                  role="link"
+                  tabIndex={0}
+                  onClick={() => navigate(`/place/${place.id}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      navigate(`/place/${place.id}`);
+                    }
+                  }}
+                  className="flex h-full min-h-[280px] cursor-pointer flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white p-2 text-left transition hover:border-[#7ea00e]/35 hover:shadow-md sm:p-2.5"
                 >
                   <div className="overflow-hidden rounded-xl bg-neutral-100">
                     <img
@@ -238,10 +287,10 @@ export function SearchPage() {
                   </div>
                   <div className="flex-1 px-1 pb-1 pt-2">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="line-clamp-1 text-sm font-semibold text-neutral-900">{place.name}</p>
+                      <p className="line-clamp-1 text-base font-semibold text-neutral-900">{place.name}</p>
                     </div>
-                    <p className="mt-1 line-clamp-1 text-[11px] text-neutral-500">
-                      <svg className="-mt-0.5 mr-1 inline h-3.5 w-3.5 text-neutral-400" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                    <p className="mt-1 line-clamp-1 text-sm text-neutral-500">
+                      <svg className="-mt-0.5 mr-1 inline h-4 w-4 text-neutral-400" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                         <path
                           fillRule="evenodd"
                           d="M12 2.25a7.5 7.5 0 00-7.5 7.5c0 5.25 7.5 12 7.5 12s7.5-6.75 7.5-12a7.5 7.5 0 00-7.5-7.5zm0 10.5a3 3 0 100-6 3 3 0 000 6z"
@@ -251,16 +300,19 @@ export function SearchPage() {
                       {sanitizeAddress(place.address, place.name)}
                     </p>
                     <div className="mt-1 flex items-center justify-between gap-2">
-                      <p className="text-[11px] text-neutral-400">
+                      <p className="text-sm text-neutral-500">
                         <span className="mr-1 text-[#f4c430]">★</span>
                         {cardRating(idx)} ({cardReviewCount(idx).toLocaleString()} Reviews)
                       </p>
                       <button
                         type="button"
-                        onClick={() => navigate(`/place/${place.id}`)}
-                        className="shrink-0 rounded-full border border-neutral-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/place/${place.id}`);
+                        }}
+                        className="shrink-0 rounded-full border border-neutral-300 bg-white px-3.5 py-1.5 text-sm font-semibold leading-none text-neutral-700 transition hover:bg-neutral-50"
                       >
-                        Explore
+                        About
                       </button>
                     </div>
                   </div>

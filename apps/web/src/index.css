@@ -528,3 +528,108 @@ body {
   }
 }
 
+/* Save success toast */
+.save-success-toast {
+  position: relative;
+  border-radius: 1rem;
+  border: 1px solid color-mix(in srgb, var(--cavitour-green) 35%, transparent);
+  background: #fff;
+  padding: 0.875rem 1rem;
+  box-shadow:
+    0 10px 40px rgba(33, 53, 2, 0.12),
+    0 2px 8px rgba(31, 79, 89, 0.08);
+  opacity: 0;
+  transform: translateY(12px) scale(0.96);
+  transition:
+    opacity 320ms ease,
+    transform 320ms ease;
+}
+
+.save-success-toast--already {
+  border-color: color-mix(in srgb, #d97706 28%, transparent);
+  box-shadow:
+    0 10px 40px rgba(33, 53, 2, 0.08),
+    0 2px 8px rgba(31, 79, 89, 0.06);
+}
+
+.save-success-toast--visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.save-success-toast--exiting {
+  opacity: 0;
+  transform: translateY(8px) scale(0.98);
+}
+
+@keyframes save-success-icon-pop-keyframes {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.save-success-icon-pop {
+  animation: save-success-icon-pop-keyframes 480ms ease-out 120ms 1 both;
+}
+
+.save-success-sparkles {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+
+.save-success-sparkle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--cavitour-green);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.4);
+  animation: save-success-sparkle-burst 620ms ease-out forwards;
+}
+
+.save-success-sparkle:nth-child(even) {
+  background: var(--cavitour-teal);
+}
+
+@keyframes save-success-sparkle-burst {
+  0% {
+    opacity: 0.95;
+    transform: translate(-50%, -50%) scale(0.5);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--sx, 0px)), calc(-50% + var(--sy, 0px))) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .save-success-toast {
+    transition: opacity 120ms ease;
+    transform: none;
+  }
+
+  .save-success-toast--visible,
+  .save-success-toast--exiting {
+    transform: none;
+  }
+
+  .save-success-icon-pop {
+    animation: none;
+  }
+
+  .save-success-sparkles {
+    display: none;
+  }
+}
+

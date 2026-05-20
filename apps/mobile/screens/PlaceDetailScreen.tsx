@@ -18,7 +18,7 @@ import { searchPlacesByText } from '../lib/placesFromSupabase';
 import { fetchTerminalsFromSupabase, filterTerminalsByText } from '../lib/terminalsFromSupabase';
 import type { Terminal } from '../data/mockData';
 
-type RouteParams = { place?: Place; query?: string };
+type RouteParams = { place?: Place; query?: string; category?: string };
 
 const PlaceDetailScreen: React.FC = () => {
   const route = useRoute();
@@ -26,7 +26,7 @@ const PlaceDetailScreen: React.FC = () => {
   const params = route.params as RouteParams | undefined;
 
   const initialPlace = params?.place;
-  const searchQuery = params?.query?.trim() ?? '';
+  const searchQuery = params?.query?.trim() ?? params?.category?.trim() ?? '';
 
   const [loading, setLoading] = useState(false);
   const [candidates, setCandidates] = useState<Place[]>([]);
