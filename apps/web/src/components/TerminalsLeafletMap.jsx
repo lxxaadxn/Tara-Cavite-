@@ -1,6 +1,15 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import {
+  CAVITE_LEAFLET_MAP_OPTIONS,
+  CAVITE_MAP_BOUNDS,
+  CAVITE_MAP_CENTER,
+  CAVITE_MAP_DEFAULT_ZOOM,
+  CAVITE_MAP_MAX_ZOOM,
+  lockMapToCaviteViewport,
+} from '../lib/caviteMapBounds';
+import { greenLeafletPinIcon } from '../lib/leafletGreenPin';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -10,7 +19,7 @@ L.Icon.Default.mergeOptions({
 });
 
 /**
- * User location + nearby terminals as circle markers; classic pin only for the selected terminal.
+ * User location dot + terminal pins (green); selected terminal uses the default blue pin.
  * @param {{ id: string; name: string; lat: number; lng: number }[]} terminals
  * @param {string | null} selectedId
  * @param {{ lat: number; lng: number } | null} userLocation
@@ -30,10 +39,14 @@ export function TerminalsLeafletMap({ terminals, selectedId, userLocation, onSel
     const valid = (terminals ?? []).filter(
       (t) => t.lat != null && t.lng != null && Number.isFinite(t.lat) && Number.isFinite(t.lng)
     );
-    const map = L.map(containerRef.current, { scrollWheelZoom: true, zoomControl: false });
+    const map = L.map(containerRef.current, {
+      scrollWheelZoom: true,
+      zoomControl: false,
+      ...CAVITE_LEAFLET_MAP_OPTIONS,
+    });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap',
-      maxZoom: 19,
+      maxZoom: CAVITE_MAP_MAX_ZOOM,
     }).addTo(map);
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
@@ -70,35 +83,30 @@ export function TerminalsLeafletMap({ terminals, selectedId, userLocation, onSel
 
     valid.forEach((t) => {
       const idStr = String(t.id);
-      if (sel && idStr === sel) {
-        const m = L.marker([t.lat, t.lng]).addTo(layer);
-        m.bindPopup(String(t.name || 'Terminal'));
-        m.on('click', () => selectRef.current?.(idStr));
-        return;
-      }
-      const c = L.circleMarker([t.lat, t.lng], {
-        radius: 7,
-        fillColor: '#7EA00E',
-        color: '#ffffff',
-        weight: 2,
-        opacity: 1,
-        fillOpacity: 0.92,
-      }).addTo(layer);
-      c.bindPopup(String(t.name || 'Terminal'));
-      c.on('click', () => selectRef.current?.(idStr));
+      const isSelected = sel != null && idStr === sel;
+      const m = L.marker(
+        [t.lat, t.lng],
+        isSelected ? { zIndexOffset: 1000 } : { icon: greenLeafletPinIcon }
+      ).addTo(layer);
+      m.bindPopup(String(t.name || 'Terminal'));
+      m.on('click', () => selectRef.current?.(idStr));
     });
 
     const boundsPoints = valid.map((t) => [t.lat, t.lng]);
     if (hasUser) boundsPoints.push([userLocation.lat, userLocation.lng]);
 
     if (boundsPoints.length === 0) {
-      map.setView([14.28, 120.95], 10);
+      map.setView(CAVITE_MAP_CENTER, CAVITE_MAP_DEFAULT_ZOOM);
     } else {
       const bounds = L.latLngBounds(boundsPoints);
       map.fitBounds(bounds, { padding: [48, 48], maxZoom: 13 });
+      map.panInsideBounds(CAVITE_MAP_BOUNDS, { animate: false });
     }
 
+    const unlockViewport = lockMapToCaviteViewport(map);
+
     return () => {
+      unlockViewport();
       map.remove();
     };
   }, [terminals, selectedId, userLocation]);

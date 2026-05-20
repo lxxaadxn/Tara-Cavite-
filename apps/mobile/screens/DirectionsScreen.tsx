@@ -6,7 +6,6 @@ import {
   ScrollView,
   Image,
   TouchableOpacity,
-  Share,
   Pressable,
   Alert,
   ActivityIndicator,
@@ -18,6 +17,7 @@ import { JamIcon } from '../components/JamIcon';
 import { SaveToListSheet, type SaveToListRow } from '../components/SaveToListSheet';
 import { Place, type Terminal } from '../data/mockData';
 import { parsePlaceCoords } from '../lib/placeCoords';
+import { placeImageSource } from '../lib/placeImageSource';
 import { formatNtdpCategoryTagLabel } from '../lib/ntdpDisplayLabels';
 import {
   fetchDrivingRoute,
@@ -25,12 +25,10 @@ import {
   formatDistanceM,
   formatDurationS,
   type OsrmRouteResult,
-  type RouteStepUi,
 } from '../lib/fetchOsrmRoute';
-import {
-  buildCommuterNarrativeFromOsrmSteps,
-  commuterDirectStepInstruction,
-} from '../lib/commuterRouteNarration';
+import { commuterDirectStepInstruction } from '../lib/commuterRouteNarration';
+import { buildCommuterGuideSteps } from 'cavitour-shared/commuterGuideBuilder';
+import { fetchRoutesForTerminalId } from '../lib/fetchTerminalRoutesFromSupabase';
 import type { DirectionsMapPayload } from '../lib/directionsMapBridge';
 import { supabase } from '../lib/supabase';
 import {
@@ -45,17 +43,46 @@ import {
   addTerminalToSavedList,
   addItineraryToSavedList,
   placeRowExists,
-  fetchUserListsForPicker,
+  fetchUserListsForPickerWithCounts,
+  findOrCreateListByName,
 } from '../lib/savedListItems';
 import {
-  planNearestTerminalsForPlaceCommute,
+  alertAfterSaveToList,
+  SAVE_TO_LIST_CREATE_BUSY_ID,
+  suggestedSaveListName,
+} from '../lib/saveToListModalHelpers';
+import {
+  planCommuterGuideForPlace,
   fetchNearestTerminalForUser,
   type TerminalTransitPlan,
 } from '../lib/terminalTransitPlanner';
 import { recordDestinationReached } from '../lib/destinationReachedActivity';
-import { haversineDistanceKm } from '../lib/placesFromSupabase';
+import { fetchPlaceById, haversineDistanceKm } from '../lib/placesFromSupabase';
+import { DirectionsMapView } from '../components/DirectionsMapView';
 
 const GREEN = '#7EA00E';
+
+// #region agent log
+function debugLog(
+  location: string,
+  message: string,
+  data: Record<string, unknown>,
+  hypothesisId: string
+) {
+  fetch('http://127.0.0.1:7604/ingest/c241c18c-94ef-45ef-99cf-e15fd3724139', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'c650a7' },
+    body: JSON.stringify({
+      sessionId: 'c650a7',
+      location,
+      message,
+      data,
+      hypothesisId,
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+}
+// #endregion
 const TEAL = '#1F4F59';
 const OLIVE = '#213502';
 const TITLE = '#241D13';
@@ -82,19 +109,30 @@ export type DirectionsScreenParams = {
   caviTrip?: boolean;
 };
 
-function buildTags(place: Place): { label: string; variant: PillVariant }[] {
+function shouldShowTaCategoryTag(place: Place, includeTaCategory: boolean): boolean {
+  if (includeTaCategory) return true;
+  const ta = place.ta_category?.trim();
+  if (!ta) return true;
+  const typeLabel = (place.type || '').trim();
+  if (!typeLabel) return false;
+  return typeLabel.toLowerCase() !== ta.toLowerCase();
+}
+
+function buildTags(
+  place: Place,
+  options?: { includeTaCategory?: boolean }
+): { label: string; variant: PillVariant }[] {
+  const includeTaCategory = options?.includeTaCategory !== false;
   const out: { label: string; variant: PillVariant }[] = [];
-  if (place.type) out.push({ label: place.type, variant: 'green' });
+  if (place.type && shouldShowTaCategoryTag(place, includeTaCategory)) {
+    out.push({ label: place.type, variant: 'green' });
+  }
   if (place.ntdp_category) {
     out.push({ label: formatNtdpCategoryTagLabel(place.ntdp_category), variant: 'teal' });
   } else if (!place.ntdp_category && place.type !== 'Terminal') {
     out.push({ label: 'Alfresco', variant: 'teal' });
   }
   return out;
-}
-
-function buildNarrativeGuide(steps: RouteStepUi[], destinationLabel: string): string {
-  return buildCommuterNarrativeFromOsrmSteps(steps, destinationLabel);
 }
 
 function commuterStepHint(index: number, total: number, stepDistanceM: number): string {
@@ -151,9 +189,35 @@ const DirectionsScreen: React.FC = () => {
   const isItinerary = place?.type === 'Itinerary';
   /** Show boarding + near-destination terminal hints (no T2T graph). */
   const showPlaceOrItineraryTerminalHints = Boolean(place) && !isTerminal;
-  const destCoords = useMemo(() => (place ? parsePlaceCoords(place) : null), [place]);
+  const [catalogCoords, setCatalogCoords] = useState<{ lat: number; lng: number } | null>(null);
 
-  const [tab, setTab] = useState<'routeSteps' | 'stepGuide' | 'viaTerminals'>('routeSteps');
+  useEffect(() => {
+    if (!place?.id) {
+      setCatalogCoords(null);
+      return;
+    }
+    let cancelled = false;
+    fetchPlaceById(supabase, place.id)
+      .then((catalog) => {
+        if (cancelled) return;
+        setCatalogCoords(catalog ? parsePlaceCoords(catalog) : null);
+      })
+      .catch(() => {
+        if (!cancelled) setCatalogCoords(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [place?.id]);
+
+  const destCoords = useMemo(() => {
+    if (catalogCoords) return catalogCoords;
+    return place ? parsePlaceCoords(place) : null;
+  }, [place, catalogCoords]);
+
+  const [tab, setTab] = useState<'routeSteps' | 'stepGuide' | 'viaTerminals'>(
+    caviTrip ? 'stepGuide' : 'routeSteps'
+  );
   const [userPt, setUserPt] = useState<{ lat: number; lng: number } | null>(null);
   /** Updated while CaviTrip is on — map dot follows you; route stays from the first fix. */
   const [liveUserPt, setLiveUserPt] = useState<{ lat: number; lng: number } | null>(null);
@@ -164,6 +228,9 @@ const DirectionsScreen: React.FC = () => {
   const [routeError, setRouteError] = useState<string | null>(null);
   const [terminalPlan, setTerminalPlan] = useState<TerminalTransitPlan | null>(null);
   const [terminalPlanLoading, setTerminalPlanLoading] = useState(false);
+  const [boardingRoutes, setBoardingRoutes] = useState<
+    { routeName: string; origin: string; destination: string; transportName: string }[]
+  >([]);
   /** When the destination is a terminal: nearest hub from the user's GPS (e.g. first mile / going home). */
   const [nearestTerminalFromUser, setNearestTerminalFromUser] = useState<
     TerminalTransitPlan['originTerminal'] | null
@@ -172,11 +239,15 @@ const DirectionsScreen: React.FC = () => {
   const [saved, setSaved] = useState(false);
   const [saveModalVisible, setSaveModalVisible] = useState(false);
   const [pickLists, setPickLists] = useState<SaveToListRow[]>([]);
+  const [listNameDraft, setListNameDraft] = useState('');
   const [saveListBusyId, setSaveListBusyId] = useState<string | null>(null);
   const [checkingSaved, setCheckingSaved] = useState(false);
   const [destinationReachedBusy, setDestinationReachedBusy] = useState(false);
 
-  const tags = useMemo(() => (place ? buildTags(place) : []), [place]);
+  const tags = useMemo(
+    () => (place ? buildTags(place, { includeTaCategory: !caviTrip }) : []),
+    [place, caviTrip]
+  );
   const commuteFromLabel = userPt ? 'Your current location' : 'Current location';
 
   useEffect(() => {
@@ -187,6 +258,14 @@ const DirectionsScreen: React.FC = () => {
       if (cancelled) return;
       if (status !== 'granted') {
         setLocStatus('denied');
+        // #region agent log
+        debugLog(
+          'DirectionsScreen.tsx:location',
+          'permission denied',
+          { status, caviTrip },
+          'A'
+        );
+        // #endregion
         return;
       }
       setLocStatus('granted');
@@ -198,9 +277,27 @@ const DirectionsScreen: React.FC = () => {
           const pt = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           setUserPt(pt);
           if (caviTrip) setLiveUserPt(pt);
+          // #region agent log
+          debugLog(
+            'DirectionsScreen.tsx:location',
+            'user position acquired',
+            { lat: pt.lat, lng: pt.lng, caviTrip },
+            'A'
+          );
+          // #endregion
         }
-      } catch {
-        if (!cancelled) setLocStatus('denied');
+      } catch (locErr) {
+        if (!cancelled) {
+          setLocStatus('denied');
+          // #region agent log
+          debugLog(
+            'DirectionsScreen.tsx:location',
+            'getCurrentPosition failed',
+            { err: locErr instanceof Error ? locErr.message : 'unknown', caviTrip },
+            'A'
+          );
+          // #endregion
+        }
       }
     })();
     return () => {
@@ -209,6 +306,13 @@ const DirectionsScreen: React.FC = () => {
   }, [place, caviTrip]);
 
   const locationWatchRef = useRef<Location.LocationSubscription | null>(null);
+  const destinationRecordedRef = useRef(false);
+
+  useEffect(() => {
+    if (caviTrip && tab === 'routeSteps') {
+      setTab('stepGuide');
+    }
+  }, [caviTrip, tab]);
 
   useEffect(() => {
     if (!place || !caviTrip || locStatus !== 'granted') {
@@ -266,6 +370,18 @@ const DirectionsScreen: React.FC = () => {
         if (cancelled) return;
         setRouteDriving(d);
         setRouteFoot(f);
+        // #region agent log
+        debugLog(
+          'DirectionsScreen.tsx:osrm',
+          'route fetch result',
+          {
+            drivingPoints: d?.geometry?.coordinates?.length ?? 0,
+            footPoints: f?.geometry?.coordinates?.length ?? 0,
+            caviTrip,
+          },
+          'C'
+        );
+        // #endregion
         if (!d) {
           setRouteError(
             'No road corridor found between you and this place. Open the full map to plan transfers or walk links manually.'
@@ -319,7 +435,7 @@ const DirectionsScreen: React.FC = () => {
           }
           return;
         }
-        const plan = await planNearestTerminalsForPlaceCommute(supabase, userPt, destCoords);
+        const plan = await planCommuterGuideForPlace(supabase, userPt, destCoords);
         if (!cancelled) {
           setTerminalPlan(plan);
           setNearestTerminalFromUser(null);
@@ -340,6 +456,99 @@ const DirectionsScreen: React.FC = () => {
     };
   }, [userPt, destCoords, isTerminal, place]);
 
+  useEffect(() => {
+    const originId = terminalPlan?.originTerminal?.id;
+    if (!originId) {
+      setBoardingRoutes([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const rows = await fetchRoutesForTerminalId(originId);
+        if (!cancelled) {
+          setBoardingRoutes(
+            rows.map((r) => ({
+              routeName: r.routeName,
+              origin: r.origin,
+              destination: r.destination,
+              transportName: r.transportName,
+            }))
+          );
+        }
+      } catch {
+        if (!cancelled) setBoardingRoutes([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [terminalPlan?.originTerminal?.id]);
+
+  const [routeSegmentsGeoJson, setRouteSegmentsGeoJson] = useState<
+    { type: 'LineString'; coordinates: number[][] }[] | null
+  >(null);
+
+  useEffect(() => {
+    if (!userPt || !destCoords) {
+      setRouteSegmentsGeoJson(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const segments: { type: 'LineString'; coordinates: number[][] }[] = [];
+      const pushSeg = async (from: { lat: number; lng: number }, to: { lat: number; lng: number }) => {
+        const d = await fetchDrivingRoute(from, to);
+        if (d?.geometry?.coordinates?.length && d.geometry.coordinates.length > 1) {
+          segments.push(d.geometry);
+        }
+      };
+
+      if (terminalPlan?.originTerminal) {
+        await pushSeg(userPt, {
+          lat: terminalPlan.originTerminal.latitude,
+          lng: terminalPlan.originTerminal.longitude,
+        });
+      }
+
+      const main = routeDriving?.geometry ?? (await fetchDrivingRoute(userPt, destCoords))?.geometry;
+      if (main?.coordinates?.length && main.coordinates.length > 1) {
+        segments.push(main);
+      }
+
+      if (terminalPlan?.destinationTerminal) {
+        const destTerm = terminalPlan.destinationTerminal;
+        const last = await fetchDrivingRoute(
+          { lat: destTerm.latitude, lng: destTerm.longitude },
+          destCoords
+        );
+        if (last?.geometry?.coordinates?.length && last.geometry.coordinates.length > 1) {
+          segments.push(last.geometry);
+        }
+      }
+
+      if (!cancelled) {
+        setRouteSegmentsGeoJson(segments.length ? segments : null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userPt, destCoords, terminalPlan, routeDriving?.geometry]);
+
+  const commuterGuideSteps = useMemo(() => {
+    if (!place) return [];
+    return buildCommuterGuideSteps({
+      userPt,
+      destPt: destCoords,
+      destinationName: place.name,
+      destMunicipality: place.city_mun,
+      terminalPlan: terminalPlanLoading ? null : terminalPlan,
+      boardingRoutes,
+      osrmSteps: routeDriving?.steps ?? [],
+    });
+  }, [place, userPt, destCoords, terminalPlan, terminalPlanLoading, boardingRoutes, routeDriving?.steps]);
+
   const mapUserPt = caviTrip ? liveUserPt ?? userPt : userPt;
 
   const mapPayload: DirectionsMapPayload = useMemo(
@@ -349,9 +558,9 @@ const DirectionsScreen: React.FC = () => {
       destLat: destCoords?.lat ?? 0,
       destLng: destCoords?.lng ?? 0,
       routeGeoJson: routeDriving?.geometry ?? routeFoot?.geometry ?? null,
-      routeSegmentsGeoJson: null,
+      routeSegmentsGeoJson,
     }),
-    [mapUserPt, destCoords, routeDriving, routeFoot]
+    [mapUserPt, destCoords, routeDriving, routeFoot, routeSegmentsGeoJson]
   );
 
   const refreshSavedState = useCallback(async () => {
@@ -402,16 +611,14 @@ const DirectionsScreen: React.FC = () => {
     }, [refreshSavedState])
   );
 
-  const onShare = async () => {
-    if (!place) return;
-    try {
-      await Share.share({
-        message: `${place.name}\n${place.address}`,
-        title: place.name,
-      });
-    } catch {
-      /* ignore */
+  const saveItemToList = async (listId: string) => {
+    if (!place) return { ok: false as const, duplicate: false, message: 'Missing place.' };
+    if (isItinerary) return addItineraryToSavedList(supabase, listId, place.id);
+    if (isTerminal) return addTerminalToSavedList(supabase, listId, place.id);
+    if (!isSupabasePlaceId(place.id)) {
+      return { ok: false as const, duplicate: false, message: 'Invalid place id.' };
     }
+    return addPlaceToSavedList(supabase, listId, place.id);
   };
 
   const openSaveToListPicker = async () => {
@@ -424,63 +631,24 @@ const DirectionsScreen: React.FC = () => {
       return;
     }
 
-    if (isItinerary) {
-      try {
-        const lists = await fetchUserListsForPicker(supabase, user.id);
-        if (!lists.length) {
-          Alert.alert(
-            'No saved lists yet',
-            'Create a list first from your profile under Saved list, then come back here.'
-          );
-          return;
-        }
-        setPickLists(lists);
-        setSaveModalVisible(true);
-      } catch (e) {
-        Alert.alert('Error', e instanceof Error ? e.message : 'Could not load lists.');
-      }
-      return;
-    }
-
-    if (isTerminal) {
-      try {
-        const lists = await fetchUserListsForPicker(supabase, user.id);
-        if (!lists.length) {
-          Alert.alert(
-            'No saved lists yet',
-            'Create a list first from your profile under Saved list, then come back here.'
-          );
-          return;
-        }
-        setPickLists(lists);
-        setSaveModalVisible(true);
-      } catch (e) {
-        Alert.alert('Error', e instanceof Error ? e.message : 'Could not load lists.');
-      }
-      return;
-    }
-
-    if (!isSupabasePlaceId(place.id)) {
-      Alert.alert(
-        'Can’t save this place',
-        'Only catalog locations with a database id can be added to a saved list.'
-      );
-      return;
-    }
-    const exists = await placeRowExists(supabase, place.id);
-    if (!exists) {
-      Alert.alert('Place not found', 'This location is not in the catalog yet and can’t be saved.');
-      return;
-    }
-    try {
-      const lists = await fetchUserListsForPicker(supabase, user.id);
-      if (!lists.length) {
+    if (!isItinerary && !isTerminal) {
+      if (!isSupabasePlaceId(place.id)) {
         Alert.alert(
-          'No saved lists yet',
-          'Create a list first from your profile under Saved list, then come back here.'
+          'Can’t save this place',
+          'Only catalog locations with a database id can be added to a saved list.'
         );
         return;
       }
+      const exists = await placeRowExists(supabase, place.id);
+      if (!exists) {
+        Alert.alert('Place not found', 'This location is not in the catalog yet and can’t be saved.');
+        return;
+      }
+    }
+
+    try {
+      const lists = await fetchUserListsForPickerWithCounts(supabase, user.id);
+      setListNameDraft(suggestedSaveListName(place.ntdp_category));
       setPickLists(lists);
       setSaveModalVisible(true);
     } catch (e) {
@@ -529,75 +697,93 @@ const DirectionsScreen: React.FC = () => {
     if (!place) return;
     setSaveListBusyId(list.id);
     try {
-      if (isItinerary) {
-        const res = await addItineraryToSavedList(supabase, list.id, place.id);
-        if (res.ok) {
-          setSaveModalVisible(false);
-          setSaved(true);
-          Alert.alert('Saved', `Added to “${list.name}”.`);
-          return;
-        }
-        if (res.duplicate) {
-          setSaveModalVisible(false);
-          setSaved(true);
-          Alert.alert('Already in list', `“${place.name}” is already in “${list.name}”.`);
-          return;
-        }
-        Alert.alert('Error', res.message ?? 'Could not save to this list.');
-        return;
-      }
-      if (isTerminal) {
-        const res = await addTerminalToSavedList(supabase, list.id, place.id);
-        if (res.ok) {
-          setSaveModalVisible(false);
-          setSaved(true);
-          Alert.alert('Saved', `Added to “${list.name}”.`);
-          return;
-        }
-        if (res.duplicate) {
-          setSaveModalVisible(false);
-          setSaved(true);
-          Alert.alert('Already in list', `“${place.name}” is already in “${list.name}”.`);
-          return;
-        }
-        Alert.alert('Error', res.message ?? 'Could not save to this list.');
-        return;
-      }
-      if (!isSupabasePlaceId(place.id)) return;
-      const res = await addPlaceToSavedList(supabase, list.id, place.id);
-      if (res.ok) {
+      const res = await saveItemToList(list.id);
+      alertAfterSaveToList(res, place.name, list.name, () => {
         setSaveModalVisible(false);
         setSaved(true);
-        Alert.alert('Saved', `Added to “${list.name}”.`);
-        return;
-      }
-      if (res.duplicate) {
-        setSaveModalVisible(false);
-        setSaved(true);
-        Alert.alert('Already in list', `“${place.name}” is already in “${list.name}”.`);
-        return;
-      }
-      Alert.alert('Error', res.message ?? 'Could not save to this list.');
+      });
     } finally {
       setSaveListBusyId(null);
     }
   };
 
-  const openFullMap = () => {
-    if (!destCoords) {
+  const onCreateList = async () => {
+    if (!place) return;
+    const trimmed = listNameDraft.trim();
+    if (!trimmed) return;
+    setSaveListBusyId(SAVE_TO_LIST_CREATE_BUSY_ID);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      const list = await findOrCreateListByName(supabase, user.id, trimmed);
+      if (!list) return;
+      const res = await saveItemToList(list.id);
+      alertAfterSaveToList(res, place.name, list.name, () => {
+        setSaveModalVisible(false);
+        setSaved(true);
+      });
+    } catch (e) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Could not create list.');
+    } finally {
+      setSaveListBusyId(null);
+    }
+  };
+
+  const openFullMap = async () => {
+    if (!destCoords || !place) {
       Alert.alert('Map unavailable', 'This destination does not have map coordinates yet.');
       return;
     }
+    const routeOrigin = userPt ?? mapUserPt;
+    let routeGeoJson = mapPayload.routeGeoJson;
+    if (!routeGeoJson && routeOrigin) {
+      try {
+        const d = await fetchDrivingRoute(routeOrigin, destCoords);
+        routeGeoJson = d?.geometry ?? routeFoot?.geometry ?? null;
+      } catch {
+        routeGeoJson = routeFoot?.geometry ?? null;
+      }
+    }
+    const outgoing = {
+      userLat: mapUserPt?.lat ?? null,
+      userLng: mapUserPt?.lng ?? null,
+      destLat: destCoords.lat,
+      destLng: destCoords.lng,
+      routeGeoJson,
+      routeSegmentsGeoJson: routeSegmentsGeoJson ?? (routeGeoJson ? [routeGeoJson] : null),
+    };
+    // #region agent log
+    debugLog(
+      'DirectionsScreen.tsx:openFullMap',
+      'navigate FullRouteMap',
+      {
+        userLat: outgoing.userLat,
+        userLng: outgoing.userLng,
+        routePoints: outgoing.routeGeoJson?.coordinates?.length ?? 0,
+        segmentCount: outgoing.routeSegmentsGeoJson?.length ?? 0,
+        locStatus,
+        caviTrip,
+      },
+      'B'
+    );
+    // #endregion
     (navigation as { navigate: (name: string, params: object) => void }).navigate('FullRouteMap', {
-      mapPayload,
+      mapPayload: outgoing,
+      destinationName: place.name,
     });
   };
 
-  const onDestinationReached = useCallback(async () => {
-    if (!place?.id) return;
+  useEffect(() => {
+    destinationRecordedRef.current = false;
+  }, [place?.id]);
+
+  const tryRecordDestinationReached = useCallback(async () => {
+    if (!place?.id || destinationRecordedRef.current) return false;
     if (!isSupabasePlaceId(place.id)) {
-      Alert.alert('Not available', 'Only catalog places can be counted toward Activity this month.');
-      return;
+      destinationRecordedRef.current = true;
+      return false;
     }
     setDestinationReachedBusy(true);
     try {
@@ -605,18 +791,39 @@ const DirectionsScreen: React.FC = () => {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        Alert.alert('Sign in', 'Sign in to add this trip to your monthly activity.');
-        return;
+        destinationRecordedRef.current = true;
+        return false;
       }
       await recordDestinationReached(user.id, place.id, {
         name: place.name,
         image: placeImageUriForActivity(place),
       });
+      destinationRecordedRef.current = true;
       Alert.alert('', 'Thank You and Enjoy your trip');
+      return true;
+    } catch {
+      return false;
     } finally {
       setDestinationReachedBusy(false);
     }
   }, [place]);
+
+  const onDestinationReached = useCallback(() => {
+    void tryRecordDestinationReached();
+  }, [tryRecordDestinationReached]);
+
+  /** CaviTrip: record visit automatically when within ~200 m of the destination. */
+  useEffect(() => {
+    if (!caviTrip || !liveUserPt || !destCoords || destinationRecordedRef.current) return;
+    const km = haversineDistanceKm(
+      liveUserPt.lat,
+      liveUserPt.lng,
+      destCoords.lat,
+      destCoords.lng
+    );
+    if (km > 0.2) return;
+    void tryRecordDestinationReached();
+  }, [caviTrip, liveUserPt, destCoords, tryRecordDestinationReached]);
 
   if (!place) {
     return (
@@ -653,32 +860,37 @@ const DirectionsScreen: React.FC = () => {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 24) + 24 }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.heroWrap}>
-          {place.image ? (
-            <Image
-              source={place.image}
-              style={styles.heroImage}
-              resizeMode="cover"
-              accessibilityLabel={`${place.name} photo`}
-            />
-          ) : (
-            <View style={[styles.heroImage, styles.heroPlaceholder]}>
-              <JamIcon ionicon="image-outline" size={48} color={MUTED} />
-            </View>
-          )}
-        </View>
-
-        <Text style={styles.placeName}>{place.name}</Text>
-
-        {caviTrip && locStatus === 'granted' ? (
-          <View style={styles.caviTripBanner}>
-            <JamIcon ionicon="navigate" size={18} color={TEAL} />
-            <Text style={styles.caviTripBannerText}>
-              CaviTrip is on — your blue dot on the map updates as you move. Keep this screen open for live GPS
-              (foreground).
-            </Text>
+        {!caviTrip ? (
+          <View style={styles.heroWrap}>
+            {placeImageSource(place.image) ? (
+              <Image
+                source={placeImageSource(place.image)!}
+                style={styles.heroImage}
+                resizeMode="cover"
+                accessibilityLabel={`${place.name} photo`}
+              />
+            ) : (
+              <View style={[styles.heroImage, styles.heroPlaceholder]}>
+                <JamIcon ionicon="image-outline" size={48} color={MUTED} />
+              </View>
+            )}
           </View>
         ) : null}
+
+        {caviTrip && destCoords ? (
+          <View style={styles.caviTripMapCard}>
+            <DirectionsMapView payload={mapPayload} style={styles.caviTripMapInner} />
+            {locStatus === 'denied' ? (
+              <Text style={styles.caviTripMapHint}>
+                Allow location access to see your position and the blue route on the map.
+              </Text>
+            ) : routeLoading && !routeDriving ? (
+              <Text style={styles.caviTripMapHint}>Loading route…</Text>
+            ) : null}
+          </View>
+        ) : null}
+
+        <Text style={styles.placeName}>{place.name}</Text>
 
         <View style={styles.tagsAndActionsRow}>
           <View style={styles.pillRow}>
@@ -706,36 +918,29 @@ const DirectionsScreen: React.FC = () => {
                 <JamIcon ionicon="bookmark-outline" size={20} color={saved ? WHITE : GREEN} />
               )}
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.fab, styles.fabShare]}
-              onPress={onShare}
-              accessibilityRole="button"
-              accessibilityLabel="Share"
-              activeOpacity={0.82}
-            >
-              <JamIcon ionicon="share-outline" size={20} color={TEAL} />
-            </TouchableOpacity>
           </View>
         </View>
 
         <View style={styles.segmentWrap} accessibilityRole="tablist">
-          <Pressable
-            onPress={() => setTab('routeSteps')}
-            style={[styles.segmentSlot, tab === 'routeSteps' && styles.segmentSlotActive]}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: tab === 'routeSteps' }}
-          >
-            <Text
-              style={[
-                styles.segmentLabel,
-                styles.segmentLabelCompact,
-                tab === 'routeSteps' ? styles.segmentLabelOn : styles.segmentLabelOff,
-              ]}
-              numberOfLines={2}
+          {!caviTrip ? (
+            <Pressable
+              onPress={() => setTab('routeSteps')}
+              style={[styles.segmentSlot, tab === 'routeSteps' && styles.segmentSlotActive]}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: tab === 'routeSteps' }}
             >
-              Commute steps
-            </Text>
-          </Pressable>
+              <Text
+                style={[
+                  styles.segmentLabel,
+                  styles.segmentLabelCompact,
+                  tab === 'routeSteps' ? styles.segmentLabelOn : styles.segmentLabelOff,
+                ]}
+                numberOfLines={2}
+              >
+                Commute steps
+              </Text>
+            </Pressable>
+          ) : null}
           <Pressable
             onPress={() => setTab('stepGuide')}
             style={[styles.segmentSlot, tab === 'stepGuide' && styles.segmentSlotActive]}
@@ -772,22 +977,9 @@ const DirectionsScreen: React.FC = () => {
           </Pressable>
         </View>
 
-        {tab === 'routeSteps' ? (
+        {tab === 'routeSteps' && !caviTrip ? (
           <View style={styles.routeCard}>
             <View style={styles.mapsPlannerCard}>
-              <View style={styles.mapsModeRow}>
-                <View style={[styles.mapsModeChip, styles.mapsModeChipActive]}>
-                  <JamIcon ionicon="checkmark-circle" size={14} color={TEAL} />
-                  <Text style={styles.mapsModeChipText}>Best</Text>
-                </View>
-                <View style={styles.mapsModeChip}>
-                  <JamIcon ionicon="bus" size={14} color={TEAL} />
-                </View>
-                <View style={styles.mapsModeChip}>
-                  <JamIcon ionicon="walk" size={14} color={TEAL} />
-                </View>
-              </View>
-
               <View style={styles.mapsInputCard}>
                 <View style={styles.mapsInputRow}>
                   <JamIcon ionicon="radio-button-off-outline" size={16} color={TITLE} />
@@ -879,9 +1071,29 @@ const DirectionsScreen: React.FC = () => {
             <View style={styles.commuterBadge}>
               <Text style={styles.commuterBadgeLabel}>Commuter-first</Text>
             </View>
-            <Text style={styles.routeOsrmDisclaimer}>{COMMUTER_DISCLAIMER}</Text>
+            <Text style={styles.routeOsrmDisclaimer}>
+              Main road toward this place first, then the terminals nearest you, then jeep or bus signboards.{' '}
+              {COMMUTER_DISCLAIMER}
+            </Text>
             <Text style={styles.routeFootnote}>{COMMUTER_FOOTNOTE}</Text>
-            <Text style={styles.guideBody}>{buildNarrativeGuide(routeDriving?.steps ?? [], place.name)}</Text>
+            {terminalPlanLoading && userPt ? (
+              <ActivityIndicator style={styles.routeSpinner} color={GREEN} />
+            ) : null}
+            {commuterGuideSteps.map((step, index) => (
+              <View key={`guide-${step.title}-${index}`} style={styles.guideStepBlock}>
+                <View style={styles.guideStepHeader}>
+                  <Text style={styles.guideStepNum}>{index + 1}</Text>
+                  <Text style={styles.guideStepTitle}>{step.title}</Text>
+                </View>
+                <Text style={styles.guideStepBody}>{step.body}</Text>
+                {step.signboards?.map((sign) => (
+                  <View key={sign} style={styles.guideSignChip}>
+                    <Text style={styles.guideSignLabel}>Sign to look for: &ldquo;{sign}&rdquo;</Text>
+                  </View>
+                ))}
+                {step.hint ? <Text style={styles.guideStepHint}>{step.hint}</Text> : null}
+              </View>
+            ))}
           </View>
         ) : (
           <View style={styles.routeCard}>
@@ -1106,26 +1318,28 @@ const DirectionsScreen: React.FC = () => {
           </View>
         )}
 
-        <View style={styles.destinationReachedWrap}>
-          <Text style={styles.destinationReachedHint}>
-            After you arrive, tap Destination Reached below to record this visit. Opening See full map does not count
-            toward Activity this month.
-          </Text>
-          <TouchableOpacity
-            onPress={onDestinationReached}
-            style={[styles.destinationReachedButton, destinationReachedBusy && styles.destinationReachedButtonDisabled]}
-            activeOpacity={0.92}
-            accessibilityRole="button"
-            accessibilityLabel="Destination Reached"
-            disabled={destinationReachedBusy}
-          >
-            {destinationReachedBusy ? (
-              <ActivityIndicator size="small" color={WHITE} />
-            ) : (
-              <Text style={styles.destinationReachedButtonLabel}>Destination Reached</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+        {!caviTrip ? (
+          <View style={styles.destinationReachedWrap}>
+            <Text style={styles.destinationReachedHint}>
+              After you arrive, tap Destination Reached below to record this visit. Opening See full map does not count
+              toward Activity this month.
+            </Text>
+            <TouchableOpacity
+              onPress={onDestinationReached}
+              style={[styles.destinationReachedButton, destinationReachedBusy && styles.destinationReachedButtonDisabled]}
+              activeOpacity={0.92}
+              accessibilityRole="button"
+              accessibilityLabel="Destination Reached"
+              disabled={destinationReachedBusy}
+            >
+              {destinationReachedBusy ? (
+                <ActivityIndicator size="small" color={WHITE} />
+              ) : (
+                <Text style={styles.destinationReachedButtonLabel}>Destination Reached</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
         <TouchableOpacity
           onPress={openFullMap}
@@ -1141,10 +1355,14 @@ const DirectionsScreen: React.FC = () => {
       <SaveToListSheet
         visible={saveModalVisible}
         onClose={() => setSaveModalVisible(false)}
-        hint={`Choose a list to add “${place.name}”.`}
+        itemLabel={place.name}
         lists={pickLists}
+        listNameDraft={listNameDraft}
+        onListNameChange={setListNameDraft}
         onSelectList={onPickList}
+        onCreateList={onCreateList}
         busyListId={saveListBusyId}
+        countLabel="items"
       />
     </View>
   );
@@ -1223,6 +1441,26 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: TITLE,
     marginBottom: 12,
+  },
+  caviTripMapCard: {
+    marginBottom: 16,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    backgroundColor: WHITE,
+  },
+  caviTripMapInner: {
+    minHeight: 220,
+    borderRadius: 0,
+  },
+  caviTripMapHint: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 17,
+    color: MUTED,
+    paddingHorizontal: 14,
+    paddingBottom: 12,
   },
   caviTripBanner: {
     flexDirection: 'row',
@@ -1758,6 +1996,69 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 24,
     color: TITLE,
+  },
+  guideStepBlock: {
+    marginTop: 16,
+    paddingTop: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: CARD_BORDER,
+  },
+  guideStepHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  guideStepNum: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: WHITE,
+    backgroundColor: OLIVE,
+    width: 26,
+    height: 26,
+    lineHeight: 26,
+    textAlign: 'center',
+    borderRadius: 13,
+    overflow: 'hidden',
+  },
+  guideStepTitle: {
+    flex: 1,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 15,
+    lineHeight: 22,
+    color: TITLE,
+  },
+  guideStepBody: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 22,
+    color: TITLE,
+    marginTop: 8,
+    marginLeft: 36,
+  },
+  guideSignChip: {
+    marginTop: 8,
+    marginLeft: 36,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: 'rgba(126, 160, 14, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(126, 160, 14, 0.35)',
+  },
+  guideSignLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    lineHeight: 18,
+    color: OLIVE,
+  },
+  guideStepHint: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 18,
+    color: MUTED,
+    marginTop: 6,
+    marginLeft: 36,
+    fontStyle: 'italic',
   },
   destinationReachedWrap: {
     marginTop: 8,

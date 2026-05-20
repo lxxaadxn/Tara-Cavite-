@@ -1,26 +1,39 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Link, useLocation } from 'react-router-dom';
 import { LogoWordmark } from './LogoWordmark';
+import { resolveAvatarFromSources, resolveAvatarUrl } from 'cavitour-shared/defaultAvatar';
 import { supabase } from '../lib/supabase';
 const olive = '#7ea00e';
-const DEFAULT_PROFILE_LOGO = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='%23eaf5cf'/><circle cx='32' cy='32' r='19' fill='%237ea00e'/><text x='32' y='38' text-anchor='middle' font-family='Arial,sans-serif' font-size='18' font-weight='700' fill='white'>CT</text></svg>";
 function navMatch(pathname, to) {
     if (to === '/search')
         return pathname === '/search' || pathname.startsWith('/place/');
+    if (to === '/establishments')
+        return pathname === '/establishments' || pathname.startsWith('/establishments/');
     if (to === '/terminals')
         return pathname === '/terminals' || pathname.startsWith('/terminals/');
     return pathname === to || pathname.startsWith(`${to}/`);
 }
 export function AppHeader() {
     const { pathname } = useLocation();
-    const [avatarUrl, setAvatarUrl] = useState(DEFAULT_PROFILE_LOGO);
+    const [avatarUrl, setAvatarUrl] = useState(() => resolveAvatarUrl(null));
 
     useEffect(() => {
         let cancelled = false;
         const loadAvatar = async () => {
             const { data } = await supabase.auth.getUser();
-            const metadata = data?.user?.user_metadata ?? {};
-            const photo = metadata.avatar_url || metadata.picture || DEFAULT_PROFILE_LOGO;
+            const u = data?.user ?? null;
+            if (!u) {
+                if (!cancelled)
+                    setAvatarUrl(resolveAvatarUrl(null));
+                return;
+            }
+            const { data: profileRow } = await supabase
+                .from('user_profiles')
+                .select('avatar_url')
+                .eq('id', u.id)
+                .maybeSingle();
+            const metadata = u.user_metadata ?? {};
+            const photo = resolveAvatarFromSources(profileRow, metadata);
             if (!cancelled)
                 setAvatarUrl(photo);
         };
@@ -32,13 +45,21 @@ export function AppHeader() {
         const { data: { subscription }, } = supabase.auth.onAuthStateChange((event, session) => {
             if (event === 'SIGNED_OUT') {
                 if (!cancelled)
-                    setAvatarUrl(DEFAULT_PROFILE_LOGO);
+                    setAvatarUrl(resolveAvatarUrl(null));
                 return;
             }
-            const metadata = session?.user?.user_metadata ?? {};
-            const photo = metadata.avatar_url || metadata.picture || DEFAULT_PROFILE_LOGO;
-            if (!cancelled)
-                setAvatarUrl(photo);
+            const u = session?.user ?? null;
+            if (!u) return;
+            void (async () => {
+                const { data: profileRow } = await supabase
+                    .from('user_profiles')
+                    .select('avatar_url')
+                    .eq('id', u.id)
+                    .maybeSingle();
+                if (cancelled) return;
+                const metadata = u.user_metadata ?? {};
+                setAvatarUrl(resolveAvatarFromSources(profileRow, metadata));
+            })();
         });
         return () => {
             cancelled = true;
@@ -49,6 +70,7 @@ export function AppHeader() {
 
     const nav = [
         { to: '/search', label: 'Search' },
+        { to: '/establishments', label: 'Browse' },
         { to: '/saved', label: 'Saved' },
         { to: '/itinerary', label: 'Itinerary' },
         { to: '/terminals', label: 'Terminals' },
@@ -73,18 +95,8 @@ export function AppHeader() {
         </nav>
 
         <div className="flex items-center gap-3 shrink-0">
-          <Link
-            to="/saved"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-600 transition hover:bg-neutral-50"
-            aria-label="Saved"
-          >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-              <path d="m12 21.35-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09A6.02 6.02 0 0 1 16.5 3C19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54z" />
-            </svg>
-          </Link>
           <Link to="/profile" className="relative rounded-full ring-2 ring-white shadow-md overflow-hidden w-10 h-10 block" aria-label="Profile">
             <img src={avatarUrl} alt="" className="w-full h-full object-cover"/>
-            <span className="absolute bottom-0.5 right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white" style={{ backgroundColor: olive }} aria-hidden/>
           </Link>
         </div>
       </div>

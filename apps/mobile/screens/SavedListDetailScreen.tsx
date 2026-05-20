@@ -214,20 +214,9 @@ export default function SavedListDetailScreen() {
       return;
     }
     if (item.kind === 'itinerary' && item.itinerary) {
-      const c = item.itinerary;
-      const place: Place = {
-        id: c.id,
-        name: c.title,
-        address: c.subtitle,
-        type: 'Itinerary',
-        hours: 'Varies by stop',
-        latitude: 14.1,
-        longitude: 120.9,
-        image: c.image,
-      };
       (navigation as { navigate: (name: string, params: object) => void }).navigate('Itineraries', {
-        screen: 'AboutEstablishment',
-        params: { place },
+        screen: 'ItineraryDetail',
+        params: { itineraryId: item.itinerary.id },
       });
     }
   };

@@ -14,17 +14,14 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Location from 'expo-location';
 import { useNavigation } from '@react-navigation/native';
 import { JamIcon } from '../components/JamIcon';
+import { MapPlacePreviewCard } from '../components/MapPlacePreviewCard';
 import { LeafletMapView } from '../components/LeafletMapView';
 import type { LeafletMarker } from '../components/LeafletMapView';
-import {
-  getMapSpots,
-  mapSpotsToMarkers,
-  getMapSpotById,
-  type CommuteLegKind,
-} from '../data/mapBrowseSpots';
+import type { LeafletPreviewPoint } from '../components/leafletMapTypes';
+import { placeToMapSpot, type CommuteLegKind } from '../data/mapBrowseSpots';
 import { getMainFloatingTabBarStyle } from '../lib/mainTabBarStyle';
 import { supabase } from '../lib/supabase';
-import { fetchTrendingPlacesFromSupabase } from '../lib/placesFromSupabase';
+import { fetchTrendingPlacesFromSupabase, logPlacesFetchError } from '../lib/placesFromSupabase';
 import { fetchTerminalsFromSupabase } from '../lib/terminalsFromSupabase';
 import { mockTerminals, type Place, type Terminal } from '../data/mockData';
 
@@ -40,6 +37,10 @@ const STAR = '#FFC012';
 const { height: SCREEN_H } = Dimensions.get('window');
 const SHEET_PEEK_RATIO = 0.6;
 const SHEET_ROUTE_RATIO = 0.6;
+const PREVIEW_CARD_HALF_W = 144;
+const PREVIEW_ABOVE_OFFSET = 168;
+const PREVIEW_BELOW_OFFSET = 14;
+const PREVIEW_FLIP_TOP_THRESHOLD = 170;
 
 function legIonicon(kind: CommuteLegKind): string {
   switch (kind) {
@@ -64,13 +65,22 @@ export default function MapScreen() {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sheetMode, setSheetMode] = useState<'preview' | 'routes'>('preview');
+  const [previewSpotId, setPreviewSpotId] = useState<string | null>(null);
+  const [previewPoint, setPreviewPoint] = useState<LeafletPreviewPoint | null>(null);
   const [dbMarkers, setDbMarkers] = useState<LeafletMarker[]>([]);
   const [dbPlaces, setDbPlaces] = useState<Place[]>([]);
   const [terminals, setTerminals] = useState<Terminal[]>(mockTerminals);
 
-  const spots = useMemo(() => getMapSpots(), []);
-  const markers = useMemo(() => mapSpotsToMarkers(spots), [spots]);
-  const selectedSpot = selectedId ? getMapSpotById(selectedId) : undefined;
+  const selectedSpot = useMemo(() => {
+    if (!selectedId) return undefined;
+    const place = dbPlaces.find((p) => p.id === selectedId);
+    return place ? placeToMapSpot(place) : undefined;
+  }, [selectedId, dbPlaces]);
+
+  const previewPlace = useMemo(() => {
+    if (!previewSpotId) return undefined;
+    return dbPlaces.find((p) => p.id === previewSpotId);
+  }, [previewSpotId, dbPlaces]);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,7 +95,8 @@ export default function MapScreen() {
           lng: p.longitude,
         }));
         if (!cancelled) setDbMarkers(m);
-      } catch {
+      } catch (err) {
+        logPlacesFetchError('fetchTrendingPlacesFromSupabase', err);
         if (!cancelled) {
           setDbPlaces([]);
           setDbMarkers([]);
@@ -123,11 +134,7 @@ export default function MapScreen() {
     [terminals]
   );
 
-  const combinedMarkers = useMemo(() => {
-    // Prefer DB markers (real establishments). Fall back to bundled map data if DB is empty.
-    if (dbMarkers.length > 0) return dbMarkers;
-    return markers;
-  }, [dbMarkers, markers]);
+  const combinedMarkers = dbMarkers;
 
   const sheetHeight =
     selectedSpot == null
@@ -196,20 +203,23 @@ export default function MapScreen() {
     };
   }, [navigation]);
 
-  const openSpot = (id: string) => {
-    if (id.startsWith('terminal-')) {
-      const terminalId = id.replace('terminal-', '');
-      const terminal = terminals.find((t) => t.id === terminalId);
-      if (terminal) {
-        navigation.navigate('TerminalDetail' as never, { terminal } as never);
-      }
-      return;
+  const clearPreview = () => {
+    setPreviewSpotId(null);
+    setPreviewPoint(null);
+  };
+
+  const openTerminal = (id: string) => {
+    if (!id.startsWith('terminal-')) return;
+    clearPreview();
+    const terminalId = id.replace('terminal-', '');
+    const terminal = terminals.find((t) => t.id === terminalId);
+    if (terminal) {
+      navigation.navigate('TerminalDetail' as never, { terminal } as never);
     }
-    const livePlace = dbPlaces.find((p) => p.id === id);
-    if (livePlace) {
-      navigation.navigate('AboutEstablishment' as never, { place: livePlace } as never);
-      return;
-    }
+  };
+
+  const openDirectionsSheet = (id: string) => {
+    clearPreview();
     setSelectedId(id);
     setSheetMode('preview');
   };
@@ -243,8 +253,46 @@ export default function MapScreen() {
             markers={combinedMarkers}
             terminals={terminalMarkers}
             userLocation={userLocation}
-            onMarkerPress={(id) => openSpot(id)}
+            onMarkerPress={openTerminal}
+            onMarkerPreview={(id, point) => {
+              if (id.startsWith('terminal-')) return;
+              setPreviewSpotId(id);
+              setPreviewPoint(point);
+            }}
+            onMarkerPreviewEnd={clearPreview}
           />
+
+          {previewPlace && previewPoint ? (
+            <View
+              style={[
+                styles.previewAnchor,
+                {
+                  left: previewPoint.x,
+                  top: previewPoint.y,
+                  transform: [
+                    { translateX: -PREVIEW_CARD_HALF_W },
+                    {
+                      translateY:
+                        previewPoint.y < PREVIEW_FLIP_TOP_THRESHOLD
+                          ? PREVIEW_BELOW_OFFSET
+                          : -PREVIEW_ABOVE_OFFSET,
+                    },
+                  ],
+                },
+              ]}
+              pointerEvents="box-none"
+            >
+              <MapPlacePreviewCard
+                place={previewPlace}
+                flipBelow={previewPoint.y < PREVIEW_FLIP_TOP_THRESHOLD}
+                onExplore={() => {
+                  clearPreview();
+                  navigation.navigate('AboutEstablishment' as never, { place: previewPlace } as never);
+                }}
+                onDirections={() => openDirectionsSheet(previewPlace.id)}
+              />
+            </View>
+          ) : null}
 
           <View
             style={[styles.frameOverlay, { paddingTop: OVERLAY_TOP, paddingHorizontal: H_PAD }]}
@@ -333,6 +381,17 @@ export default function MapScreen() {
                     </View>
                     <Text style={styles.closesText}>{selectedSpot.closesAtLabel ?? selectedSpot.hours}</Text>
                   </View>
+                  <TouchableOpacity
+                    style={styles.aboutCta}
+                    onPress={() => {
+                      closeSheet();
+                      navigation.navigate('AboutEstablishment' as never, { place: selectedSpot } as never);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="About establishment"
+                  >
+                    <Text style={styles.aboutCtaLabel}>ABOUT ESTABLISHMENT</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.directionsCta}
                     onPress={() => setSheetMode('routes')}
@@ -423,6 +482,11 @@ const styles = StyleSheet.create({
   mapLayer: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: MAP_BG,
+  },
+  previewAnchor: {
+    position: 'absolute',
+    zIndex: 4,
+    width: 288,
   },
   frameOverlay: {
     position: 'absolute',
@@ -610,6 +674,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: MUTED,
     flex: 1,
+  },
+  aboutCta: {
+    marginBottom: 10,
+    borderRadius: 999,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: TEAL,
+    backgroundColor: '#FFFFFF',
+  },
+  aboutCtaLabel: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 14,
+    color: TEAL,
+    letterSpacing: 0.4,
   },
   directionsCta: {
     backgroundColor: GREEN,

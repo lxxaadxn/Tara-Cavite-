@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
 import { JamIcon } from './JamIcon';
+export { FILTER_OPTION_LABEL_BY_KEY } from '../lib/dashboardFilterOptions';
 
 /** Figma filter export: dark green chevron (#213502) */
 const CHEVRON = '#213502';
@@ -85,17 +86,6 @@ const SECTIONS: FilterSection[] = [
     ],
   },
 ];
-
-/** Key → label for all filter options (for screens that apply selections outside the panel). */
-export const FILTER_OPTION_LABEL_BY_KEY: Record<string, string> = (() => {
-  const m: Record<string, string> = {};
-  for (const s of SECTIONS) {
-    for (const o of s.options) {
-      m[o.key] = o.label;
-    }
-  }
-  return m;
-})();
 
 /** Ids for `sectionIds` on {@link DashboardFiltersPanel}. */
 export type DashboardFilterSectionId =

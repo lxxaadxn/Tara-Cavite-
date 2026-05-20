@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   View,
   Text,
@@ -15,7 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { FontAwesome, Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { JamIcon } from '../components/JamIcon';
 import { Colors } from '../constants/theme';
 import { Button } from '../components/Button';
@@ -28,10 +27,9 @@ import { withAuthRetry, isNetworkErrorMsg, NETWORK_ERROR_USER_MESSAGE } from '..
 import { signInWithGoogleMobile } from '../lib/googleAuth';
 import { getAdminReservedEmailMessage, isAdminReservedEmail } from '../lib/adminReservedEmail';
 
-const TURQUOISE = '#54C0CC';
-const MUTED = '#7A7878';
-const LINE = 'rgba(122, 120, 120, 0.45)';
-const AUTH_POPUP_MS = 1200;
+const MUTED = '#6B7280';
+const BORDER = 'rgba(17, 24, 39, 0.1)';
+const FIELD_BG = '#F9FAFB';
 
 function toFriendlyLoginError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error ?? '');
@@ -89,9 +87,9 @@ const SignInScreen: React.FC = () => {
   };
 
   const runGoogleSignIn = async () => {
+    setFormError(null);
     setLoading(true);
     setGoogleAuthInProgress(true);
-    const startedAt = Date.now();
     try {
       await signInWithGoogleMobile();
       await AsyncStorage.setItem('isAuthenticated', 'true');
@@ -102,30 +100,17 @@ const SignInScreen: React.FC = () => {
           : 'Google sign in failed. Please try again.';
       setFormError(message);
     } finally {
-      const elapsed = Date.now() - startedAt;
-      const remaining = Math.max(0, AUTH_POPUP_MS - elapsed);
-      if (remaining > 0) {
-        await new Promise((resolve) => setTimeout(resolve, remaining));
-      }
       setLoading(false);
       setGoogleAuthInProgress(false);
     }
   };
 
   const handleGoogleSignIn = () => {
-    setFormError(null);
     if (!isSupabaseConfigured) {
       setFormError(SUPABASE_ENV_MISSING_MESSAGE);
       return;
     }
-    Alert.alert(
-      'Sign in with Google',
-      'Allow CaviTour to sign you in with Google? You will continue in the Google sign-in window.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Continue', onPress: () => void runGoogleSignIn() },
-      ]
-    );
+    void runGoogleSignIn();
   };
 
   return (
@@ -133,9 +118,9 @@ const SignInScreen: React.FC = () => {
       <Modal visible={googleAuthInProgress} transparent animationType="fade" statusBarTranslucent>
         <View style={styles.authOverlay}>
           <View style={styles.authCard}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={styles.authTitle}>Authenticating with Google</Text>
-            <Text style={styles.authSubtitle}>Please continue in the Google sign-in window.</Text>
+            <ActivityIndicator size="large" color={Colors.accent} />
+            <Text style={styles.authTitle}>Signing in with Google</Text>
+            <Text style={styles.authSubtitle}>Complete sign-in in the Google window.</Text>
           </View>
         </View>
       </Modal>
@@ -145,362 +130,318 @@ const SignInScreen: React.FC = () => {
         style={styles.flex}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
       >
-        <View style={[styles.column, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-          <View style={[styles.hero, { marginTop: -insets.top, paddingTop: insets.top + 8 }]}>
-            <View style={styles.decoTurquoise} pointerEvents="none" />
-            <View style={styles.decoTealBlob} pointerEvents="none" />
-
-            <View style={styles.headerTextBlock}>
-              <Text style={styles.mabuhay}>Mabuhay!</Text>
-              <Text style={styles.welcome}>Welcome to CaviTour</Text>
-            </View>
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingTop: insets.top + 16, paddingBottom: Math.max(insets.bottom, 24) },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.brandBlock}>
+            <Text style={styles.brandMark}>CaviTour</Text>
+            <Text style={styles.brandTagline}>Mabuhay — explore Cavite with ease.</Text>
           </View>
 
-          <View style={styles.sheet}>
-            <ScrollView
-              style={styles.sheetScroll}
-              contentContainerStyle={styles.sheetScrollContent}
-              keyboardShouldPersistTaps="always"
-              showsVerticalScrollIndicator={false}
-              bounces={false}
-            >
-              <View style={styles.loginHead}>
-                <Text style={styles.loginTitle}>Login</Text>
-              </View>
+          <View style={styles.card}>
+            <Text style={styles.title}>Sign in</Text>
+            <Text style={styles.subtitle}>Use your email or Google account.</Text>
 
-              <View style={styles.fieldsBlock}>
-                <View style={styles.pill}>
-                  <Ionicons name="mail-outline" size={19} color={MUTED} style={styles.pillIcon} />
-                  <TextInput
-                    style={styles.pillInput}
-                    placeholder="Email"
-                    placeholderTextColor={MUTED}
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    accessibilityLabel="Email"
-                  />
-                </View>
-
-                <View style={[styles.pill, styles.pillSpaced]}>
-                  <Ionicons name="lock-closed-outline" size={19} color={MUTED} style={styles.pillIcon} />
-                  <TextInput
-                    style={styles.pillInput}
-                    placeholder="Password"
-                    placeholderTextColor={MUTED}
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry
-                    accessibilityLabel="Password"
-                  />
-                </View>
-              </View>
-
-              <TouchableOpacity
-                style={styles.forgotWrap}
-                accessibilityRole="button"
-                hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
-                onPress={() => {
-                  const parent = navigation.getParent();
-                  if (parent) {
-                    parent.navigate('Auth' as never, { screen: 'ForgotPassword' } as never);
-                  } else {
-                    navigation.navigate('ForgotPassword' as never);
-                  }
-                }}
-              >
-                <Text style={styles.forgotText}>Forgot Password?</Text>
-              </TouchableOpacity>
-
-              {formError ? (
-                <Text style={styles.errorText} accessibilityRole="alert">
-                  {formError}
-                </Text>
-              ) : null}
-
-              <View style={styles.loginBtnWrap}>
-                <Button
-                  title="Login"
-                  onPress={handleSignIn}
-                  loading={loading}
-                  disabled={loading}
-                  accessibilityLabel="Sign in to your CaviTour account"
-                  style={styles.loginBtn}
-                  textStyle={styles.loginBtnText}
+            <View style={styles.fieldsBlock}>
+              <Text style={styles.fieldLabel}>Email</Text>
+              <View style={styles.field}>
+                <Ionicons name="mail-outline" size={18} color={MUTED} style={styles.fieldIcon} />
+                <TextInput
+                  style={styles.fieldInput}
+                  placeholder="you@example.com"
+                  placeholderTextColor={MUTED}
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  accessibilityLabel="Email"
                 />
               </View>
 
-              <View style={styles.bottomBlock}>
-                <View style={styles.dividerRow}>
-                  <View style={styles.dividerLine} />
-                  <Text style={styles.dividerLabel}>Or login with</Text>
-                  <View style={styles.dividerLine} />
-                </View>
-
-                <View style={styles.socialRow}>
-                  <TouchableOpacity
-                    style={styles.socialBtn}
-                    accessibilityLabel="Log in with Facebook"
-                    onPress={() => {}}
-                  >
-                    <FontAwesome name="facebook" size={22} color={Colors.primary} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.socialBtn}
-                    accessibilityLabel="Log in with Google"
-                    onPress={handleGoogleSignIn}
-                  >
-                    <JamIcon ionicon="logo-google" size={22} color={Colors.primary} />
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.footerRow}>
-                  <Text style={styles.footerMuted}>{"Don't have an account? "}</Text>
-                  <TouchableOpacity onPress={() => navigation.navigate('SignUp')} accessibilityRole="button">
-                    <Text style={styles.footerLink}>Sign up</Text>
-                  </TouchableOpacity>
-                </View>
+              <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>Password</Text>
+              <View style={styles.field}>
+                <Ionicons name="lock-closed-outline" size={18} color={MUTED} style={styles.fieldIcon} />
+                <TextInput
+                  style={styles.fieldInput}
+                  placeholder="Your password"
+                  placeholderTextColor={MUTED}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  accessibilityLabel="Password"
+                />
               </View>
-            </ScrollView>
+            </View>
+
+            <TouchableOpacity
+              style={styles.forgotWrap}
+              accessibilityRole="button"
+              hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+              onPress={() => {
+                const parent = navigation.getParent();
+                if (parent) {
+                  parent.navigate('Auth' as never, { screen: 'ForgotPassword' } as never);
+                } else {
+                  navigation.navigate('ForgotPassword' as never);
+                }
+              }}
+            >
+              <Text style={styles.forgotText}>Forgot password?</Text>
+            </TouchableOpacity>
+
+            {formError ? (
+              <Text style={styles.errorText} accessibilityRole="alert">
+                {formError}
+              </Text>
+            ) : null}
+
+            <Button
+              title="Sign in"
+              onPress={handleSignIn}
+              loading={loading}
+              disabled={loading}
+              accessibilityLabel="Sign in to your CaviTour account"
+              style={styles.primaryBtn}
+              textStyle={styles.primaryBtnText}
+            />
+
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerLabel}>or</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <TouchableOpacity
+              style={styles.googleBtn}
+              onPress={handleGoogleSignIn}
+              disabled={loading}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Continue with Google"
+            >
+              <JamIcon ionicon="logo-google" size={20} color={Colors.primary} />
+              <Text style={styles.googleBtnText}>Continue with Google</Text>
+            </TouchableOpacity>
           </View>
-        </View>
+
+          <View style={styles.footerRow}>
+            <Text style={styles.footerMuted}>{"Don't have an account? "}</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('SignUp')} accessibilityRole="button">
+              <Text style={styles.footerLink}>Sign up</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  /** White behind status bar / nav bar; hero is pulled up with insets for green under status bar */
   root: {
     flex: 1,
-    backgroundColor: Colors.white,
-    paddingTop: 0,
+    backgroundColor: '#FFFFFF',
   },
   flex: {
     flex: 1,
-    backgroundColor: Colors.white,
   },
-  /** flex 1 : flex 3 ≈ 25% hero / 75% white sheet */
-  column: {
-    flex: 1,
-    backgroundColor: Colors.white,
-    overflow: 'visible',
-  },
-  hero: {
-    flex: 1,
-    backgroundColor: Colors.accent,
+  scrollContent: {
+    flexGrow: 1,
     paddingHorizontal: 24,
-    justifyContent: 'center',
-    overflow: 'hidden',
   },
-  decoTurquoise: {
-    position: 'absolute',
-    width: 160,
-    height: 110,
-    borderRadius: 56,
-    backgroundColor: TURQUOISE,
-    opacity: 0.95,
-    top: 4,
-    left: -48,
-    transform: [{ rotate: '-18deg' }],
+  brandBlock: {
+    marginBottom: 28,
   },
-  decoTealBlob: {
-    position: 'absolute',
-    width: 220,
-    height: 320,
-    borderRadius: 110,
-    backgroundColor: Colors.primary,
-    top: 24,
-    right: -72,
-  },
-  headerTextBlock: {
-    paddingBottom: 4,
-  },
-  mabuhay: {
+  brandMark: {
     fontFamily: 'Poppins_700Bold',
-    fontSize: 38,
-    lineHeight: 46,
-    color: Colors.white,
+    fontSize: 32,
+    lineHeight: 38,
+    color: Colors.accent,
+    letterSpacing: -0.5,
   },
-  welcome: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 17,
-    lineHeight: 24,
-    color: Colors.white,
-    marginTop: 8,
-    opacity: 0.98,
+  brandTagline: {
+    marginTop: 6,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 15,
+    lineHeight: 22,
+    color: MUTED,
   },
-  sheet: {
-    flex: 3,
-    backgroundColor: Colors.white,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    marginTop: -20,
-    paddingHorizontal: 22,
-    paddingTop: 8,
-    minHeight: 0,
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: BORDER,
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.04,
+    shadowRadius: 24,
+    elevation: 2,
   },
-  sheetScroll: {
-    flex: 1,
+  title: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 22,
+    lineHeight: 28,
+    color: Colors.text.primary,
   },
-  sheetScrollContent: {
-    paddingBottom: 16,
-  },
-  loginHead: {
-    paddingTop: 18,
-    paddingBottom: 26,
-  },
-  loginTitle: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 24,
-    lineHeight: 30,
-    color: Colors.primary,
+  subtitle: {
+    marginTop: 4,
+    marginBottom: 20,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    color: MUTED,
   },
   fieldsBlock: {
     marginBottom: 4,
   },
-  pill: {
+  fieldLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    lineHeight: 18,
+    color: Colors.text.primary,
+    marginBottom: 6,
+  },
+  fieldLabelSpaced: {
+    marginTop: 14,
+  },
+  field: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: LINE,
-    borderRadius: 999,
-    paddingVertical: 2,
-    paddingHorizontal: 14,
-    minHeight: 46,
-    backgroundColor: Colors.white,
+    borderColor: BORDER,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    minHeight: 48,
+    backgroundColor: FIELD_BG,
   },
-  pillSpaced: {
-    marginTop: 18,
-  },
-  pillIcon: {
+  fieldIcon: {
     marginRight: 10,
   },
-  pillInput: {
+  fieldInput: {
     flex: 1,
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Inter_400Regular',
     fontSize: 15,
     color: Colors.text.primary,
-    paddingVertical: 10,
+    paddingVertical: 12,
   },
   forgotWrap: {
     alignSelf: 'flex-end',
-    marginTop: 8,
+    marginTop: 10,
     marginBottom: 4,
   },
   forgotText: {
-    fontFamily: 'Poppins_400Regular',
-    fontSize: 11,
-    color: Colors.primary,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: Colors.accent,
   },
   errorText: {
-    fontSize: 12,
-    color: '#c62828',
-    fontFamily: 'Poppins_400Regular',
-    marginBottom: 8,
-    marginTop: 4,
+    fontSize: 13,
+    color: '#B91C1C',
+    fontFamily: 'Inter_400Regular',
+    marginTop: 12,
+    marginBottom: 4,
+    lineHeight: 18,
   },
-  loginBtnWrap: {
-    marginTop: 20,
-    marginBottom: 48,
-  },
-  loginBtn: {
+  primaryBtn: {
     width: '100%',
-    maxWidth: 400,
-    alignSelf: 'center',
-    height: 48,
-    minHeight: 48,
-    borderRadius: 999,
+    marginTop: 20,
+    height: 50,
+    minHeight: 50,
+    borderRadius: 12,
     paddingVertical: 0,
     backgroundColor: Colors.accent,
   },
-  loginBtnText: {
-    fontFamily: 'Poppins_700Bold',
+  primaryBtnText: {
+    fontFamily: 'Poppins_600SemiBold',
     fontSize: 16,
     textTransform: 'none',
-    letterSpacing: 0.2,
-  },
-  bottomBlock: {
-    paddingTop: 0,
+    letterSpacing: 0,
   },
   dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 0,
-    marginBottom: 12,
-    gap: 10,
+    marginTop: 20,
+    marginBottom: 16,
+    gap: 12,
   },
   dividerLine: {
     flex: 1,
     height: StyleSheet.hairlineWidth,
-    backgroundColor: LINE,
+    backgroundColor: BORDER,
   },
   dividerLabel: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Inter_400Regular',
     fontSize: 13,
     color: MUTED,
+    textTransform: 'lowercase',
   },
-  socialRow: {
+  googleBtn: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 16,
-    marginBottom: 10,
-  },
-  socialBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: LINE,
-    backgroundColor: Colors.white,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 10,
+    minHeight: 50,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: '#FFFFFF',
+  },
+  googleBtnText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 15,
+    color: Colors.text.primary,
   },
   footerRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingBottom: 4,
+    marginTop: 24,
     flexWrap: 'wrap',
   },
   footerMuted: {
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Inter_400Regular',
     fontSize: 14,
     color: MUTED,
   },
   footerLink: {
-    fontFamily: 'Poppins_700Bold',
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
-    color: Colors.primary,
+    color: Colors.accent,
   },
   authOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
   },
   authCard: {
     width: '100%',
     maxWidth: 320,
     backgroundColor: Colors.white,
     borderRadius: 16,
-    paddingHorizontal: 18,
-    paddingVertical: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
     alignItems: 'center',
   },
   authTitle: {
-    marginTop: 12,
-    fontFamily: 'Poppins_700Bold',
+    marginTop: 14,
+    fontFamily: 'Poppins_600SemiBold',
     fontSize: 16,
     color: Colors.text.primary,
     textAlign: 'center',
   },
   authSubtitle: {
     marginTop: 6,
-    fontFamily: 'Poppins_400Regular',
+    fontFamily: 'Inter_400Regular',
     fontSize: 13,
     color: MUTED,
     textAlign: 'center',

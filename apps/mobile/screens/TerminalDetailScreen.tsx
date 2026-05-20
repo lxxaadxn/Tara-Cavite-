@@ -23,8 +23,14 @@ import {
   isTerminalSavedByUser,
   removeTerminalFromAllUserLists,
   addTerminalToSavedList,
-  fetchUserListsForPicker,
+  fetchUserListsForPickerWithCounts,
+  findOrCreateListByName,
 } from '../lib/savedListItems';
+import {
+  alertAfterSaveToList,
+  SAVE_TO_LIST_CREATE_BUSY_ID,
+  suggestedSaveListName,
+} from '../lib/saveToListModalHelpers';
 import { fetchRoutesForTerminalId } from '../lib/fetchTerminalRoutesFromSupabase';
 import { haversineDistanceKm } from '../lib/placesFromSupabase';
 
@@ -80,6 +86,7 @@ const TerminalDetailScreen: React.FC = () => {
   const [checkingSaved, setCheckingSaved] = useState(false);
   const [saveModalVisible, setSaveModalVisible] = useState(false);
   const [pickLists, setPickLists] = useState<SaveToListRow[]>([]);
+  const [listNameDraft, setListNameDraft] = useState('');
   const [saveListBusyId, setSaveListBusyId] = useState<string | null>(null);
   const [openGates, setOpenGates] = useState<Record<string, boolean>>({});
   const [liveRoutes, setLiveRoutes] = useState<{ label: string }[]>([]);
@@ -197,14 +204,8 @@ const TerminalDetailScreen: React.FC = () => {
       return;
     }
     try {
-      const lists = await fetchUserListsForPicker(supabase, user.id);
-      if (!lists.length) {
-        Alert.alert(
-          'No saved lists yet',
-          'Create a list first from your profile under Saved list, then come back here.'
-        );
-        return;
-      }
+      const lists = await fetchUserListsForPickerWithCounts(supabase, user.id);
+      setListNameDraft(suggestedSaveListName());
       setPickLists(lists);
       setSaveModalVisible(true);
     } catch (e) {
@@ -248,19 +249,34 @@ const TerminalDetailScreen: React.FC = () => {
     setSaveListBusyId(list.id);
     try {
       const res = await addTerminalToSavedList(supabase, list.id, terminal.id);
-      if (res.ok) {
+      alertAfterSaveToList(res, terminal.name, list.name, () => {
         setSaveModalVisible(false);
         setSaved(true);
-        Alert.alert('Saved', `Added to “${list.name}”.`);
-        return;
-      }
-      if (res.duplicate) {
+      });
+    } finally {
+      setSaveListBusyId(null);
+    }
+  };
+
+  const onCreateList = async () => {
+    if (!terminal) return;
+    const trimmed = listNameDraft.trim();
+    if (!trimmed) return;
+    setSaveListBusyId(SAVE_TO_LIST_CREATE_BUSY_ID);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      const list = await findOrCreateListByName(supabase, user.id, trimmed);
+      if (!list) return;
+      const res = await addTerminalToSavedList(supabase, list.id, terminal.id);
+      alertAfterSaveToList(res, terminal.name, list.name, () => {
         setSaveModalVisible(false);
         setSaved(true);
-        Alert.alert('Already in list', `“${terminal.name}” is already in “${list.name}”.`);
-        return;
-      }
-      Alert.alert('Error', res.message ?? 'Could not save to this list.');
+      });
+    } catch (e) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Could not create list.');
     } finally {
       setSaveListBusyId(null);
     }
@@ -499,10 +515,14 @@ const TerminalDetailScreen: React.FC = () => {
       <SaveToListSheet
         visible={saveModalVisible}
         onClose={() => setSaveModalVisible(false)}
-        hint={`Choose a list to add “${terminal.name}”.`}
+        itemLabel={terminal.name}
         lists={pickLists}
+        listNameDraft={listNameDraft}
+        onListNameChange={setListNameDraft}
         onSelectList={onPickList}
+        onCreateList={onCreateList}
         busyListId={saveListBusyId}
+        countLabel="items"
       />
     </View>
   );

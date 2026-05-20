@@ -15,6 +15,39 @@ export function readSavedLists() {
   return safeParse(window.localStorage.getItem(SAVED_LISTS_KEY));
 }
 
+export function isItinerarySavedItem(item) {
+  return item?.kind === 'itinerary' || String(item?.id ?? '').startsWith('itinerary-');
+}
+
+/** Lists eligible when saving an itinerary (itinerary-only or empty itinerary lists). */
+export function readItinerarySavedLists() {
+  return readSavedLists()
+    .filter((list) => {
+      const items = Array.isArray(list.items) ? list.items : [];
+      if (items.length === 0) return list.listKind === 'itinerary';
+      return items.every(isItinerarySavedItem);
+    })
+    .map((list) => {
+      const items = Array.isArray(list.items) ? list.items : [];
+      return {
+        ...list,
+        items: items.filter(isItinerarySavedItem),
+      };
+    });
+}
+
+/** Lists the user marked public (shown on profile). */
+export function readPublicSavedLists() {
+  return readSavedLists()
+    .map((list) => ({
+      ...list,
+      name: list.name || 'My list',
+      privacy: list.privacy === 'public' ? 'public' : 'private',
+      items: Array.isArray(list.items) ? list.items : [],
+    }))
+    .filter((list) => list.privacy === 'public' && list.items.length > 0);
+}
+
 function writeSavedLists(lists) {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(SAVED_LISTS_KEY, JSON.stringify(lists));
@@ -40,17 +73,17 @@ export function savePlaceToList(listName, place) {
   if (listIndex >= 0) {
     const existingList = lists[listIndex];
     const currentItems = Array.isArray(existingList.items) ? existingList.items : [];
-    const existingItemIdx = currentItems.findIndex((item) => item.id === nextPlace.id);
-    if (existingItemIdx >= 0) {
-      currentItems[existingItemIdx] = { ...currentItems[existingItemIdx], ...nextPlace };
-    } else {
-      currentItems.unshift(nextPlace);
+    const alreadySaved = currentItems.some((item) => item.id === nextPlace.id);
+    if (alreadySaved) {
+      return { ok: true, alreadySaved: true, listName: cleanName };
     }
+    currentItems.unshift(nextPlace);
     lists[listIndex] = { ...existingList, name: cleanName, items: currentItems, updatedAt: nowIso };
   } else {
     lists.unshift({
       id: `list-${Date.now()}`,
       name: cleanName,
+      privacy: 'private',
       createdAt: nowIso,
       updatedAt: nowIso,
       items: [nextPlace],
@@ -58,7 +91,7 @@ export function savePlaceToList(listName, place) {
   }
 
   writeSavedLists(lists);
-  return { ok: true };
+  return { ok: true, alreadySaved: false, listName: cleanName };
 }
 
 /** @param {{ id: string; title?: string; image?: string; subtitle?: string }} itinerary */
@@ -84,17 +117,24 @@ export function saveItineraryToList(listName, itinerary) {
   if (listIndex >= 0) {
     const existingList = lists[listIndex];
     const currentItems = Array.isArray(existingList.items) ? existingList.items : [];
-    const existingItemIdx = currentItems.findIndex((item) => item.id === nextItem.id);
-    if (existingItemIdx >= 0) {
-      currentItems[existingItemIdx] = { ...currentItems[existingItemIdx], ...nextItem };
-    } else {
-      currentItems.unshift(nextItem);
+    const alreadySaved = currentItems.some((item) => item.id === nextItem.id);
+    if (alreadySaved) {
+      return { ok: true, alreadySaved: true, listName: cleanName };
     }
-    lists[listIndex] = { ...existingList, name: cleanName, items: currentItems, updatedAt: nowIso };
+    currentItems.unshift(nextItem);
+    lists[listIndex] = {
+      ...existingList,
+      name: cleanName,
+      listKind: existingList.listKind || 'itinerary',
+      items: currentItems,
+      updatedAt: nowIso,
+    };
   } else {
     lists.unshift({
       id: `list-${Date.now()}`,
       name: cleanName,
+      listKind: 'itinerary',
+      privacy: 'private',
       createdAt: nowIso,
       updatedAt: nowIso,
       items: [nextItem],
@@ -102,7 +142,7 @@ export function saveItineraryToList(listName, itinerary) {
   }
 
   writeSavedLists(lists);
-  return { ok: true };
+  return { ok: true, alreadySaved: false, listName: cleanName };
 }
 
 /** Save a place into an existing list by id (from readSavedLists). */
@@ -126,15 +166,14 @@ export function savePlaceToListId(listId, place) {
 
   const existingList = lists[listIndex];
   const currentItems = Array.isArray(existingList.items) ? existingList.items : [];
-  const existingItemIdx = currentItems.findIndex((item) => item.id === nextPlace.id);
-  if (existingItemIdx >= 0) {
-    currentItems[existingItemIdx] = { ...currentItems[existingItemIdx], ...nextPlace };
-  } else {
-    currentItems.unshift(nextPlace);
+  const alreadySaved = currentItems.some((item) => item.id === nextPlace.id);
+  if (alreadySaved) {
+    return { ok: true, alreadySaved: true, listName: existingList.name };
   }
+  currentItems.unshift(nextPlace);
   lists[listIndex] = { ...existingList, items: currentItems, updatedAt: nowIso };
   writeSavedLists(lists);
-  return { ok: true, listName: existingList.name };
+  return { ok: true, alreadySaved: false, listName: existingList.name };
 }
 
 /** Save an itinerary into an existing list by id. */
@@ -161,15 +200,83 @@ export function saveItineraryToListId(listId, itinerary) {
 
   const existingList = lists[listIndex];
   const currentItems = Array.isArray(existingList.items) ? existingList.items : [];
-  const existingItemIdx = currentItems.findIndex((item) => item.id === nextItem.id);
-  if (existingItemIdx >= 0) {
-    currentItems[existingItemIdx] = { ...currentItems[existingItemIdx], ...nextItem };
-  } else {
-    currentItems.unshift(nextItem);
+  const alreadySaved = currentItems.some((item) => item.id === nextItem.id);
+  if (alreadySaved) {
+    return { ok: true, alreadySaved: true, listName: existingList.name };
   }
-  lists[listIndex] = { ...existingList, items: currentItems, updatedAt: nowIso };
+  currentItems.unshift(nextItem);
+  lists[listIndex] = {
+    ...existingList,
+    listKind: existingList.listKind || 'itinerary',
+    items: currentItems,
+    updatedAt: nowIso,
+  };
   writeSavedLists(lists);
-  return { ok: true, listName: existingList.name };
+  return { ok: true, alreadySaved: false, listName: existingList.name };
+}
+
+/** Remove one saved item from a list by list id and item id. */
+export function removeItemFromList(listId, itemId) {
+  const lid = String(listId ?? '').trim();
+  const iid = String(itemId ?? '').trim();
+  if (!lid || !iid) return { ok: false, reason: 'invalid_input' };
+
+  const lists = readSavedLists();
+  const listIndex = lists.findIndex((l) => String(l.id) === lid || String(l.name) === lid);
+  if (listIndex < 0) return { ok: false, reason: 'list_not_found' };
+
+  const existingList = lists[listIndex];
+  const currentItems = Array.isArray(existingList.items) ? existingList.items : [];
+  const nextItems = currentItems.filter((item) => String(item.id) !== iid);
+  if (nextItems.length === currentItems.length) return { ok: false, reason: 'item_not_found' };
+
+  if (nextItems.length === 0) {
+    lists.splice(listIndex, 1);
+  } else {
+    lists[listIndex] = {
+      ...existingList,
+      items: nextItems,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  writeSavedLists(lists);
+  return { ok: true };
+}
+
+/** @param {string} listId @param {{ name?: string, privacy?: 'private' | 'public' }} patch */
+export function updateSavedList(listId, patch) {
+  const lid = String(listId ?? '').trim();
+  if (!lid) return { ok: false, reason: 'invalid_input' };
+
+  const lists = readSavedLists();
+  const listIndex = lists.findIndex((l) => String(l.id) === lid || String(l.name) === lid);
+  if (listIndex < 0) return { ok: false, reason: 'list_not_found' };
+
+  const existing = lists[listIndex];
+  const nextName = patch.name != null ? String(patch.name).trim() : existing.name;
+  if (!nextName) return { ok: false, reason: 'invalid_input' };
+
+  const duplicate = lists.some(
+    (l, i) => i !== listIndex && String(l.name).toLowerCase() === nextName.toLowerCase(),
+  );
+  if (duplicate) return { ok: false, reason: 'duplicate_name' };
+
+  const privacy =
+    patch.privacy === 'public' || patch.privacy === 'private'
+      ? patch.privacy
+      : existing.privacy === 'public'
+        ? 'public'
+        : 'private';
+
+  lists[listIndex] = {
+    ...existing,
+    name: nextName,
+    privacy,
+    updatedAt: new Date().toISOString(),
+  };
+  writeSavedLists(lists);
+  return { ok: true, listName: nextName, privacy };
 }
 
 export function flattenSavedListsToCards(lists) {

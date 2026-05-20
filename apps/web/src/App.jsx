@@ -11,7 +11,9 @@ import { PrototypeStartupFeaturesPage } from './pages/PrototypeStartupFeaturesPa
 import { PrototypeSignInPage } from './pages/PrototypeSignInPage';
 import { PrototypeSignUpPage } from './pages/PrototypeSignUpPage';
 import { GoogleAuthProcessingPage } from './pages/GoogleAuthProcessingPage';
+import { MobileExpoOAuthBridgePage } from './pages/MobileExpoOAuthBridgePage';
 import { SearchPage } from './pages/SearchPage';
+import { EstablishmentsPage } from './pages/EstablishmentsPage';
 import { PlaceDetailPage } from './pages/PlaceDetailPage';
 import { SavedPage } from './pages/SavedPage';
 import { ItineraryPage } from './pages/ItineraryPage';
@@ -69,6 +71,7 @@ export default function App() {
         <Route path="/prototype/sign-in" element={<PrototypeSignInPage />} />
         <Route path="/prototype/sign-up" element={<PrototypeSignUpPage />} />
         <Route path="/auth/google" element={<GoogleAuthProcessingPage />} />
+        <Route path="/auth/mobile-callback" element={<MobileExpoOAuthBridgePage />} />
 
         {/* Admin (apps/admin) — same dev server as marketing web */}
         <Route path="/admin" element={<AdminEmbedRoot />}>
@@ -84,6 +87,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <SearchPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/establishments"
+          element={
+            <ProtectedRoute>
+              <EstablishmentsPage />
             </ProtectedRoute>
           }
         />

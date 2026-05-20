@@ -5,11 +5,15 @@ export type LeafletMarker = {
   lng: number;
 };
 
+export type LeafletPreviewPoint = { x: number; y: number };
+
 export type LeafletMapViewProps = {
   markers: LeafletMarker[];
   /** Transport terminals (e.g. mock terminals) — shown as green dots on the map. */
   terminals?: LeafletMarker[];
   userLocation: { lat: number; lng: number } | null;
-  onMarkerPress: (id: string, _name?: string) => void;
+  onMarkerPress?: (id: string, _name?: string) => void;
+  onMarkerPreview?: (id: string, point: LeafletPreviewPoint) => void;
+  onMarkerPreviewEnd?: () => void;
   style?: object;
 };

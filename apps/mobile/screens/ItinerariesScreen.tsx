@@ -1,68 +1,34 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Pressable,
-  TextInput,
   Image,
   StatusBar,
   Dimensions,
-  Modal,
   FlatList,
-  ScrollView,
-  RefreshControl,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { JamIcon } from '../components/JamIcon';
-import {
-  DashboardFiltersPanel,
-  type DashboardFilterSectionId,
-} from '../components/DashboardFiltersPanel';
-import { getBrowseEstablishmentsForItineraries, mockItineraries, type Place } from '../data/mockData';
-import {
-  placeMatchesDashboardFilters,
-  sortPlacesByDashboardSort,
-} from '../lib/dashboardPlaceFilters';
+import { publishedItineraries } from '../data/publishedItineraries';
+import { formatRouteLine, metaLine } from '../lib/itineraryFormat';
+import { placeImageSource } from '../lib/placeImageSource';
 
 const HEADER_GREEN = '#7EA00E';
 const TEAL = '#1F4F59';
-const PLACEHOLDER = '#B3AAAA';
 const TITLE = '#241D13';
 const MUTED = '#7A7878';
 const PAGE_BG = '#F4F6EC';
 const WHITE = '#FFFFFF';
 const H_PAD = 16;
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const CARD_IMG_H = Math.round(SCREEN_W * 0.38);
-const FILTER_SHEET_MAX_HEIGHT = Math.round(SCREEN_H * 0.5);
-
-const ITINERARY_FILTER_SECTION_IDS: DashboardFilterSectionId[] = [
-  'sort',
-  'categories',
-  'cities',
-  'municipalities',
-  'access',
-  'amenities',
-];
-
-type ItineraryEstablishmentItem = {
-  place: Place;
-  itineraryTitle: string;
-};
+const { width: SCREEN_W } = Dimensions.get('window');
+const CARD_IMG_H = Math.round(SCREEN_W * 0.56);
 
 const ItinerariesScreen: React.FC = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const filterSheetPadBottom = Math.max(insets.bottom, 10);
-  const filterScrollMaxHeight = FILTER_SHEET_MAX_HEIGHT - filterSheetPadBottom;
-  const [search, setSearch] = useState('');
-  const [filtersVisible, setFiltersVisible] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [filterToggles, setFilterToggles] = useState<Record<string, boolean>>({});
-  const [filterPanelKey, setFilterPanelKey] = useState(0);
 
   const onBack = () => {
     if (navigation.canGoBack()) {
@@ -72,79 +38,11 @@ const ItinerariesScreen: React.FC = () => {
     }
   };
 
-  const availableEstablishments = useMemo(() => getBrowseEstablishmentsForItineraries(), []);
-
-  const onFilterTogglesChange = useCallback((toggles: Record<string, boolean>) => {
-    setFilterToggles(toggles);
-  }, []);
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    let rows = availableEstablishments;
-    if (q) {
-      rows = rows.filter(({ place, itineraryTitle }) =>
-        [place.name, place.address, place.type, itineraryTitle].some((v) => v.toLowerCase().includes(q))
-      );
-    }
-    const hasFilter = Object.keys(filterToggles).some((k) => filterToggles[k]);
-    if (hasFilter) {
-      rows = rows.filter(({ place }) => placeMatchesDashboardFilters(place, filterToggles));
-    }
-    const sortKeys = Object.keys(filterToggles).filter((k) => k.startsWith('sort-') && filterToggles[k]);
-    if (sortKeys.length) {
-      const places = rows.map((r) => r.place);
-      const sortedPlaces = sortPlacesByDashboardSort(places, filterToggles);
-      const order = new Map(sortedPlaces.map((p, i) => [p.id, i]));
-      rows = [...rows].sort((a, b) => (order.get(a.place.id) ?? 0) - (order.get(b.place.id) ?? 0));
-    }
-    return rows;
-  }, [search, availableEstablishments, filterToggles]);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 600);
+  const openDetail = (itineraryId: string) => {
+    (navigation as { navigate: (n: string, p: object) => void }).navigate('ItineraryDetail', {
+      itineraryId,
+    });
   };
-
-  const renderCard = ({ item }: { item: ItineraryEstablishmentItem }) => (
-    <TouchableOpacity
-      style={styles.card}
-      activeOpacity={0.92}
-      onPress={() =>
-        navigation.navigate('AboutEstablishment' as never, { place: item.place } as never)
-      }
-      accessibilityLabel={`${item.place.name} establishment`}
-      accessibilityRole="button"
-    >
-      <Image
-        source={item.place.image}
-        style={styles.cardImage}
-        resizeMode="cover"
-        accessibilityLabel={`${item.place.name} cover`}
-      />
-      <View style={styles.cardBody}>
-        <View style={styles.cardTextCol}>
-          <Text style={styles.cardTitle} numberOfLines={2}>
-            {item.place.name}
-          </Text>
-          <Text style={styles.cardSubtitle} numberOfLines={2}>
-            {item.place.address}
-          </Text>
-          <View style={styles.pillRow}>
-            <View style={styles.pill}>
-              <Text style={styles.pillText}>{item.place.type}</Text>
-            </View>
-            <Text style={styles.tagChip} numberOfLines={1}>
-              via {item.itineraryTitle}
-            </Text>
-          </View>
-        </View>
-        <View style={styles.viewBtn}>
-          <Text style={styles.viewBtnText}>View</Text>
-          <JamIcon ionicon="chevron-forward" size={16} color={TEAL} />
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -157,156 +55,70 @@ const ItinerariesScreen: React.FC = () => {
             accessibilityLabel="Go back"
             accessibilityRole="button"
           >
-            <JamIcon name="chevron-left" size={26} color="#FFFFFF" />
+            <JamIcon name="chevron-left" size={26} color={WHITE} />
           </TouchableOpacity>
           <View style={styles.headerTitleBlock}>
             <Text style={styles.headerTitle} pointerEvents="none">
-              Available Itinerary Establishments
-            </Text>
-            <Text style={styles.headerSubtitle} pointerEvents="none">
-              {availableEstablishments.length} ideas — route stops + same city or municipality
+              Curated routes
             </Text>
           </View>
           <View style={styles.headerSide} />
         </View>
       </View>
 
-      <View style={styles.searchRow}>
-        <View style={styles.searchPill}>
-          <JamIcon name="search" size={18} color={TEAL} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search establishments…"
-            placeholderTextColor={PLACEHOLDER}
-            value={search}
-            onChangeText={setSearch}
-            accessibilityLabel="Search establishments"
-            returnKeyType="search"
-          />
-          {search.length > 0 ? (
-            <TouchableOpacity onPress={() => setSearch('')} hitSlop={8} accessibilityLabel="Clear search">
-              <JamIcon ionicon="close-circle" size={20} color={MUTED} />
-            </TouchableOpacity>
-          ) : null}
-        </View>
-        <TouchableOpacity
-          style={styles.filterCircle}
-          onPress={() => setFiltersVisible((v) => !v)}
-          accessibilityLabel={filtersVisible ? 'Hide filters' : 'Show filters'}
-          accessibilityRole="button"
-        >
-          <JamIcon name="filter" size={20} color={TEAL} />
-        </TouchableOpacity>
-      </View>
-
       <FlatList
-        data={filtered}
-        keyExtractor={(item) => item.place.id}
-        renderItem={renderCard}
+        data={publishedItineraries}
+        keyExtractor={(it) => it.id}
         contentContainerStyle={[
           styles.listContent,
-          { paddingBottom: 100 + Math.max(insets.bottom, 12) },
+          { paddingBottom: 88 + Math.max(insets.bottom, 12) },
         ]}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={HEADER_GREEN} />}
         ListHeaderComponent={
-          <View style={styles.curatedBlock}>
-            <Text style={styles.curatedTitle}>CaviTour curated</Text>
-            <Text style={styles.curatedSub}>Itineraries made by the system — tap to open the full route.</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.curatedScroll}
-            >
-              {mockItineraries.map((it) => (
-                <TouchableOpacity
-                  key={it.id}
-                  style={styles.curatedCard}
-                  activeOpacity={0.9}
-                  onPress={() =>
-                    (navigation as { navigate: (n: string, p: object) => void }).navigate('ItineraryDetail', {
-                      itineraryId: it.id,
-                    })
-                  }
-                  accessibilityRole="button"
-                  accessibilityLabel={`Open curated itinerary ${it.title}`}
-                >
-                  <Image source={it.image} style={styles.curatedImg} resizeMode="cover" />
-                  <View style={styles.curatedTextCol}>
-                    <Text style={styles.curatedCardTitle} numberOfLines={2}>
-                      {it.title}
-                    </Text>
-                    <Text style={styles.curatedCardSub} numberOfLines={2}>
-                      {it.subtitle}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
+          <Text style={styles.intro}>
+            Ready-made trips from our team. Save any route and follow it stop by stop.
+          </Text>
         }
-        ListEmptyComponent={
-          <View style={styles.emptyWrap}>
-            <JamIcon ionicon="map-outline" size={48} color={MUTED} />
-            <Text style={styles.emptyTitle}>No matches</Text>
-            <Text style={styles.emptySub}>Try another search, open filters, or reset them.</Text>
+        renderItem={({ item: it }) => {
+          const img = placeImageSource(it.image);
+          return (
             <TouchableOpacity
-              onPress={() => {
-                setSearch('');
-                setFilterPanelKey((k) => k + 1);
-              }}
-              style={styles.emptyBtn}
+              style={styles.card}
+              activeOpacity={0.92}
+              onPress={() => openDetail(it.id)}
+              accessibilityRole="button"
+              accessibilityLabel={`Open itinerary ${it.title}`}
             >
-              <Text style={styles.emptyBtnText}>Clear search & filters</Text>
+              {img ? (
+                <Image source={img} style={styles.cardImage} resizeMode="cover" accessibilityLabel="" />
+              ) : (
+                <View style={styles.cardImage} />
+              )}
+              <View style={styles.cardBody}>
+                <Text style={styles.cardTitle} numberOfLines={2}>
+                  {it.title}
+                </Text>
+                <Text style={styles.cardRoute} numberOfLines={2}>
+                  {formatRouteLine(it)}
+                </Text>
+                {it.summary ? (
+                  <Text style={styles.cardSummary} numberOfLines={2}>
+                    {it.summary}
+                  </Text>
+                ) : (
+                  <View style={styles.cardSummarySpacer} />
+                )}
+                <View style={styles.cardFooter}>
+                  <Text style={styles.cardMeta}>{metaLine(it)}</Text>
+                  <View style={styles.cardChevron} accessibilityElementsHidden>
+                    <JamIcon ionicon="chevron-forward" size={14} color={MUTED} />
+                  </View>
+                </View>
+              </View>
             </TouchableOpacity>
-          </View>
-        }
+          );
+        }}
       />
-
-      <TouchableOpacity
-        style={[styles.fab, { bottom: 72 + Math.max(insets.bottom, 10) }]}
-        onPress={() => navigation.navigate('CreateItinerary' as never)}
-        accessibilityLabel="Create new itinerary"
-        accessibilityRole="button"
-        activeOpacity={0.9}
-      >
-        <JamIcon ionicon="add-outline" size={28} color={WHITE} />
-      </TouchableOpacity>
-
-      <Modal
-        visible={filtersVisible}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        onRequestClose={() => setFiltersVisible(false)}
-      >
-        <View style={styles.filterModalRoot} accessibilityViewIsModal>
-          <Pressable
-            style={styles.filterModalDismiss}
-            onPress={() => setFiltersVisible(false)}
-            accessibilityLabel="Dismiss filters"
-            accessibilityRole="button"
-          />
-          <View
-            style={[
-              styles.filterSheet,
-              {
-                maxHeight: FILTER_SHEET_MAX_HEIGHT,
-                paddingBottom: filterSheetPadBottom,
-              },
-            ]}
-          >
-            <DashboardFiltersPanel
-              key={filterPanelKey}
-              embedded
-              sheet
-              sheetScrollMaxHeight={filterScrollMaxHeight}
-              sectionIds={ITINERARY_FILTER_SECTION_IDS}
-              onTogglesChange={onFilterTogglesChange}
-            />
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 };
@@ -341,119 +153,31 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_700Bold',
     fontSize: 20,
     lineHeight: 24,
-    color: '#FFFFFF',
+    color: WHITE,
     textAlign: 'center',
-  },
-  headerSubtitle: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    lineHeight: 16,
-    color: 'rgba(255,255,255,0.9)',
-    marginTop: 2,
-  },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: H_PAD,
-    paddingTop: 14,
-    paddingBottom: 12,
-    gap: 10,
-  },
-  searchPill: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    backgroundColor: WHITE,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(31, 79, 89, 0.12)',
-  },
-  searchInput: {
-    flex: 1,
-    minWidth: 0,
-    paddingVertical: 0,
-    fontSize: 15,
-    fontFamily: 'Inter_400Regular',
-    color: TITLE,
-  },
-  filterCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: WHITE,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(31, 79, 89, 0.12)',
   },
   listContent: {
     paddingHorizontal: H_PAD,
-    paddingTop: 4,
-    gap: 12,
+    paddingTop: 16,
+    gap: 16,
   },
-  curatedBlock: {
-    marginBottom: 16,
-  },
-  curatedTitle: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 16,
-    color: TEAL,
+  intro: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 21,
+    color: MUTED,
     marginBottom: 4,
   },
-  curatedSub: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    color: MUTED,
-    marginBottom: 10,
-  },
-  curatedScroll: {
-    gap: 12,
-    paddingRight: H_PAD,
-  },
-  curatedCard: {
-    width: 260,
-    flexDirection: 'row',
+  card: {
     backgroundColor: WHITE,
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(31, 79, 89, 0.1)',
-  },
-  curatedImg: {
-    width: 88,
-    height: 88,
-    backgroundColor: '#e8ebe6',
-  },
-  curatedTextCol: {
-    flex: 1,
-    padding: 10,
-    justifyContent: 'center',
-  },
-  curatedCardTitle: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 14,
-    color: TITLE,
-  },
-  curatedCardSub: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    color: MUTED,
-    marginTop: 4,
-  },
-  card: {
-    backgroundColor: WHITE,
-    borderRadius: 18,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(31, 79, 89, 0.08)',
     shadowColor: TEAL,
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
     elevation: 3,
   },
   cardImage: {
@@ -462,140 +186,57 @@ const styles = StyleSheet.create({
     backgroundColor: '#E8E8E8',
   },
   cardBody: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    gap: 12,
-  },
-  cardTextCol: {
-    flex: 1,
-    minWidth: 0,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 12,
+    minHeight: 120,
   },
   cardTitle: {
     fontFamily: 'Poppins_700Bold',
-    fontSize: 17,
-    lineHeight: 23,
+    fontSize: 16,
+    lineHeight: 22,
     color: TITLE,
-    marginBottom: 4,
   },
-  cardSubtitle: {
+  cardRoute: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#525252',
+    marginTop: 6,
+  },
+  cardSummary: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 18,
     color: MUTED,
-  },
-  pillRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 10,
-  },
-  pill: {
-    backgroundColor: 'rgba(126, 160, 14, 0.12)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  pillText: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 11,
-    color: TEAL,
-  },
-  tagRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
     marginTop: 8,
+    flex: 1,
   },
-  tagChip: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 11,
-    color: MUTED,
-    backgroundColor: '#f4f6ec',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    overflow: 'hidden',
+  cardSummarySpacer: {
+    flex: 1,
+    minHeight: 8,
   },
-  viewBtn: {
+  cardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#dce9a8',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    flexShrink: 0,
+    justifyContent: 'space-between',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(31, 79, 89, 0.08)',
   },
-  viewBtnText: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 13,
-    color: TITLE,
+  cardMeta: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 12,
+    color: MUTED,
   },
-  fab: {
-    position: 'absolute',
-    right: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: HEADER_GREEN,
+  cardChevron: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F4F4F5',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  emptyWrap: {
-    alignItems: 'center',
-    paddingVertical: 48,
-    paddingHorizontal: 24,
-  },
-  emptyTitle: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 17,
-    color: TITLE,
-    marginTop: 12,
-  },
-  emptySub: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-    color: MUTED,
-    marginTop: 6,
-    textAlign: 'center',
-  },
-  emptyBtn: {
-    marginTop: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    backgroundColor: WHITE,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(31, 79, 89, 0.15)',
-  },
-  emptyBtnText: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 14,
-    color: TEAL,
-  },
-  filterModalRoot: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.22)',
-    flexDirection: 'column',
-    justifyContent: 'flex-end',
-  },
-  filterModalDismiss: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  filterSheet: {
-    width: '100%',
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    overflow: 'hidden',
   },
 });
 

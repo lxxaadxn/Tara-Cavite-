@@ -1,3 +1,5 @@
+import { LEAFLET_GREEN_PIN_SNIPPET } from './leafletGreenPinSnippet';
+
 /**
  * Single Leaflet + OSM map document for WebView (iOS/Android) and iframe (Expo web).
  * Host updates: native uses injectJavaScript(__cavitourUpdateMap); web uses postMessage.
@@ -79,17 +81,38 @@ export const CAVITOUR_LEAFLET_HTML = `<!DOCTYPE html>
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
       }).addTo(map);
 
-      L.Icon.Default.mergeOptions({
-        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png'
-      });
+      ${LEAFLET_GREEN_PIN_SNIPPET}
 
       var markersLayer = L.layerGroup().addTo(map);
       var terminalsLayer = L.layerGroup().addTo(map);
       var userLayer = L.layerGroup().addTo(map);
       var didCenterUser = false;
       var didFitPlaces = false;
+      var activePreviewId = null;
+      var activePreviewMarker = null;
+
+      function postMarkerPreview(marker, id) {
+        var pt = map.latLngToContainerPoint(marker.getLatLng());
+        activePreviewId = String(id);
+        activePreviewMarker = marker;
+        postToHost({ type: 'markerPreview', id: String(id), x: pt.x, y: pt.y });
+      }
+
+      function clearMarkerPreview() {
+        activePreviewId = null;
+        activePreviewMarker = null;
+        postToHost({ type: 'markerPreviewEnd' });
+      }
+
+      map.on('click', function () {
+        clearMarkerPreview();
+      });
+
+      map.on('move zoom', function () {
+        if (!activePreviewMarker || !activePreviewId) return;
+        var pt = map.latLngToContainerPoint(activePreviewMarker.getLatLng());
+        postToHost({ type: 'markerPreview', id: activePreviewId, x: pt.x, y: pt.y });
+      });
 
       function clampLatLng(lat, lng) {
         var sw = caviteBounds.getSouthWest();
@@ -110,27 +133,30 @@ export const CAVITOUR_LEAFLET_HTML = `<!DOCTYPE html>
           markersLayer.clearLayers();
           terminalsLayer.clearLayers();
           var bounds = [];
+          if (activePreviewId && !markers.some(function (p) { return String(p.id) === activePreviewId; })) {
+            clearMarkerPreview();
+          }
+
           markers.forEach(function (p) {
             if (p.lat == null || p.lng == null || isNaN(p.lat) || isNaN(p.lng)) return;
-            var m = L.marker([p.lat, p.lng]);
-            m.on('click', function () {
-              postToHost({ type: 'markerPress', id: String(p.id), name: String(p.name || '') });
+            var m = L.marker([p.lat, p.lng], { icon: greenPinIcon });
+            m.on('click', function (ev) {
+              L.DomEvent.stopPropagation(ev);
+              postMarkerPreview(m, p.id);
             });
-            m.bindPopup(String(p.name || 'Place'));
+            m.on('mouseover', function () {
+              postMarkerPreview(m, p.id);
+            });
+            m.on('mouseout', function () {
+              if (activePreviewId === String(p.id)) clearMarkerPreview();
+            });
             markersLayer.addLayer(m);
             bounds.push([p.lat, p.lng]);
           });
 
           terminals.forEach(function (p) {
             if (p.lat == null || p.lng == null || isNaN(p.lat) || isNaN(p.lng)) return;
-            var t = L.circleMarker([p.lat, p.lng], {
-              radius: 8,
-              fillColor: '#7EA00E',
-              color: '#ffffff',
-              weight: 2,
-              opacity: 1,
-              fillOpacity: 0.95
-            });
+            var t = L.marker([p.lat, p.lng], { icon: greenPinIcon });
             t.on('click', function () {
               postToHost({ type: 'markerPress', id: String(p.id), name: String(p.name || '') });
             });

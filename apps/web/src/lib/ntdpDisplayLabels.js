@@ -99,20 +99,75 @@ export function isLikelyPlaceholderDescription(text) {
   return /lorem\s+ipsum/i.test(text);
 }
 
-export function getNtdpCategoryAboutText(ntdpCategory, placeName, address) {
-  const label = ntdpCategory?.trim()
-    ? formatNtdpCategoryTagLabel(ntdpCategory)
-    : 'Cavite tourism establishment';
-  const paragraph = resolveNtdpParagraph(ntdpCategory);
-  const addr = address?.trim();
-  const addrSuffix = addr ? ` Address: ${addr}.` : '';
-  return `${placeName} is classified under “${label}” in the National Tourism Development Plan (NTDP) inventory for Cavite.\n\n${paragraph}${addrSuffix}`;
+function categoryHighlightPhrase(ntdpCategory) {
+  const key = normalizeCategoryKey(ntdpCategory);
+  if (key.includes('cultural')) return 'history, heritage, and local culture';
+  if (key.includes('nature')) return 'landscapes, trails, and outdoor experiences';
+  if (key.includes('leisure') || key.includes('entertainment')) {
+    return 'family-friendly recreation and entertainment';
+  }
+  if (key.includes('mice') || key.includes('conference') || key.includes('exhibition')) {
+    return 'meetings, events, and gatherings';
+  }
+  if (key.includes('health') || key.includes('wellness') || key.includes('retirement')) {
+    return 'wellness, rest, and healthy living';
+  }
+  if (key.includes('food') || key.includes('gastronom')) return 'local food and culinary experiences';
+  if (key.includes('education')) return 'learning and interpretive visits';
+  if (key.includes('sport') || (key.includes('recreation') && !key.includes('entertainment'))) {
+    return 'sports and active recreation';
+  }
+  if (key.includes('farm') || key.includes('agri')) return 'farm visits and rural experiences';
+  if (key.includes('shopping')) return 'shopping and specialty retail';
+  if (key.includes('cruise') || key.includes('beach')) return 'coastal scenery and beach activities';
+  if (key.includes('other')) return 'a variety of visitor experiences';
+  return 'sightseeing and local discovery';
+}
+
+function formatAboutLocation(place) {
+  const m = place.city_mun?.trim();
+  if (m) {
+    if (/cavite/i.test(m)) return m.replace(/\s*,?\s*Philippines\s*$/i, '').trim() || m;
+    return `${m}, Cavite`;
+  }
+  const addr = place.address?.trim();
+  if (addr && /cavite/i.test(addr)) {
+    const parts = addr
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const town = parts.length >= 2 ? parts[parts.length - 2] : parts[0];
+    if (town && !/^cavite$/i.test(town)) return `${town}, Cavite`;
+    return 'Cavite';
+  }
+  return 'Cavite';
+}
+
+export function buildEstablishmentAboutSentence(place) {
+  const name = place.name?.trim() || 'This establishment';
+  const where = formatAboutLocation(place);
+  const highlight = categoryHighlightPhrase(place.ntdp_category);
+  const categoryRaw = place.ntdp_category?.trim();
+  if (categoryRaw) {
+    const label = formatNtdpCategoryTagLabel(categoryRaw).toLowerCase();
+    return `${name} is a ${label} destination in ${where} where visitors can enjoy ${highlight}.`;
+  }
+  return `${name} is a tourism destination in ${where} where visitors can enjoy ${highlight}.`;
+}
+
+export function getNtdpCategoryAboutText(ntdpCategory, placeName, address, city_mun) {
+  return buildEstablishmentAboutSentence({
+    name: placeName,
+    ntdp_category: ntdpCategory,
+    address,
+    city_mun,
+  });
 }
 
 export function getEstablishmentAboutBody(place) {
   const raw = place.description?.trim();
   if (raw && !isLikelyPlaceholderDescription(raw)) return raw;
-  return getNtdpCategoryAboutText(place.ntdp_category, place.name, place.address);
+  return buildEstablishmentAboutSentence(place);
 }
 
 /** Neutral avatar for “preview” review rows (not real users). */

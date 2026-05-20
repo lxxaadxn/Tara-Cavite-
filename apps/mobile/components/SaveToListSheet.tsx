@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -12,47 +12,55 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { JamIcon } from './JamIcon';
+import { pluralCountLabel, SAVE_TO_LIST_CREATE_BUSY_ID } from '../lib/saveToListModalHelpers';
 
-export type SaveToListRow = { id: string; name: string; type: string };
+export type SaveToListRow = {
+  id: string;
+  name: string;
+  type: string;
+  itemCount?: number;
+};
 
 type Props = {
   visible: boolean;
   onClose: () => void;
   title?: string;
-  hint: string;
+  subtitle?: string;
+  itemLabel?: string;
   lists: SaveToListRow[];
+  listNameDraft: string;
+  onListNameChange: (value: string) => void;
   onSelectList: (list: SaveToListRow) => void;
+  onCreateList: () => void;
   busyListId: string | null;
+  countLabel?: string;
 };
 
 const GREEN = '#7EA00E';
 const TITLE = '#241D13';
-const MUTED = '#7A7878';
-const TEAL = '#1F4F59';
+const MUTED = '#6B7280';
 const WHITE = '#FFFFFF';
-const PLACEHOLDER = '#B3AAAA';
+const BORDER = 'rgba(17, 24, 39, 0.1)';
+const PLACEHOLDER = '#9CA3AF';
 
 export function SaveToListSheet({
   visible,
   onClose,
   title = 'Save to list',
-  hint,
+  subtitle = 'Choose a list or create a new one.',
+  itemLabel,
   lists,
+  listNameDraft,
+  onListNameChange,
   onSelectList,
+  onCreateList,
   busyListId,
+  countLabel = 'places',
 }: Props) {
   const insets = useSafeAreaInsets();
-  const [q, setQ] = useState('');
-
-  useEffect(() => {
-    if (!visible) setQ('');
-  }, [visible]);
-
-  const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return lists;
-    return lists.filter((l) => l.name.toLowerCase().includes(s));
-  }, [lists, q]);
+  const hasLists = lists.length > 0;
+  const createBlocked = !String(listNameDraft ?? '').trim();
+  const createBusy = busyListId === SAVE_TO_LIST_CREATE_BUSY_ID;
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -61,82 +69,114 @@ export function SaveToListSheet({
         <View
           style={[
             styles.sheet,
-            {
-              paddingBottom: Math.max(insets.bottom, 12) + 16,
-              maxHeight: '72%',
-            },
+            { paddingBottom: Math.max(insets.bottom, 16) + 8, maxHeight: '85%' },
           ]}
         >
-          <View style={styles.grab} accessibilityRole="adjustable" accessibilityLabel="Sheet handle">
+          <View style={styles.grab} accessibilityLabel="Sheet handle">
             <View style={styles.grabBar} />
           </View>
-          <Text style={styles.sheetTitle}>{title}</Text>
-          <Text style={styles.hint}>{hint}</Text>
 
-          {lists.length > 3 ? (
-            <View style={styles.searchShell}>
-              <JamIcon ionicon="search" size={18} color={MUTED} />
-              <TextInput
-                value={q}
-                onChangeText={setQ}
-                placeholder="Search lists…"
-                placeholderTextColor={PLACEHOLDER}
-                style={styles.searchInput}
-                returnKeyType="search"
-              />
-              {q.length > 0 ? (
-                <TouchableOpacity onPress={() => setQ('')} hitSlop={8}>
-                  <JamIcon ionicon="close-circle" size={20} color={MUTED} />
-                </TouchableOpacity>
+          <View style={styles.headerRow}>
+            <View style={styles.headerText}>
+              <Text style={styles.sheetTitle}>{title}</Text>
+              <Text style={styles.subtitle}>{subtitle}</Text>
+              {itemLabel ? (
+                <Text style={styles.itemLabel} numberOfLines={2}>
+                  {itemLabel}
+                </Text>
               ) : null}
             </View>
-          ) : null}
+            <TouchableOpacity
+              style={styles.closeBtn}
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+            >
+              <JamIcon ionicon="close" size={22} color={MUTED} />
+            </TouchableOpacity>
+          </View>
 
-          <FlatList
-            data={filtered}
-            keyExtractor={(item) => item.id}
-            style={styles.list}
-            keyboardShouldPersistTaps="handled"
-            ListEmptyComponent={
-              lists.length === 0 ? (
-                <View style={styles.empty}>
-                  <JamIcon ionicon="folder-open-outline" size={40} color={MUTED} />
-                  <Text style={styles.emptyTitle}>No lists yet</Text>
-                  <Text style={styles.emptySub}>Create a list from Profile → Saved lists first.</Text>
-                </View>
-              ) : (
-                <Text style={styles.noMatch}>No match for “{q.trim()}”.</Text>
-              )
-            }
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.row}
-                onPress={() => onSelectList(item)}
-                disabled={busyListId !== null}
-                activeOpacity={0.75}
-              >
-                <View style={styles.rowIcon}>
-                  <JamIcon ionicon="bookmark" size={20} color={GREEN} />
-                </View>
-                <View style={styles.rowText}>
-                  <Text style={styles.rowTitle} numberOfLines={2}>
-                    {item.name}
-                  </Text>
-                  <Text style={styles.rowMeta}>
-                    {item.type === 'private' ? 'Private list' : 'Shared list'}
-                  </Text>
-                </View>
-                {busyListId === item.id ? (
-                  <ActivityIndicator size="small" color={GREEN} />
-                ) : (
-                  <JamIcon ionicon="add-circle-outline" size={24} color={TEAL} />
-                )}
-              </TouchableOpacity>
+          <View style={styles.body}>
+            {hasLists ? (
+              <FlatList
+                data={lists}
+                keyExtractor={(item) => item.id}
+                style={styles.list}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                renderItem={({ item }) => {
+                  const count = item.itemCount ?? 0;
+                  const busy = busyListId === item.id;
+                  return (
+                    <TouchableOpacity
+                      style={styles.row}
+                      onPress={() => onSelectList(item)}
+                      disabled={busyListId !== null}
+                      activeOpacity={0.75}
+                    >
+                      <View style={styles.rowIcon}>
+                        <JamIcon ionicon="bookmark" size={18} color={GREEN} />
+                      </View>
+                      <View style={styles.rowText}>
+                        <Text style={styles.rowTitle} numberOfLines={2}>
+                          {item.name}
+                        </Text>
+                        <Text style={styles.rowMeta}>
+                          {count} {pluralCountLabel(count, countLabel)}
+                        </Text>
+                      </View>
+                      {busy ? (
+                        <ActivityIndicator size="small" color={GREEN} />
+                      ) : (
+                        <JamIcon ionicon="chevron-forward" size={20} color={MUTED} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            ) : (
+              <Text style={styles.emptyHint}>No lists yet — create one below.</Text>
             )}
-          />
-          <TouchableOpacity style={styles.cancelBtn} onPress={onClose} accessibilityRole="button">
-            <Text style={styles.cancelLabel}>Cancel</Text>
-          </TouchableOpacity>
+
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerLabel}>Or create a list</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <TextInput
+              value={listNameDraft}
+              onChangeText={onListNameChange}
+              placeholder="List name"
+              placeholderTextColor={PLACEHOLDER}
+              style={styles.nameInput}
+              returnKeyType="done"
+              onSubmitEditing={() => {
+                if (!createBlocked && !busyListId) onCreateList();
+              }}
+              editable={!createBusy && busyListId === null}
+            />
+          </View>
+
+          <View style={styles.footer}>
+            <TouchableOpacity
+              style={[styles.createBtn, createBlocked && styles.createBtnDisabled]}
+              onPress={onCreateList}
+              disabled={createBlocked || busyListId !== null}
+              activeOpacity={0.9}
+              accessibilityRole="button"
+              accessibilityLabel="Create list"
+            >
+              {createBusy ? (
+                <ActivityIndicator color={WHITE} />
+              ) : (
+                <Text style={styles.createBtnLabel}>Create list</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.cancelBtn} onPress={onClose} accessibilityRole="button">
+              <Text style={styles.cancelLabel}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </Modal>
@@ -146,85 +186,91 @@ export function SaveToListSheet({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 20, 0.5)',
+    backgroundColor: 'rgba(15, 23, 20, 0.35)',
     justifyContent: 'flex-end',
   },
   dismiss: { flex: 1 },
   sheet: {
     backgroundColor: WHITE,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     paddingHorizontal: 20,
     paddingTop: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
+    shadowOffset: { width: 0, height: -8 },
     shadowOpacity: 0.12,
-    shadowRadius: 16,
+    shadowRadius: 24,
     elevation: 16,
   },
-  grab: {
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
+  grab: { alignItems: 'center', paddingVertical: 8 },
   grabBar: {
     width: 40,
     height: 4,
     borderRadius: 2,
     backgroundColor: 'rgba(0,0,0,0.12)',
   },
-  sheetTitle: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 20,
-    color: TITLE,
-    marginBottom: 6,
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 12,
   },
-  hint: {
+  headerText: { flex: 1, minWidth: 0 },
+  sheetTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    lineHeight: 24,
+    color: TITLE,
+  },
+  subtitle: {
+    marginTop: 2,
     fontFamily: 'Inter_400Regular',
     fontSize: 14,
     lineHeight: 20,
     color: MUTED,
-    marginBottom: 14,
   },
-  searchShell: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#f4f6ec',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(31, 79, 89, 0.1)',
-  },
-  searchInput: {
-    flex: 1,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 15,
+  itemLabel: {
+    marginTop: 4,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+    lineHeight: 20,
     color: TITLE,
-    paddingVertical: 2,
   },
-  list: { flexGrow: 0 },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3F4F6',
+  },
+  body: {
+    flexShrink: 1,
+  },
+  list: {
+    maxHeight: 200,
+    flexGrow: 0,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(122, 120, 120, 0.2)',
+    paddingVertical: 10,
+    paddingHorizontal: 4,
     gap: 12,
   },
   rowIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(126, 160, 14, 0.12)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EEF4DF',
     alignItems: 'center',
     justifyContent: 'center',
   },
   rowText: { flex: 1, minWidth: 0 },
   rowTitle: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 15,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
     color: TITLE,
     marginBottom: 2,
   },
@@ -233,36 +279,77 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: MUTED,
   },
-  empty: {
-    alignItems: 'center',
-    paddingVertical: 28,
-    paddingHorizontal: 16,
-  },
-  emptyTitle: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 16,
-    color: TITLE,
-    marginTop: 12,
-  },
-  emptySub: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    color: MUTED,
-    textAlign: 'center',
-    marginTop: 6,
-    lineHeight: 19,
-  },
-  noMatch: {
+  emptyHint: {
     fontFamily: 'Inter_400Regular',
     fontSize: 14,
     color: MUTED,
-    textAlign: 'center',
-    paddingVertical: 20,
+    paddingVertical: 8,
   },
-  cancelBtn: { alignSelf: 'center', marginTop: 12, paddingVertical: 14, paddingHorizontal: 24 },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 16,
+    gap: 10,
+  },
+  dividerLine: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: BORDER,
+  },
+  dividerLabel: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: MUTED,
+    backgroundColor: WHITE,
+    paddingHorizontal: 4,
+  },
+  nameInput: {
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
+    paddingHorizontal: 14,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 15,
+    color: TITLE,
+    backgroundColor: '#FAFAFA',
+  },
+  footer: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: BORDER,
+  },
+  createBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
+    borderRadius: 16,
+    backgroundColor: GREEN,
+    shadowColor: GREEN,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  createBtnDisabled: {
+    opacity: 0.45,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  createBtnLabel: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 15,
+    color: WHITE,
+  },
+  cancelBtn: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginTop: 4,
+  },
   cancelLabel: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 16,
-    color: TEAL,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+    color: MUTED,
   },
 });

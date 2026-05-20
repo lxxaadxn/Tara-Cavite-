@@ -9,6 +9,7 @@ const repoRoot = path.resolve(projectRoot, '../..');
 /** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(projectRoot);
 
+// Monorepo: resolve packages from app + root node_modules (cavitour-shared, hoisted deps).
 config.watchFolders = [appsRoot, repoRoot];
 config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, 'node_modules'),

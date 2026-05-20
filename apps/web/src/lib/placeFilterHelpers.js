@@ -1,84 +1,16 @@
-/** Keyword filters aligned with mobile `dashboardPlaceFilters.ts` (STA text fields). */
+/** Keyword filters aligned with mobile `dashboardPlaceFilters.ts`. */
 
-export const WEB_ACCESS_FILTER_OPTIONS = [
-  { key: 'acc-commute', label: 'Commute Accessible' },
-  { key: 'acc-parking', label: 'Parking Available' },
-  { key: 'acc-road', label: 'Easy Access Road' },
-];
+import { FILTER_OPTION_LABEL_BY_KEY } from './dashboardFilterOptions';
 
-export const WEB_AMENITY_FILTER_OPTIONS = [
-  { key: 'am-wifi', label: 'Wifi Available' },
-  { key: 'am-pet', label: 'Pet-Friendly' },
-  { key: 'am-food', label: 'Food Available' },
-  { key: 'am-insta', label: 'Instagrammable' },
-];
-
-export const WEB_SORT_OPTIONS = [
-  { key: '', label: 'Default (nearest first when location on)' },
-  { key: 'recent', label: 'Recently Added' },
-  { key: 'top', label: 'Top Rated' },
-  { key: 'reviewed', label: 'Most Reviewed' },
-];
-
-const ACCESS_KEYWORDS = {
-  'acc-commute': [
-    'jeepney',
-    'bus',
-    'terminal',
-    'pala-pala',
-    'palipala',
-    'highway',
-    'commute',
-    'public transport',
-    'uv express',
-    'van terminal',
-    'tricycle',
-    'transport terminal',
-    'integrated terminal',
-    'along aguinaldo',
-  ],
-  'acc-parking': ['parking', 'car park', 'parking area', 'parking space', 'motorcycle parking'],
-  'acc-road': [
-    'highway',
-    'national road',
-    'aguinaldo',
-    'governor',
-    'governors',
-    'main road',
-    'access road',
-    'roadside',
-    'along the highway',
-  ],
-};
-
-const AMENITY_KEYWORDS = {
-  'am-wifi': ['wifi', 'wi-fi', 'internet', 'wireless', 'fiber', 'broadband', 'hotspot'],
-  'am-pet': ['pet friendly', 'pet-friendly', 'pets allowed', 'pet policy', 'bring your pet'],
-  'am-food': [
-    'food',
-    'restaurant',
-    'cafe',
-    'café',
-    'dining',
-    'buffet',
-    'meals',
-    'kitchen',
-    'in-house dining',
-    'food court',
-  ],
-  'am-insta': [
-    'instagram',
-    'instagrammable',
-    'scenic',
-    'viewpoint',
-    'overlooking',
-    'garden',
-    'aesthetic',
-    'photo spot',
-    'picture',
-    'ridge',
-    'sunset view',
-  ],
+const CAT_KEYWORDS = {
+  'cat-nature': ['nature', 'eco', 'farm', 'agri', 'agritourism', 'wildlife', 'forest'],
+  'cat-mice': ['mice', 'meeting', 'convention', 'conference', 'event venue', 'events', 'banquet'],
+  'cat-restaurant': ['restaurant', 'dining', 'food service', 'eatery', 'bistro', 'cafe', 'café', 'food hub'],
+  'cat-health': ['health', 'wellness', 'spa', 'medical', 'retirement', 'clinic', 'therapy', 'rehab'],
+  'cat-cultural': ['cultural', 'museum', 'church', 'heritage', 'historical', 'shrine', 'parish'],
+  'cat-education': ['education', 'school', 'university', 'college', 'training', 'academy', 'learning'],
+  'cat-leisure': ['leisure', 'entertainment', 'resort', 'recreation', 'amusement', 'park', 'waterpark'],
+  'cat-shopping': ['shopping', 'mall', 'market', 'retail', 'boutique', 'bazaar', 'commercial'],
 };
 
 export function foldHaystack(value) {
@@ -108,24 +40,87 @@ export function placeSearchBlobWeb(place) {
   );
 }
 
-export function placeMatchesAccessKeysWeb(place, keys) {
+function normalizeAreaLabel(label) {
+  return String(label ?? '')
+    .replace(/\s+City\s*$/i, '')
+    .trim()
+    .toLowerCase();
+}
+
+export function placeMatchesCategoryKeysWeb(place, keys) {
   if (!keys?.length) return true;
   const blob = placeSearchBlobWeb(place);
-  return keys.every((key) => {
-    const words = ACCESS_KEYWORDS[key];
-    if (!words?.length) return true;
+  return keys.some((key) => {
+    const words = CAT_KEYWORDS[key];
+    if (!words?.length) return false;
     return words.some((w) => blob.includes(w));
   });
 }
 
-export function placeMatchesAmenityKeysWeb(place, keys) {
+export function placeMatchesLocationKeysWeb(place, keys) {
   if (!keys?.length) return true;
-  const blob = placeSearchBlobWeb(place);
-  return keys.every((key) => {
-    const words = AMENITY_KEYWORDS[key];
-    if (!words?.length) return true;
-    return words.some((w) => blob.includes(w));
+  const cmRaw = (place.city_mun ?? '').trim().toLowerCase();
+  const cm = foldHaystack(place.city_mun ?? '');
+  const addr = foldHaystack(place.address ?? '');
+  const hay = `${cm} ${addr}`;
+  return keys.some((key) => {
+    const label = FILTER_OPTION_LABEL_BY_KEY[key];
+    if (!label) return false;
+    const core = foldHaystack(normalizeAreaLabel(label));
+    if (!core) return false;
+    if (hay.includes(core)) return true;
+    if (cm.includes(core) || core.includes(cm)) return true;
+    const rawFold = foldHaystack(cmRaw);
+    return rawFold.includes(core) || core.includes(rawFold);
   });
+}
+
+/** Diacritic-insensitive match for `city_mun` (itinerary browse). */
+export function foldCityLabel(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+city\s*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function cityMunMatchesFilter(placeCityMun, selectedCityValue) {
+  const a = foldCityLabel(placeCityMun);
+  const b = foldCityLabel(selectedCityValue);
+  if (!a || !b) return false;
+  return a === b || a.includes(b) || b.includes(a);
+}
+
+/**
+ * @typedef {Object} AppliedPlaceFilters
+ * @property {string[]} selectedCategoryKeys
+ * @property {string[]} selectedCityKeys
+ * @property {string[]} selectedMunicipalityKeys
+ */
+
+/** @param {AppliedPlaceFilters | null | undefined} f */
+export function countActiveFilters(f) {
+  if (!f) return 0;
+  return (
+    (f.selectedCategoryKeys?.length ?? 0) +
+    (f.selectedCityKeys?.length ?? 0) +
+    (f.selectedMunicipalityKeys?.length ?? 0)
+  );
+}
+
+/** @param {any} place @param {AppliedPlaceFilters | null} f */
+export function placePassesAppliedFilters(place, f) {
+  if (!f) return true;
+  if (f.selectedCategoryKeys?.length && !placeMatchesCategoryKeysWeb(place, f.selectedCategoryKeys)) {
+    return false;
+  }
+  const locKeys = [...(f.selectedCityKeys ?? []), ...(f.selectedMunicipalityKeys ?? [])];
+  if (locKeys.length && !placeMatchesLocationKeysWeb(place, locKeys)) {
+    return false;
+  }
+  return true;
 }
 
 function hashIdToInt(id) {
@@ -147,6 +142,7 @@ function syntheticReviewCountWeb(place) {
   return 200 + (hashIdToInt(place.id) % 9800);
 }
 
+/** Sort search results (recent / top / reviewed); default order unchanged. */
 export function sortPlacesByModeWeb(places, sortMode) {
   const list = [...places];
   if (sortMode === 'recent') {
@@ -174,44 +170,4 @@ export function sortPlacesByModeWeb(places, sortMode) {
     return list;
   }
   return list;
-}
-
-/** Diacritic-insensitive match for `city_mun` vs filter checkbox (e.g. Dasmariñas vs Dasmariñas City). */
-export function foldCityLabel(value) {
-  return String(value ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/\s+city\s*$/i, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-export function cityMunMatchesFilter(placeCityMun, selectedCityValue) {
-  const a = foldCityLabel(placeCityMun);
-  const b = foldCityLabel(selectedCityValue);
-  if (!a || !b) return false;
-  return a === b || a.includes(b) || b.includes(a);
-}
-
-/** @param {any} place @param {any} f AppliedPlaceFilters from FilterModal */
-export function placePassesAppliedFilters(place, f) {
-  if (!f) return true;
-  if (f.selectedCities?.length) {
-    const ok = f.selectedCities.some((sel) => cityMunMatchesFilter(place.city_mun, sel));
-    if (!ok) return false;
-  }
-  if (f.selectedLgus?.length) {
-    if (!place.lgu_slug || !f.selectedLgus.includes(place.lgu_slug)) return false;
-  }
-  if (f.selectedNtdpCategories?.length) {
-    if (!place.ntdp_category || !f.selectedNtdpCategories.includes(place.ntdp_category)) return false;
-  }
-  if (f.selectedTypeCodes?.length) {
-    const code = place.type_code ?? place.type;
-    if (!code || !f.selectedTypeCodes.includes(code)) return false;
-  }
-  if (!placeMatchesAccessKeysWeb(place, f.selectedAccessKeys ?? [])) return false;
-  if (!placeMatchesAmenityKeysWeb(place, f.selectedAmenityKeys ?? [])) return false;
-  return true;
 }

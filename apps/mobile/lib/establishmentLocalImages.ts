@@ -1198,7 +1198,7 @@ const mayangFallsGallery = [
   require('../assets/images/Mayang_Falls_3.png'),
 ];
 
-/** Local bundled photos keyed by `Place.name` as returned from `v_cavite_establishments`. */
+/** Local bundled photos keyed by `Place.name` from public.places when image_url is empty. */
 const LOCAL_MEDIA: Record<string, { image: any; gallery: any[] }> = {
   Asador: { image: asadorGallery[0], gallery: asadorGallery },
   Arocarria: { image: arocarriaGallery[0], gallery: arocarriaGallery },

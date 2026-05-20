@@ -2,9 +2,11 @@
 export function parsePlaceCoords(place: {
   latitude?: unknown;
   longitude?: unknown;
+  lat?: unknown;
+  lng?: unknown;
 }): { lat: number; lng: number } | null {
-  const latRaw = place.latitude;
-  const lngRaw = place.longitude;
+  const latRaw = place.latitude ?? place.lat;
+  const lngRaw = place.longitude ?? place.lng;
   const lat = typeof latRaw === 'number' ? latRaw : parseFloat(String(latRaw ?? ''));
   const lng = typeof lngRaw === 'number' ? lngRaw : parseFloat(String(lngRaw ?? ''));
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;

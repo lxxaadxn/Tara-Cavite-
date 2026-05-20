@@ -1,14 +1,16 @@
 /**
- * Cavite establishments via unified view `v_cavite_establishments`
- * (includes admin CMS rows from public.places with source_slug admin:*).
+ * Cavite establishments via public.places (synced from STA inventory + admin destinations).
  */
+import { getDemoEstablishmentById } from 'cavitour-shared/demoPlaces';
 import { enrichPlaceWithLocalEstablishmentMedia } from './establishmentLocalImages';
-import {
-  CAVITE_ESTABLISHMENTS_SELECT,
-  ESTABLISHMENTS_VIEW,
-  collectRemoteMediaUrls,
-  isAdminCuratedRow,
-} from './cavitePlaceRow';
+
+/** Log PostgREST errors in dev (missing table, RLS, column mismatch). */
+export function logPlacesFetchError(context, error) {
+  const message = error instanceof Error ? error.message : String(error ?? 'unknown');
+  if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) {
+    console.warn(`[placesFromSupabase] ${context}:`, message);
+  }
+}
 
 /** Great-circle distance in kilometers (WGS84 approximate). */
 export function haversineDistanceKm(lat1, lon1, lat2, lon2) {
@@ -23,53 +25,95 @@ export function haversineDistanceKm(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
+/** Columns present on all deployed `places` tables (live DB may lack searchable_text, lgu_slug, gallery_urls). */
+const PLACES_SELECT_CORE =
+  'id, name, address, type, hours, latitude, longitude, image_url, description, ntdp_category, type_code, city_mun, barangay, source_slug, created_at';
+
+const PLACES_SELECT_VARIANTS = [
+  PLACES_SELECT_CORE,
+  `${PLACES_SELECT_CORE}, gallery_urls`,
+  `${PLACES_SELECT_CORE}, searchable_text, lgu_slug`,
+  `${PLACES_SELECT_CORE}, searchable_text, lgu_slug, gallery_urls`,
+];
+
 function parseCoord(v) {
   if (v == null) return null;
   const n = typeof v === 'number' ? v : parseFloat(String(v));
   return Number.isFinite(n) ? n : null;
 }
 
-/** Normalize Supabase row → UI place */
+function normalizeGalleryUrls(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((u) => (u == null ? '' : String(u).trim())).filter(Boolean);
+}
+
+function applyCatalogMedia(place) {
+  const hasDbImage = Boolean(place.imageUrl?.trim());
+  const hasDbGallery = Boolean(place.galleryUrls?.length);
+  if (hasDbImage || hasDbGallery) return place;
+  return enrichPlaceWithLocalEstablishmentMedia(place);
+}
+
+/** Published catalog rows with coordinates. */
+function publishedPlacesQuery(client, selectCols = PLACES_SELECT_CORE) {
+  return client
+    .from('places')
+    .select(selectCols)
+    .not('latitude', 'is', null)
+    .not('longitude', 'is', null);
+}
+
+async function queryPublishedPlaces(client, builder) {
+  let lastError = null;
+  for (const selectCols of PLACES_SELECT_VARIANTS) {
+    const base = publishedPlacesQuery(client, selectCols);
+    const attempts = [
+      () => builder(base),
+      () => builder(base.or('is_published.is.null,is_published.eq.true')),
+    ];
+    for (const run of attempts) {
+      const { data, error } = await run();
+      if (!error) return data ?? [];
+      lastError = error;
+      const msg = String(error.message ?? '');
+      if (/column.*does not exist/i.test(msg) && msg.includes('is_published')) continue;
+      break;
+    }
+  }
+  throw new Error(lastError?.message ?? 'places query failed');
+}
+
+/** Normalize Supabase places row → UI place */
 export function rowToPlace(row) {
   const lat = parseCoord(row.latitude);
   const lng = parseCoord(row.longitude);
   if (lat == null || lng == null) return null;
 
-  const remoteUrls = collectRemoteMediaUrls(row);
-  const adminCurated = isAdminCuratedRow(row);
+  const galleryUrls = normalizeGalleryUrls(row.gallery_urls);
+  const imageUrl = row.image_url?.trim() || galleryUrls[0] || null;
+  const taCategory = row.type?.trim() || null;
 
-  const base = {
+  return applyCatalogMedia({
     id: row.id,
-    name: row.name ?? row.ta_name,
+    name: row.name,
     address: row.address ?? '',
-    type: row.ta_category || row.type_code || 'Place',
-    hours: row.hours?.trim() || '',
+    type: taCategory || row.type_code || 'Place',
+    hours: row.hours ?? '',
     lat,
     lng,
-    imageUrl: remoteUrls[0] ?? null,
-    galleryUrls: remoteUrls.length ? remoteUrls : undefined,
+    imageUrl,
+    galleryUrls: galleryUrls.length ? galleryUrls : imageUrl ? [imageUrl] : [],
     description: row.description,
     ntdp_category: row.ntdp_category,
     city_mun: row.city_mun ?? null,
+    barangay: row.barangay ?? null,
     lgu_slug: row.lgu_slug,
-    source_slug: row.source_slug ?? null,
-    ta_category: row.ta_category ?? null,
+    ta_category: taCategory,
     type_code: row.type_code ?? null,
     created_at: row.created_at ?? null,
     searchable_text: row.searchable_text ?? null,
-    phone: row.phone?.trim() || null,
-    email: row.email?.trim() || null,
-    website: row.website?.trim() || null,
-    social_facebook: row.social_facebook?.trim() || null,
-    social_instagram: row.social_instagram?.trim() || null,
-    social_twitter: row.social_twitter?.trim() || null,
-    fromAdminCms: adminCurated,
-  };
-
-  if (adminCurated || remoteUrls.length) {
-    return base;
-  }
-  return enrichPlaceWithLocalEstablishmentMedia(base);
+    source_slug: row.source_slug ?? null,
+  });
 }
 
 function sanitizeSearchToken(raw) {
@@ -90,26 +134,18 @@ export async function searchPlacesByText(client, rawQuery, limit = 40) {
 
   const orFilter = [
     `name.ilike.${pattern}`,
-    `searchable_text.ilike.${pattern}`,
-    `ta_category.ilike.${pattern}`,
+    `type.ilike.${pattern}`,
     `address.ilike.${pattern}`,
     `city_mun.ilike.${pattern}`,
     `ntdp_category.ilike.${pattern}`,
     `type_code.ilike.${pattern}`,
+    `description.ilike.${pattern}`,
   ].join(',');
 
-  const { data, error } = await client
-    .from(ESTABLISHMENTS_VIEW)
-    .select(CAVITE_ESTABLISHMENTS_SELECT)
-    .or(orFilter)
-    .not('latitude', 'is', null)
-    .not('longitude', 'is', null)
-    .limit(fetchCap);
-
-  if (error) throw new Error(error.message);
+  const rows = await queryPublishedPlaces(client, (q) => q.or(orFilter).limit(fetchCap));
 
   const seen = new Map();
-  for (const row of data ?? []) {
+  for (const row of rows) {
     const p = rowToPlace(row);
     if (!p) continue;
     if (!seen.has(p.id)) seen.set(p.id, p);
@@ -121,18 +157,12 @@ export async function searchPlacesByText(client, rawQuery, limit = 40) {
 }
 
 export async function fetchTrendingPlacesFromSupabase(client, limit = 120) {
-  const { data, error } = await client
-    .from(ESTABLISHMENTS_VIEW)
-    .select(CAVITE_ESTABLISHMENTS_SELECT)
-    .not('latitude', 'is', null)
-    .not('longitude', 'is', null)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-
-  if (error) throw new Error(error.message);
+  const rows = await queryPublishedPlaces(client, (q) =>
+    q.order('created_at', { ascending: false }).limit(limit)
+  );
 
   const out = [];
-  for (const row of data ?? []) {
+  for (const row of rows) {
     const p = rowToPlace(row);
     if (p) out.push(p);
   }
@@ -146,17 +176,9 @@ export async function fetchAllPlacesFromSupabase(client, pageSize = 1000) {
 
   while (true) {
     const to = from + size - 1;
-    const { data, error } = await client
-      .from(ESTABLISHMENTS_VIEW)
-      .select(CAVITE_ESTABLISHMENTS_SELECT)
-      .not('latitude', 'is', null)
-      .not('longitude', 'is', null)
-      .order('created_at', { ascending: false })
-      .range(from, to);
-
-    if (error) throw new Error(error.message);
-
-    const rows = data ?? [];
+    const rows = await queryPublishedPlaces(client, (q) =>
+      q.order('created_at', { ascending: false }).range(from, to)
+    );
     for (const row of rows) {
       const p = rowToPlace(row);
       if (p && !seen.has(p.id)) seen.set(p.id, p);
@@ -170,11 +192,20 @@ export async function fetchAllPlacesFromSupabase(client, pageSize = 1000) {
 }
 
 export async function fetchPlaceById(client, id) {
-  const { data, error } = await client
-    .from(ESTABLISHMENTS_VIEW)
-    .select(CAVITE_ESTABLISHMENTS_SELECT)
-    .eq('id', id)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  return data ? rowToPlace(data) : null;
+  const key = String(id ?? '').trim();
+  if (!key) return null;
+
+  const isUuid =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key);
+  if (isUuid) {
+    try {
+      const rows = await queryPublishedPlaces(client, (q) => q.eq('id', key).limit(1));
+      if (rows[0]) return rowToPlace(rows[0]);
+    } catch {
+      /* fall through to bundled demo */
+    }
+  }
+
+  const demoRow = getDemoEstablishmentById(key);
+  return demoRow ? rowToPlace(demoRow) : null;
 }

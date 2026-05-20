@@ -1,36 +1,35 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Pressable,
   TextInput,
   Image,
   Dimensions,
-  Modal,
   ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { JamIcon } from '../components/JamIcon';
-import { DashboardFiltersPanel } from '../components/DashboardFiltersPanel';
+import { FilterModal } from '../components/FilterModal';
 import { Header } from '../components/Header';
-import { SYNC_MESSAGES, mapDemoEstablishmentRows } from 'cavitour-shared';
 import type { Place } from '../data/mockData';
-import { rowToPlace } from '../lib/placesFromSupabase';
 import { supabase } from '../lib/supabase';
-import { fetchDashboardPlacesPool, haversineDistanceKm } from '../lib/placesFromSupabase';
 import {
-  placeMatchesDashboardFilters,
-  sortPlacesByDashboardSort,
+  fetchDashboardPlacesPool,
+  haversineDistanceKm,
+  logPlacesFetchError,
+} from '../lib/placesFromSupabase';
+import { placeImageSource } from '../lib/placeImageSource';
+import {
+  placePassesAppliedFilters,
+  type AppliedPlaceFilters,
 } from '../lib/dashboardPlaceFilters';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-/** Max sheet height (shorter sheet); content scrolls inside when tall. */
-const FILTER_SHEET_MAX_HEIGHT = Math.round(SCREEN_HEIGHT * 0.5);
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const H_PAD = 16;
 const CARD_GAP = 40;
 const CARD_WIDTH = Math.min(320, Math.round(SCREEN_WIDTH * 0.74));
@@ -52,15 +51,13 @@ const SEARCH_PLACEHOLDER = '#B3AAAA';
 
 const HomeScreen: React.FC = () => {
   const navigation = useNavigation();
-  const insets = useSafeAreaInsets();
-  const filterSheetPadBottom = Math.max(insets.bottom, 10);
-  const filterScrollMaxHeight = FILTER_SHEET_MAX_HEIGHT - filterSheetPadBottom;
   const [searchQuery, setSearchQuery] = useState('');
   const [filtersVisible, setFiltersVisible] = useState(false);
-  const [filterToggles, setFilterToggles] = useState<Record<string, boolean>>({});
+  const [appliedFilters, setAppliedFilters] = useState<AppliedPlaceFilters | null>(null);
   const [catalogPlaces, setCatalogPlaces] = useState<Place[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogFromSupabase, setCatalogFromSupabase] = useState(false);
+  const [catalogError, setCatalogError] = useState('');
   const [userPt, setUserPt] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
@@ -71,11 +68,14 @@ const HomeScreen: React.FC = () => {
         const list = await fetchDashboardPlacesPool(supabase, 1500);
         if (!cancelled) {
           setCatalogPlaces(list);
-          setCatalogFromSupabase(true);
+          setCatalogFromSupabase(list.length > 0);
+          setCatalogError(list.length > 0 ? '' : 'No geocoded establishments in Supabase.');
         }
-      } catch {
+      } catch (err) {
+        logPlacesFetchError('fetchDashboardPlacesPool', err);
         if (!cancelled) {
-          setCatalogPlaces(mapDemoEstablishmentRows((row) => rowToPlace(row)).filter((p): p is Place => p != null));
+          setCatalogError(err instanceof Error ? err.message : 'Could not load establishments.');
+          setCatalogPlaces([]);
           setCatalogFromSupabase(false);
         }
       } finally {
@@ -107,9 +107,8 @@ const HomeScreen: React.FC = () => {
   }, []);
 
   const filteredSorted = useMemo(() => {
-    const matched = catalogPlaces.filter((p) => placeMatchesDashboardFilters(p, filterToggles));
-    return sortPlacesByDashboardSort(matched, filterToggles);
-  }, [catalogPlaces, filterToggles]);
+    return catalogPlaces.filter((p) => placePassesAppliedFilters(p, appliedFilters));
+  }, [catalogPlaces, appliedFilters]);
 
   const trendingRow = useMemo(() => filteredSorted.slice(0, 36), [filteredSorted]);
 
@@ -122,10 +121,6 @@ const HomeScreen: React.FC = () => {
     scored.sort((a, b) => a.km - b.km);
     return scored.map((s) => s.place).slice(0, 36);
   }, [filteredSorted, userPt]);
-
-  const onFilterTogglesChange = useCallback((toggles: Record<string, boolean>) => {
-    setFilterToggles(toggles);
-  }, []);
 
   const handleSearch = () => {
     if (searchQuery.trim()) {
@@ -142,9 +137,9 @@ const HomeScreen: React.FC = () => {
       accessibilityRole="button"
       activeOpacity={0.9}
     >
-      {place.image ? (
+      {placeImageSource(place.image) ? (
         <Image
-          source={place.image}
+          source={placeImageSource(place.image)!}
           style={styles.cardImage}
           resizeMode="cover"
           accessibilityLabel={`${place.name} image`}
@@ -171,13 +166,7 @@ const HomeScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <Header
-        title=""
-        homeBranding
-        showNotification
-        showFilter={false}
-        onNotificationPress={() => navigation.navigate('Notifications')}
-      />
+      <Header title="" homeBranding showFilter={false} />
       <View style={styles.searchFilterRow}>
         <View style={styles.searchPill}>
           <JamIcon name="search" size={18} color={FIGMA.searchGreen} />
@@ -242,46 +231,23 @@ const HomeScreen: React.FC = () => {
             </ScrollView>
           )}
         </View>
-        {catalogFromSupabase && !catalogLoading ? (
-          <Text style={styles.liveHint}>{SYNC_MESSAGES.live}</Text>
-        ) : null}
         {!catalogFromSupabase && !catalogLoading ? (
-          <Text style={styles.offlineHint}>{SYNC_MESSAGES.demo}</Text>
+          <Text style={styles.offlineHint}>
+            {catalogError
+              ? `Could not load Cavite catalog (${catalogError}). Showing sample listings.`
+              : 'Showing sample listings — connect to load full Cavite catalog.'}
+          </Text>
         ) : null}
       </ScrollView>
 
-      <Modal
+      <FilterModal
         visible={filtersVisible}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        onRequestClose={() => setFiltersVisible(false)}
-      >
-        <View style={styles.filterModalRoot} accessibilityViewIsModal>
-          <Pressable
-            style={styles.filterModalDismiss}
-            onPress={() => setFiltersVisible(false)}
-            accessibilityLabel="Dismiss filters"
-            accessibilityRole="button"
-          />
-          <View
-            style={[
-              styles.filterSheet,
-              {
-                maxHeight: FILTER_SHEET_MAX_HEIGHT,
-                paddingBottom: filterSheetPadBottom,
-              },
-            ]}
-          >
-            <DashboardFiltersPanel
-              embedded
-              sheet
-              sheetScrollMaxHeight={filterScrollMaxHeight}
-              onTogglesChange={onFilterTogglesChange}
-            />
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setFiltersVisible(false)}
+        appliedFilters={appliedFilters}
+        onApply={setAppliedFilters}
+        places={catalogPlaces}
+        resultNoun="place"
+      />
     </SafeAreaView>
   );
 };
@@ -346,23 +312,6 @@ const styles = StyleSheet.create({
   },
   section: {
     marginBottom: 8,
-  },
-  /** Single flat tint (no elevation) so edges match the center — full window via Modal */
-  filterModalRoot: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.22)',
-    flexDirection: 'column',
-    justifyContent: 'flex-end',
-  },
-  filterModalDismiss: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  filterSheet: {
-    width: '100%',
-    backgroundColor: FIGMA.white,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    overflow: 'hidden',
   },
   sectionTitle: {
     fontFamily: 'Poppins_700Bold',
@@ -436,14 +385,6 @@ const styles = StyleSheet.create({
     color: FIGMA.textMuted,
     paddingHorizontal: H_PAD,
     paddingVertical: 8,
-  },
-  liveHint: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    lineHeight: 18,
-    color: '#2d5016',
-    paddingHorizontal: H_PAD,
-    paddingBottom: 8,
   },
   offlineHint: {
     fontFamily: 'Inter_400Regular',

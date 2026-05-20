@@ -1,7 +1,8 @@
+-- Legacy one-shot sync. Prefer: supabase/migrations/20260518120000_sync_places_with_images.sql
+-- (preserves admin images + backfills tourist_attractions.picture).
+--
 -- Sync all establishments from v_cavite_establishments into public.places
 -- so saved_list_items FK (place_id -> public.places.id) works for all entries.
---
--- Run this in Supabase SQL Editor (Production) whenever dataset is refreshed.
 
 BEGIN;
 

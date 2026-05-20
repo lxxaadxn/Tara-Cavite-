@@ -1,16 +1,23 @@
-import { useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AppHeader } from '../components/AppHeader';
+import { SaveSuccessToast } from '../components/SaveSuccessToast';
+import { SaveToListModal } from '../components/SaveToListModal';
 import { publishedItineraries } from '../data/mockItineraries';
-import { readSavedLists, saveItineraryToList, saveItineraryToListId } from '../lib/savedPlaces';
+import { buildEnrichedItinerary } from '../lib/itineraryPlaces';
+import { fetchAllPlacesFromSupabase, logPlacesFetchError } from '../lib/placesFromSupabase';
+import { readItinerarySavedLists, saveItineraryToList, saveItineraryToListId } from '../lib/savedPlaces';
+import { supabase } from '../lib/supabase';
+import { useSaveSuccessToast } from '../lib/useSaveSuccessToast';
 
 const HEADER_GREEN = '#7EA00E';
 const TEAL = '#1F4F59';
 
-function formatSubtitle(s) {
-  return String(s ?? '')
+function formatRouteLine(route, subtitle) {
+  const raw = route || subtitle || '';
+  return String(raw)
     .replace(/\s*->\s*/g, ' → ')
-    .replace(/\s*-\s*/g, ' → ');
+    .replace(/\s+-\s+/g, ' → ');
 }
 
 function IconChevronLeft(props) {
@@ -58,15 +65,38 @@ function IconPin(props) {
 
 export function ItineraryDetailPage() {
   const { id } = useParams();
-  const detail = publishedItineraries.find((itinerary) => itinerary.id === id);
+  const template = publishedItineraries.find((itinerary) => itinerary.id === id);
+  const [enriched, setEnriched] = useState(null);
   const [saveOpen, setSaveOpen] = useState(false);
   const [listNameDraft, setListNameDraft] = useState('');
   const [existingLists, setExistingLists] = useState([]);
-  const [saveStatus, setSaveStatus] = useState('');
+  const { showSaveSuccess, toastProps } = useSaveSuccessToast();
+
+  useEffect(() => {
+    if (!template) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const catalog = await fetchAllPlacesFromSupabase(supabase, 2000);
+        if (cancelled) return;
+        setEnriched(buildEnrichedItinerary(template, catalog));
+      } catch (err) {
+        if (!cancelled) {
+          logPlacesFetchError('ItineraryDetailPage.fetchCatalog', err);
+          setEnriched(buildEnrichedItinerary(template, []));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [template]);
+
+  const detail = enriched ?? template;
 
   const openSave = () => {
     setListNameDraft(detail?.tags?.[0] || 'My list');
-    setExistingLists(readSavedLists());
+    setExistingLists(readItinerarySavedLists());
     setSaveOpen(true);
   };
 
@@ -81,8 +111,9 @@ export function ItineraryDetailPage() {
       subtitle: detail.subtitle,
     });
     if (result.ok) {
-      setSaveStatus(`Saved to “${trimmed}”`);
-      window.setTimeout(() => setSaveStatus(''), 2800);
+      showSaveSuccess(result.listName ?? trimmed, {
+        variant: result.alreadySaved ? 'already' : 'saved',
+      });
       setSaveOpen(false);
     }
   };
@@ -96,14 +127,23 @@ export function ItineraryDetailPage() {
       subtitle: detail.subtitle,
     });
     if (result.ok) {
-      const label = result.listName || 'list';
-      setSaveStatus(`Saved to “${label}”`);
-      window.setTimeout(() => setSaveStatus(''), 2800);
+      showSaveSuccess(result.listName || 'list', {
+        variant: result.alreadySaved ? 'already' : 'saved',
+      });
       setSaveOpen(false);
     }
   };
 
-  if (!detail) {
+  const linkedPlaces = useMemo(
+    () =>
+      (detail?.stopList || [])
+        .map((stop) => stop.place)
+        .filter((place) => place?.id)
+        .filter((place, index, list) => list.findIndex((x) => x.id === place.id) === index),
+    [detail]
+  );
+
+  if (!template) {
     return (
       <div className="min-h-screen bg-[#f0f2ec] font-['Inter',sans-serif] text-neutral-900">
         <AppHeader />
@@ -122,12 +162,8 @@ export function ItineraryDetailPage() {
     );
   }
 
-  const linkedPlaces = (detail.stopList || [])
-    .map((stop) => stop.place)
-    .filter(Boolean)
-    .filter((place, index, list) => list.findIndex((x) => x.name === place.name && x.address === place.address) === index);
-
   const stops = detail.stopList || [];
+  const stopTotal = stops.length > 0 ? stops.length : detail?.stops;
 
   return (
     <div className="min-h-screen bg-[#f0f2ec] font-['Inter',sans-serif] text-neutral-900">
@@ -144,11 +180,6 @@ export function ItineraryDetailPage() {
             Itineraries
           </Link>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            {saveStatus ? (
-              <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-200/80">
-                {saveStatus}
-              </span>
-            ) : null}
             <button
               type="button"
               onClick={openSave}
@@ -161,7 +192,7 @@ export function ItineraryDetailPage() {
           </div>
         </div>
 
-        {/* Split hero — uses width; image + copy side by side on large screens */}
+        {/* Split hero — image + copy side by side on large screens */}
         <section className="overflow-hidden rounded-3xl border border-[#dfe8d3] bg-white shadow-[0_8px_32px_rgba(31,79,89,0.08)]">
           <div className="grid min-h-0 lg:grid-cols-[minmax(260px,1fr)_minmax(0,1.15fr)]">
             <div className="relative aspect-[16/10] min-h-[200px] lg:aspect-auto lg:min-h-[300px]">
@@ -184,11 +215,13 @@ export function ItineraryDetailPage() {
               <h1 className="font-['Poppins',sans-serif] text-2xl font-bold leading-tight text-neutral-900 sm:text-3xl lg:text-4xl">
                 {detail.title}
               </h1>
-              <p className="mt-3 text-base text-neutral-600 sm:text-lg">{formatSubtitle(detail.subtitle)}</p>
+              <p className="mt-3 text-base text-neutral-600 sm:text-lg">
+                {formatRouteLine(detail.route, detail.subtitle)}
+              </p>
               <div className="mt-5 flex flex-wrap gap-2">
-                {!!detail.stops && (
+                {!!stopTotal && (
                   <span className="rounded-full bg-[#1f4f59] px-3 py-1.5 text-xs font-semibold text-white">
-                    {detail.stops} stops
+                    {stopTotal} {stopTotal === 1 ? 'stop' : 'stops'}
                   </span>
                 )}
                 {!!detail.durationLabel && (
@@ -235,16 +268,11 @@ export function ItineraryDetailPage() {
                           <div className="min-w-0 flex-1 pt-0.5">
                             <h3 className="font-['Poppins',sans-serif] text-lg font-semibold text-neutral-900">{stop.name}</h3>
                             <p className="mt-1.5 text-sm leading-relaxed text-neutral-600">{stop.description}</p>
-                            {!!stop.leg && (
-                              <div className="mt-3 flex gap-2 rounded-xl border border-[#dfe8d3] bg-[#f7faef] px-3 py-2.5 text-sm text-[#1F4F59]">
-                                <span className="shrink-0 font-semibold text-[#7EA00E]" aria-hidden>
-                                  ↳
-                                </span>
-                                <span>{stop.leg}</span>
-                              </div>
-                            )}
-                            {!!stop.place && (
-                              <div className="mt-3 flex items-center gap-3 rounded-2xl border border-neutral-200 bg-neutral-50/80 p-3 transition hover:border-[#cfe0b0] hover:bg-[#fbfcf7]">
+                            {!!stop.place?.id && (
+                              <Link
+                                to={`/place/${stop.place.id}`}
+                                className="mt-3 flex items-center gap-3 rounded-2xl border border-neutral-200 bg-neutral-50/80 p-3 transition hover:border-[#cfe0b0] hover:bg-[#fbfcf7]"
+                              >
                                 {stop.place.image ? (
                                   <img
                                     src={stop.place.image}
@@ -269,7 +297,7 @@ export function ItineraryDetailPage() {
                                     <p className="mt-0.5 line-clamp-2 text-xs text-neutral-500">{stop.place.address}</p>
                                   )}
                                 </div>
-                              </div>
+                              </Link>
                             )}
                           </div>
                         </div>
@@ -322,10 +350,12 @@ export function ItineraryDetailPage() {
                 <p className="mt-1 text-xs text-neutral-500">Quick list of named stops with addresses.</p>
                 <ul className="mt-4 divide-y divide-neutral-100">
                   {linkedPlaces.map((place) => (
-                    <li key={`${place.name}-${place.address}`} className="flex items-start gap-3 py-3 first:pt-0">
+                    <li key={place.id} className="flex items-start gap-3 py-3 first:pt-0">
                       <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#7ea00e]/70" aria-hidden />
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-neutral-900">{place.name}</p>
+                        <Link to={`/place/${place.id}`} className="text-sm font-semibold text-neutral-900 hover:text-[#1f4f59]">
+                          {place.name}
+                        </Link>
                         {!!place.address && <p className="mt-0.5 text-xs text-neutral-500">{place.address}</p>}
                       </div>
                     </li>
@@ -337,61 +367,20 @@ export function ItineraryDetailPage() {
         </div>
       </main>
 
-      {saveOpen ? (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/45 p-4 backdrop-blur-[2px]">
-          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-neutral-200/80 bg-white p-6 shadow-2xl">
-            <p className="font-['Poppins',sans-serif] text-lg font-semibold text-neutral-900">Save itinerary to list</p>
-            <p className="mt-1 text-sm text-neutral-600">Pick an existing list or create a new one.</p>
-            {existingLists.length > 0 ? (
-              <div className="mt-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Your lists</p>
-                <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-xl border border-neutral-100 bg-neutral-50 p-2">
-                  {existingLists.map((l) => (
-                    <li key={l.id || l.name}>
-                      <button
-                        type="button"
-                        onClick={() => saveToExistingList(l.id)}
-                        className="w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium text-neutral-800 transition hover:bg-white"
-                      >
-                        {l.name}
-                        <span className="ml-2 text-xs font-normal text-neutral-500">
-                          ({Array.isArray(l.items) ? l.items.length : 0} items)
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            <label className="mt-5 block text-xs font-semibold text-neutral-600" htmlFor="itin-list-name">
-              New list name
-            </label>
-            <input
-              id="itin-list-name"
-              value={listNameDraft}
-              onChange={(e) => setListNameDraft(e.target.value)}
-              className="mt-1.5 h-11 w-full rounded-xl border border-neutral-200 px-3 text-sm outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(126,160,14,0.22)]"
-            />
-            <div className="mt-6 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setSaveOpen(false)}
-                className="rounded-xl border border-neutral-200 px-4 py-2.5 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={confirmSave}
-                className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-95"
-                style={{ backgroundColor: TEAL }}
-              >
-                Save to new list
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <SaveToListModal
+        open={saveOpen}
+        onClose={() => setSaveOpen(false)}
+        title="Save itinerary"
+        itemLabel={detail.title}
+        lists={existingLists}
+        listNameDraft={listNameDraft}
+        onListNameChange={setListNameDraft}
+        onSelectList={saveToExistingList}
+        onCreateList={confirmSave}
+        primaryColor={TEAL}
+        countLabel="items"
+      />
+      <SaveSuccessToast {...toastProps} />
     </div>
   );
 }

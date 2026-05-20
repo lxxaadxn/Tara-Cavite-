@@ -191,7 +191,7 @@ export async function addPlaceToSavedList(
       ok: false,
       duplicate: false,
       message:
-        'This establishment is not linked in the places table yet. Sync v_cavite_establishments into public.places (source_slug = establishment id), then try saving again.',
+        'This establishment is not in public.places yet. Add or publish it in the admin catalog, then try saving again.',
     };
   }
   const { error } = await client
@@ -236,6 +236,13 @@ export async function placeRowExists(client: SupabaseClient, placeId: string): P
   return canonical != null;
 }
 
+export type SaveToListPickerRow = {
+  id: string;
+  name: string;
+  type: string;
+  itemCount: number;
+};
+
 export async function fetchUserListsForPicker(
   client: SupabaseClient,
   userId: string
@@ -247,4 +254,55 @@ export async function fetchUserListsForPicker(
     .order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []) as { id: string; name: string; type: string }[];
+}
+
+/** Lists for the save modal — same shape as web `SaveToListModal` (`items.length`). */
+export async function fetchUserListsForPickerWithCounts(
+  client: SupabaseClient,
+  userId: string
+): Promise<SaveToListPickerRow[]> {
+  const lists = await fetchUserListsForPicker(client, userId);
+  if (lists.length === 0) return [];
+  const counts = await fetchSavedItemCountsByListId(
+    client,
+    lists.map((l) => l.id)
+  );
+  return lists.map((l) => ({
+    ...l,
+    itemCount: counts[l.id] ?? 0,
+  }));
+}
+
+/** Match web `findOrCreateListByName` (Supabase). */
+export async function findOrCreateListByName(
+  client: SupabaseClient,
+  userId: string,
+  listName: string
+): Promise<{ id: string; name: string } | null> {
+  const cleanName = String(listName ?? '').trim();
+  if (!cleanName) return null;
+
+  const { data: lists, error } = await client
+    .from('saved_lists')
+    .select('id, name')
+    .eq('user_id', userId);
+  if (error) throw error;
+
+  const match = (lists ?? []).find(
+    (l) => String(l.name).toLowerCase() === cleanName.toLowerCase()
+  );
+  if (match) return { id: match.id as string, name: match.name as string };
+
+  const { data: created, error: insertErr } = await client
+    .from('saved_lists')
+    .insert({
+      user_id: userId,
+      name: cleanName,
+      type: 'private',
+      icon_name: 'bookmark',
+    })
+    .select('id, name')
+    .single();
+  if (insertErr) throw insertErr;
+  return { id: created.id as string, name: created.name as string };
 }

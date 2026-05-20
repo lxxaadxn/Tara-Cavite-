@@ -17,13 +17,14 @@ import {
 import * as SplashScreen from 'expo-splash-screen';
 import * as Linking from 'expo-linking';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { Image, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createNavigationContainerRef } from '@react-navigation/native';
 
 import { JamIcon } from './components/JamIcon';
 import { AuthRecoveryProvider } from './context/AuthRecoveryContext';
 import { Colors } from './constants/Colors';
+import { applyOAuthCallbackFromUrl, isOAuthCallbackUrl } from './lib/authOAuth';
 import { applyPasswordRecoveryFromUrl, isPasswordRecoveryUrl } from './lib/authRecoveryDeepLink';
 import { isStoredSessionInvalidError } from './lib/authHelpers';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
@@ -42,6 +43,7 @@ import MapCommuteDetailScreen from './screens/MapCommuteDetailScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
 import PlaceDetailScreen from './screens/PlaceDetailScreen';
 import AboutEstablishmentScreen from './screens/AboutEstablishmentScreen';
+import EstablishmentsBrowseScreen from './screens/EstablishmentsBrowseScreen';
 import PreferencesScreen from './screens/PreferencesScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import SavedListScreen from './screens/SavedListScreen';
@@ -105,6 +107,7 @@ const DashboardStack = () => (
     <Stack.Screen name="TerminalDetail" component={TerminalDetailScreen} />
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
     <Stack.Screen name="AboutEstablishment" component={AboutEstablishmentScreen} />
+    <Stack.Screen name="EstablishmentsBrowse" component={EstablishmentsBrowseScreen} />
     <Stack.Screen name="Directions" component={DirectionsScreen} />
     <Stack.Screen name="FullRouteMap" component={FullRouteMapScreen} />
     <Stack.Screen name="Categories" component={CategoriesScreen} />
@@ -121,6 +124,7 @@ const ItinerariesStack = () => (
     <Stack.Screen name="Notifications" component={NotificationsScreen} />
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
     <Stack.Screen name="AboutEstablishment" component={AboutEstablishmentScreen} />
+    <Stack.Screen name="EstablishmentsBrowse" component={EstablishmentsBrowseScreen} />
     <Stack.Screen name="Directions" component={DirectionsScreen} />
     <Stack.Screen name="FullRouteMap" component={FullRouteMapScreen} />
     <Stack.Screen name="NewList" component={NewListScreen} />
@@ -138,6 +142,11 @@ const ProfileStack = () => (
     <Stack.Screen name="SavedList" component={SavedListScreen} />
     <Stack.Screen name="SavedListDetail" component={SavedListDetailScreen} />
     <Stack.Screen name="NewList" component={NewListScreen} />
+    <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
+    <Stack.Screen name="AboutEstablishment" component={AboutEstablishmentScreen} />
+    <Stack.Screen name="EstablishmentsBrowse" component={EstablishmentsBrowseScreen} />
+    <Stack.Screen name="Directions" component={DirectionsScreen} />
+    <Stack.Screen name="FullRouteMap" component={FullRouteMapScreen} />
     <Stack.Screen name="Notifications" component={NotificationsScreen} />
   </Stack.Navigator>
 );
@@ -158,6 +167,7 @@ const MapStack = () => (
     <Stack.Screen name="MapMain" component={MapScreen} />
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
     <Stack.Screen name="AboutEstablishment" component={AboutEstablishmentScreen} />
+    <Stack.Screen name="EstablishmentsBrowse" component={EstablishmentsBrowseScreen} />
     <Stack.Screen name="TerminalDetail" component={TerminalDetailScreen} />
     <Stack.Screen name="Directions" component={DirectionsScreen} />
     <Stack.Screen name="MapCommuteDetail" component={MapCommuteDetailScreen} />
@@ -226,7 +236,10 @@ function MainTabs() {
           const hideTab =
             focused === 'Notifications' ||
             focused === 'TerminalDetail' ||
-            focused === 'Directions';
+            focused === 'Directions' ||
+            focused === 'FullRouteMap' ||
+            focused === 'AboutEstablishment' ||
+            focused === 'PlaceDetail';
           return {
             tabBarLabel: 'Home',
             tabBarStyle: hideTab ? { display: 'none' } : mainTabBarStyle,
@@ -241,7 +254,9 @@ function MainTabs() {
           const hideTab =
             focused === 'Notifications' ||
             focused === 'PlaceDetail' ||
+            focused === 'AboutEstablishment' ||
             focused === 'Directions' ||
+            focused === 'FullRouteMap' ||
             focused === 'NewList' ||
             focused === 'CreateItinerary';
           return {
@@ -258,7 +273,9 @@ function MainTabs() {
           const hideTab =
             focused === 'Notifications' ||
             focused === 'PlaceDetail' ||
+            focused === 'AboutEstablishment' ||
             focused === 'Directions' ||
+            focused === 'FullRouteMap' ||
             focused === 'TerminalDetail';
           return {
             tabBarLabel: 'Map',
@@ -271,7 +288,8 @@ function MainTabs() {
         component={TerminalsStack}
         options={({ route }) => {
           const focused = getFocusedRouteNameFromRoute(route) ?? 'TerminalsMain';
-          const hideTab = focused === 'TerminalDetail' || focused === 'Directions';
+          const hideTab =
+            focused === 'TerminalDetail' || focused === 'Directions' || focused === 'FullRouteMap';
           return {
             tabBarLabel: 'Terminals',
             tabBarStyle: hideTab ? { display: 'none' } : mainTabBarStyle,
@@ -281,12 +299,9 @@ function MainTabs() {
       <Tab.Screen
         name="Profile"
         component={ProfileStack}
-        options={({ route }) => {
-          const focused = getFocusedRouteNameFromRoute(route) ?? 'ProfileMain';
-          return {
-            tabBarLabel: 'Profile',
-            tabBarStyle: focused === 'Notifications' ? { display: 'none' } : mainTabBarStyle,
-          };
+        options={{
+          tabBarLabel: 'Profile',
+          tabBarStyle: { display: 'none' },
         }}
       />
     </Tab.Navigator>
@@ -353,6 +368,20 @@ export default function App() {
             skipStartupSignOut = true;
             pendingRecoveryNavRef.current = true;
           }
+        } else if (initialUrl && isOAuthCallbackUrl(initialUrl)) {
+          const ok = await applyOAuthCallbackFromUrl(supabase, initialUrl);
+          if (ok) {
+            skipStartupSignOut = true;
+          }
+        } else if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          const webUrl = window.location.href;
+          if (isOAuthCallbackUrl(webUrl)) {
+            const ok = await applyOAuthCallbackFromUrl(supabase, webUrl);
+            if (ok) {
+              skipStartupSignOut = true;
+              window.history.replaceState({}, '', window.location.pathname || '/');
+            }
+          }
         }
       } catch {
         // Ignore invalid recovery URLs on cold start.
@@ -388,6 +417,10 @@ export default function App() {
 
   useEffect(() => {
     const sub = Linking.addEventListener('url', ({ url }) => {
+      if (isOAuthCallbackUrl(url)) {
+        void applyOAuthCallbackFromUrl(supabase, url);
+        return;
+      }
       if (!isPasswordRecoveryUrl(url)) {
         return;
       }
