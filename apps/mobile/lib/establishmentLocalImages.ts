@@ -830,6 +830,374 @@ const stFrancisOfAssisiParishGallery = [
   require('../assets/images/St._Francis_of_Assisi_Parish_3.png'),
 ];
 
+const indangCommunityMuseumGallery = [
+  require('../assets/images/Indang_Community_Museum.png'),
+  require('../assets/images/Indang_Community_Museum_1.png'),
+  require('../assets/images/Indang_Community_Museum_2.png'),
+  require('../assets/images/Indang_Community_Museum_3.png'),
+];
+
+const bonifacioShrineGallery = [
+  require('../assets/images/Bonifacio_Shrine.png'),
+  require('../assets/images/Bonifacio_Shrine_1.png'),
+  require('../assets/images/Bonifacio_Shrine_2.png'),
+  require('../assets/images/Bonifacio_Shrine_3.png'),
+];
+
+const cvsuAgriEcoTourismParkGallery = [
+  require('../assets/images/CvSU_Agri-Eco_Tourism_Park.png'),
+  require('../assets/images/CvSU_Agri-Eco_Tourism_Park_1.png'),
+  require('../assets/images/CvSU_Agri-Eco_Tourism_Park_2.png'),
+  require('../assets/images/CvSU_Agri-Eco_Tourism_Park_3.png'),
+];
+
+const loufilResortGallery = [
+  require('../assets/images/Loufil_Resort.png'),
+  require('../assets/images/Loufil_Resort_1.png'),
+  require('../assets/images/Loufil_Resort_2.png'),
+  require('../assets/images/Loufil_Resort_3.png'),
+];
+
+const marayataFarmGallery = [
+  require('../assets/images/Marayata_Farm.png'),
+  require('../assets/images/Marayata_Farm_1.png'),
+  require('../assets/images/Marayata_Farm_2.png'),
+  require('../assets/images/Marayata_Farm_3.png'),
+];
+
+const pioDeRodaGallery = [
+  require('../assets/images/Pio_de_Roda.png'),
+  require('../assets/images/Pio_de_Roda_1.png'),
+  require('../assets/images/Pio_de_Roda_2.png'),
+  require('../assets/images/Pio_de_Roda_3.png'),
+];
+
+const preciousGardenEventsPlaceGallery = [
+  require('../assets/images/Precious_Garden_Events_Place.png'),
+  require('../assets/images/Precious_Garden_Events_Place_1.png'),
+  require('../assets/images/Precious_Garden_Events_Place_2.png'),
+  require('../assets/images/Precious_Garden_Events_Place_3.png'),
+];
+
+const sanctuarioNatureFarmsGallery = [
+  require('../assets/images/Sanctuario_Nature_Farms.png'),
+  require('../assets/images/Sanctuario_Nature_Farms_1.png'),
+  require('../assets/images/Sanctuario_Nature_Farms_2.png'),
+  require('../assets/images/Sanctuario_Nature_Farms_3.png'),
+];
+
+const stGregoryTheGreatParishGallery = [
+  require('../assets/images/St._Gregory_the_Great_Parish.png'),
+  require('../assets/images/St._Gregory_the_Great_Parish_1.png'),
+  require('../assets/images/St._Gregory_the_Great_Parish_2.png'),
+  require('../assets/images/St._Gregory_the_Great_Parish_3.png'),
+];
+
+const magallanesMarkerGallery = [
+  require('../assets/images/Magallanes_Marker.png'),
+  require('../assets/images/Magallanes_Marker_1.png'),
+  require('../assets/images/Magallanes_Marker_2.png'),
+  require('../assets/images/Magallanes_Marker_3.png'),
+];
+
+const nuestraSenoraDeGuiaChurchGallery = [
+  require('../assets/images/Nuestra_Se_ora_de_Guia_Church.png'),
+  require('../assets/images/Nuestra_Se_ora_de_Guia_Church_1.png'),
+  require('../assets/images/Nuestra_Se_ora_de_Guia_Church_2.png'),
+  require('../assets/images/Nuestra_Se_ora_de_Guia_Church_3.png'),
+];
+
+const utodRiverAndFallsGallery = [
+  require('../assets/images/Utod_River___Falls.png'),
+  require('../assets/images/Utod_River___Falls_1.png'),
+  require('../assets/images/Utod_River___Falls_2.png'),
+  require('../assets/images/Utod_River___Falls_3.png'),
+];
+
+const jumpOffToMtMaramiGallery = [
+  require('../assets/images/Jump_off_to_Mt._Marami.png'),
+  require('../assets/images/Jump_off_to_Mt._Marami_1.png'),
+  require('../assets/images/Jump_off_to_Mt._Marami_2.png'),
+  require('../assets/images/Jump_off_to_Mt._Marami_3.png'),
+];
+
+const buhayForestGallery = [
+  require('../assets/images/Buhay_Forest.png'),
+  require('../assets/images/Buhay_Forest_1.png'),
+  require('../assets/images/Buhay_Forest_2.png'),
+  require('../assets/images/Buhay_Forest_3.png'),
+];
+
+const mendezEcologicalParkGallery = [
+  require('../assets/images/Mendez_Ecological_Park.png'),
+  require('../assets/images/Mendez_Ecological_Park_1.png'),
+  require('../assets/images/Mendez_Ecological_Park_2.png'),
+  require('../assets/images/Mendez_Ecological_Park_3.png'),
+];
+
+const stAugustineParishChurchGallery = [
+  require('../assets/images/St._Augustine_Parish_Church.png'),
+  require('../assets/images/St._Augustine_Parish_Church_1.png'),
+  require('../assets/images/St._Augustine_Parish_Church_2.png'),
+  require('../assets/images/St._Augustine_Parish_Church_3.png'),
+];
+
+const yokisFarmGallery = [
+  require('../assets/images/Yoki_s_Farm.png'),
+  require('../assets/images/Yoki_s_Farm_1.png'),
+  require('../assets/images/Yoki_s_Farm_2.png'),
+  require('../assets/images/Yoki_s_Farm_3.png'),
+];
+
+const paradizooThemeFarmGallery = [
+  require('../assets/images/Paradizoo_Theme_Farm.png'),
+  require('../assets/images/Paradizoo_Theme_Farm_1.png'),
+  require('../assets/images/Paradizoo_Theme_Farm_2.png'),
+  require('../assets/images/Paradizoo_Theme_Farm_3.png'),
+];
+
+const diocesanShrineOfSanAgustinParishOfStaCruzGallery = [
+  require('../assets/images/Diocesan_Shrine_of_San_Agustin_Parish_of_Sta._Cruz.png'),
+  require('../assets/images/Diocesan_Shrine_of_San_Agustin_Parish_of_Sta._Cruz_1.png'),
+  require('../assets/images/Diocesan_Shrine_of_San_Agustin_Parish_of_Sta._Cruz_2.png'),
+  require('../assets/images/Diocesan_Shrine_of_San_Agustin_Parish_of_Sta._Cruz_3.png'),
+];
+
+const juluganFishTerminalGallery = [
+  require('../assets/images/Julugan_Fish_Terminal.png'),
+  require('../assets/images/Julugan_Fish_Terminal_1.png'),
+  require('../assets/images/Julugan_Fish_Terminal_2.png'),
+  require('../assets/images/Julugan_Fish_Terminal_3.png'),
+];
+
+const plazaDeSanAgustinGallery = [
+  require('../assets/images/Plaza_de_San_Agustin.png'),
+  require('../assets/images/Plaza_de_San_Agustin_1.png'),
+  require('../assets/images/Plaza_de_San_Agustin_2.png'),
+  require('../assets/images/Plaza_de_San_Agustin_3.png'),
+];
+
+const staCruzConventMuseumGallery = [
+  require('../assets/images/Sta._Cruz_Convent_Museum.png'),
+  require('../assets/images/Sta._Cruz_Convent_Museum_1.png'),
+  require('../assets/images/Sta._Cruz_Convent_Museum_2.png'),
+  require('../assets/images/Sta._Cruz_Convent_Museum_3.png'),
+];
+
+const smTanzaGallery = [
+  require('../assets/images/SM_Tanza.png'),
+  require('../assets/images/SM_Tanza_1.png'),
+  require('../assets/images/SM_Tanza_2.png'),
+  require('../assets/images/SM_Tanza_3.png'),
+];
+
+const ardenBotanicalGardenGallery = [
+  require('../assets/images/Arden_Botanical_Garden.png'),
+  require('../assets/images/Arden_Botanical_Garden_1.png'),
+  require('../assets/images/Arden_Botanical_Garden_2.png'),
+  require('../assets/images/Arden_Botanical_Garden_3.png'),
+];
+
+const foodBazaarGallery = [
+  require('../assets/images/Food_Bazaar.png'),
+  require('../assets/images/Food_Bazaar_1.png'),
+  require('../assets/images/Food_Bazaar_2.png'),
+  require('../assets/images/Food_Bazaar_3.png'),
+];
+
+const vistaMallTanzaGallery = [
+  require('../assets/images/Vista_Mall_Tanza.png'),
+  require('../assets/images/Vista_Mall_Tanza_1.png'),
+  require('../assets/images/Vista_Mall_Tanza_2.png'),
+  require('../assets/images/Vista_Mall_Tanza_3.png'),
+];
+
+const casaHaciendaDeTanzaGallery = [
+  require('../assets/images/Casa_Hacienda_de_Tanza.png'),
+  require('../assets/images/Casa_Hacienda_de_Tanza_1.png'),
+  require('../assets/images/Casa_Hacienda_de_Tanza_2.png'),
+  require('../assets/images/Casa_Hacienda_de_Tanza_3.png'),
+];
+
+const ilogMariaHoneybeeFarmsGallery = [
+  require('../assets/images/Ilog_Maria_Honeybee_Farms.png'),
+  require('../assets/images/Ilog_Maria_Honeybee_Farms_1.png'),
+  require('../assets/images/Ilog_Maria_Honeybee_Farms_2.png'),
+  require('../assets/images/Ilog_Maria_Honeybee_Farms_3.png'),
+];
+
+const oldKanoFarmGallery = [
+  require('../assets/images/Old_Kano_Farm.png'),
+  require('../assets/images/Old_Kano_Farm_1.png'),
+  require('../assets/images/Old_Kano_Farm_2.png'),
+  require('../assets/images/Old_Kano_Farm_3.png'),
+];
+
+const rivieraGolfClubIncGallery = [
+  require('../assets/images/Riviera_Golf_Club__Inc..png'),
+  require('../assets/images/Riviera_Golf_Club__Inc._1.png'),
+  require('../assets/images/Riviera_Golf_Club__Inc._2.png'),
+  require('../assets/images/Riviera_Golf_Club__Inc._3.png'),
+];
+
+const aciendaDesignerOutletGallery = [
+  require('../assets/images/Acienda_Designer_Outlet.png'),
+  require('../assets/images/Acienda_Designer_Outlet_1.png'),
+  require('../assets/images/Acienda_Designer_Outlet_2.png'),
+  require('../assets/images/Acienda_Designer_Outlet_3.png'),
+];
+
+const gameroomArtsAndPlayCenterGallery = [
+  require('../assets/images/Gameroom_Arts_and_Play_Center.png'),
+  require('../assets/images/Gameroom_Arts_and_Play_Center_1.png'),
+  require('../assets/images/Gameroom_Arts_and_Play_Center_2.png'),
+  require('../assets/images/Gameroom_Arts_and_Play_Center_3.png'),
+];
+
+const cornerstonePotteryGallery = [
+  require('../assets/images/Cornerstone_Pottery.png'),
+  require('../assets/images/Cornerstone_Pottery_1.png'),
+  require('../assets/images/Cornerstone_Pottery_2.png'),
+  require('../assets/images/Cornerstone_Pottery_3.png'),
+];
+
+const santisDelicatessenGallery = [
+  require('../assets/images/Santis_Delicatessen.png'),
+  require('../assets/images/Santis_Delicatessen_1.png'),
+  require('../assets/images/Santis_Delicatessen_2.png'),
+  require('../assets/images/Santis_Delicatessen_3.png'),
+];
+
+const perlasNgSilangGallery = [
+  require('../assets/images/Perlas_ng_Silang.png'),
+  require('../assets/images/Perlas_ng_Silang_1.png'),
+  require('../assets/images/Perlas_ng_Silang_2.png'),
+  require('../assets/images/Perlas_ng_Silang_3.png'),
+];
+
+const division41stUssafeShrineGallery = [
+  require('../assets/images/41st_Division_USSAFE_Shrine.png'),
+  require('../assets/images/41st_Division_USSAFE_Shrine_1.png'),
+  require('../assets/images/41st_Division_USSAFE_Shrine_2.png'),
+  require('../assets/images/41st_Division_USSAFE_Shrine_3.png'),
+];
+
+const museoOrlinaGallery = [
+  require('../assets/images/Museo_Orlina.png'),
+  require('../assets/images/Museo_Orlina_1.png'),
+  require('../assets/images/Museo_Orlina_2.png'),
+  require('../assets/images/Museo_Orlina_3.png'),
+];
+
+const tagaytayPicnicGroveGallery = [
+  require('../assets/images/Tagaytay_Picnic_Grove.png'),
+  require('../assets/images/Tagaytay_Picnic_Grove_1.png'),
+  require('../assets/images/Tagaytay_Picnic_Grove_2.png'),
+  require('../assets/images/Tagaytay_Picnic_Grove_3.png'),
+];
+
+const skyranchTagaytayGallery = [
+  require('../assets/images/Skyranch_Tagaytay.png'),
+  require('../assets/images/Skyranch_Tagaytay_1.png'),
+  require('../assets/images/Skyranch_Tagaytay_2.png'),
+  require('../assets/images/Skyranch_Tagaytay_3.png'),
+];
+
+const residenceInnGallery = [
+  require('../assets/images/Residence_Inn.png'),
+  require('../assets/images/Residence_Inn_1.png'),
+  require('../assets/images/Residence_Inn_2.png'),
+  require('../assets/images/Residence_Inn_3.png'),
+];
+
+const pinkSistersConventGallery = [
+  require('../assets/images/Pink_Sisters_Convent.png'),
+  require('../assets/images/Pink_Sisters_Convent_1.png'),
+  require('../assets/images/Pink_Sisters_Convent_2.png'),
+  require('../assets/images/Pink_Sisters_Convent_3.png'),
+];
+
+const lolasPlatesAndPoursGallery = [
+  require('../assets/images/Lola_s_Plates_and_Pours.png'),
+  require('../assets/images/Lola_s_Plates_and_Pours_1.png'),
+  require('../assets/images/Lola_s_Plates_and_Pours_2.png'),
+  require('../assets/images/Lola_s_Plates_and_Pours_3.png'),
+];
+
+const publicoCafeAndRestaurantGallery = [
+  require('../assets/images/Publico_Caf__and_Restaurant.png'),
+  require('../assets/images/Publico_Caf__and_Restaurant_1.png'),
+  require('../assets/images/Publico_Caf__and_Restaurant_2.png'),
+  require('../assets/images/Publico_Caf__and_Restaurant_3.png'),
+];
+
+const oldCaviteProvincialCapitolBuildingGallery = [
+  require('../assets/images/Old_Cavite_Provincial_Capitol_Building.png'),
+];
+
+const newCaviteProvincialCapitolBuildingGallery = [
+  require('../assets/images/New_Cavite_Provincial_Capitol_BUilding.png'),
+  require('../assets/images/New_Cavite_Provincial_Capitol_BUilding_1.png'),
+  require('../assets/images/New_Cavite_Provincial_Capitol_BUilding_2.png'),
+  require('../assets/images/New_Cavite_Provincial_Capitol_BUilding_3.png'),
+];
+
+const kanlunganCafeGallery = [
+  require('../assets/images/Kanlungan_Caf_.png'),
+  require('../assets/images/Kanlungan_Caf__1.png'),
+  require('../assets/images/Kanlungan_Caf__2.png'),
+  require('../assets/images/Kanlungan_Caf__3.png'),
+];
+
+const sherwoodHillsGolfAndCountryClubGallery = [
+  require('../assets/images/Sherwood_Hills_Golf_and_Country_Club.png'),
+  require('../assets/images/Sherwood_Hills_Golf_and_Country_Club_1.png'),
+  require('../assets/images/Sherwood_Hills_Golf_and_Country_Club_2.png'),
+  require('../assets/images/Sherwood_Hills_Golf_and_Country_Club_3.png'),
+];
+
+const forestParkGallery = [
+  require('../assets/images/Forest_Park.png'),
+  require('../assets/images/Forest_Park_1.png'),
+  require('../assets/images/Forest_Park_2.png'),
+  require('../assets/images/Forest_Park_3.png'),
+];
+
+const bantayogNgLabintatlongMartyrNgCaviteGallery = [
+  require('../assets/images/Bantayog_ng_Labintatlong_Martyr_ng_Cavite.png'),
+  require('../assets/images/Bantayog_ng_Labintatlong_Martyr_ng_Cavite_1.png'),
+  require('../assets/images/Bantayog_ng_Labintatlong_Martyr_ng_Cavite_2.png'),
+  require('../assets/images/Bantayog_ng_Labintatlong_Martyr_ng_Cavite_3.png'),
+];
+
+const peoplesParkGallery = [
+  require('../assets/images/Peoples_Park.png'),
+  require('../assets/images/Peoples_Park_1.png'),
+  require('../assets/images/Peoples_Park_2.png'),
+  require('../assets/images/Peoples_Park_3.png'),
+];
+
+const minaTunnelGallery = [
+  require('../assets/images/Mina_Tunnel.png'),
+  require('../assets/images/Mina_Tunnel_1.png'),
+  require('../assets/images/Mina_Tunnel_2.png'),
+  require('../assets/images/Mina_Tunnel_3.png'),
+];
+
+const stJudeThaddeusChurchGallery = [
+  require('../assets/images/St._Jude_Thaddeus_Church.png'),
+  require('../assets/images/St._Jude_Thaddeus_Church_1.png'),
+  require('../assets/images/St._Jude_Thaddeus_Church_2.png'),
+  require('../assets/images/St._Jude_Thaddeus_Church_3.png'),
+];
+
+const mayangFallsGallery = [
+  require('../assets/images/Mayang_Falls.png'),
+  require('../assets/images/Mayang_Falls_1.png'),
+  require('../assets/images/Mayang_Falls_2.png'),
+  require('../assets/images/Mayang_Falls_3.png'),
+];
+
 /** Local bundled photos keyed by `Place.name` as returned from `v_cavite_establishments`. */
 const LOCAL_MEDIA: Record<string, { image: any; gallery: any[] }> = {
   Asador: { image: asadorGallery[0], gallery: asadorGallery },
@@ -1152,6 +1520,152 @@ const LOCAL_MEDIA: Record<string, { image: any; gallery: any[] }> = {
     image: stFrancisOfAssisiParishGallery[0],
     gallery: stFrancisOfAssisiParishGallery,
   },
+  'Indang Community Museum': {
+    image: indangCommunityMuseumGallery[0],
+    gallery: indangCommunityMuseumGallery,
+  },
+  'Bonifacio Shrine': { image: bonifacioShrineGallery[0], gallery: bonifacioShrineGallery },
+  'CvSU Agri-Eco Tourism Park': {
+    image: cvsuAgriEcoTourismParkGallery[0],
+    gallery: cvsuAgriEcoTourismParkGallery,
+  },
+  'Loufil Resort': { image: loufilResortGallery[0], gallery: loufilResortGallery },
+  'Marayata Farm': { image: marayataFarmGallery[0], gallery: marayataFarmGallery },
+  'Pio de Roda': { image: pioDeRodaGallery[0], gallery: pioDeRodaGallery },
+  'Precious Garden Events Place': {
+    image: preciousGardenEventsPlaceGallery[0],
+    gallery: preciousGardenEventsPlaceGallery,
+  },
+  'Sanctuario Nature Farms': {
+    image: sanctuarioNatureFarmsGallery[0],
+    gallery: sanctuarioNatureFarmsGallery,
+  },
+  'St. Gregory the Great Parish': {
+    image: stGregoryTheGreatParishGallery[0],
+    gallery: stGregoryTheGreatParishGallery,
+  },
+  'Magallanes Marker': { image: magallanesMarkerGallery[0], gallery: magallanesMarkerGallery },
+  'Nuestra Señora de Guia Church': {
+    image: nuestraSenoraDeGuiaChurchGallery[0],
+    gallery: nuestraSenoraDeGuiaChurchGallery,
+  },
+  'Utod River & Falls': { image: utodRiverAndFallsGallery[0], gallery: utodRiverAndFallsGallery },
+  'Jump off to Mt. Marami': {
+    image: jumpOffToMtMaramiGallery[0],
+    gallery: jumpOffToMtMaramiGallery,
+  },
+  'Buhay Forest': { image: buhayForestGallery[0], gallery: buhayForestGallery },
+  'Mendez Ecological Park': {
+    image: mendezEcologicalParkGallery[0],
+    gallery: mendezEcologicalParkGallery,
+  },
+  'St. Augustine Parish Church': {
+    image: stAugustineParishChurchGallery[0],
+    gallery: stAugustineParishChurchGallery,
+  },
+  "Yoki's Farm": { image: yokisFarmGallery[0], gallery: yokisFarmGallery },
+  'Paradizoo Theme Farm': {
+    image: paradizooThemeFarmGallery[0],
+    gallery: paradizooThemeFarmGallery,
+  },
+  'Diocesan Shrine of San Agustin Parish of Sta. Cruz': {
+    image: diocesanShrineOfSanAgustinParishOfStaCruzGallery[0],
+    gallery: diocesanShrineOfSanAgustinParishOfStaCruzGallery,
+  },
+  'Julugan Fish Terminal': {
+    image: juluganFishTerminalGallery[0],
+    gallery: juluganFishTerminalGallery,
+  },
+  'Plaza de San Agustin': { image: plazaDeSanAgustinGallery[0], gallery: plazaDeSanAgustinGallery },
+  'Sta. Cruz Convent Museum': {
+    image: staCruzConventMuseumGallery[0],
+    gallery: staCruzConventMuseumGallery,
+  },
+  'SM Tanza': { image: smTanzaGallery[0], gallery: smTanzaGallery },
+  'Vista Mall Tanza': { image: vistaMallTanzaGallery[0], gallery: vistaMallTanzaGallery },
+  'Arden Botanical Garden': {
+    image: ardenBotanicalGardenGallery[0],
+    gallery: ardenBotanicalGardenGallery,
+  },
+  'Food Bazaar': { image: foodBazaarGallery[0], gallery: foodBazaarGallery },
+  'Casa Hacienda de Tanza': {
+    image: casaHaciendaDeTanzaGallery[0],
+    gallery: casaHaciendaDeTanzaGallery,
+  },
+  'Ilog Maria Honeybee Farms': {
+    image: ilogMariaHoneybeeFarmsGallery[0],
+    gallery: ilogMariaHoneybeeFarmsGallery,
+  },
+  'Old Kano Farm': { image: oldKanoFarmGallery[0], gallery: oldKanoFarmGallery },
+  'Riviera Golf Club, Inc.': {
+    image: rivieraGolfClubIncGallery[0],
+    gallery: rivieraGolfClubIncGallery,
+  },
+  'Acienda Designer Outlet': {
+    image: aciendaDesignerOutletGallery[0],
+    gallery: aciendaDesignerOutletGallery,
+  },
+  'Gameroom Arts and Play Center': {
+    image: gameroomArtsAndPlayCenterGallery[0],
+    gallery: gameroomArtsAndPlayCenterGallery,
+  },
+  'Cornerstone Pottery': {
+    image: cornerstonePotteryGallery[0],
+    gallery: cornerstonePotteryGallery,
+  },
+  'Santis Delicatessen': {
+    image: santisDelicatessenGallery[0],
+    gallery: santisDelicatessenGallery,
+  },
+  'Perlas ng Silang': { image: perlasNgSilangGallery[0], gallery: perlasNgSilangGallery },
+  '41st Division USSAFE Shrine': {
+    image: division41stUssafeShrineGallery[0],
+    gallery: division41stUssafeShrineGallery,
+  },
+  'Museo Orlina': { image: museoOrlinaGallery[0], gallery: museoOrlinaGallery },
+  'Tagaytay Picnic Grove': {
+    image: tagaytayPicnicGroveGallery[0],
+    gallery: tagaytayPicnicGroveGallery,
+  },
+  'Skyranch Tagaytay': { image: skyranchTagaytayGallery[0], gallery: skyranchTagaytayGallery },
+  'Residence Inn': { image: residenceInnGallery[0], gallery: residenceInnGallery },
+  'Pink Sisters Convent': {
+    image: pinkSistersConventGallery[0],
+    gallery: pinkSistersConventGallery,
+  },
+  "Lola's Plates and Pours": {
+    image: lolasPlatesAndPoursGallery[0],
+    gallery: lolasPlatesAndPoursGallery,
+  },
+  'Publico Café and Restaurant': {
+    image: publicoCafeAndRestaurantGallery[0],
+    gallery: publicoCafeAndRestaurantGallery,
+  },
+  'Old Cavite Provincial Capitol Building': {
+    image: oldCaviteProvincialCapitolBuildingGallery[0],
+    gallery: oldCaviteProvincialCapitolBuildingGallery,
+  },
+  'New Cavite Provincial Capitol BUilding': {
+    image: newCaviteProvincialCapitolBuildingGallery[0],
+    gallery: newCaviteProvincialCapitolBuildingGallery,
+  },
+  'Kanlungan Café': { image: kanlunganCafeGallery[0], gallery: kanlunganCafeGallery },
+  'Sherwood Hills Golf and Country Club': {
+    image: sherwoodHillsGolfAndCountryClubGallery[0],
+    gallery: sherwoodHillsGolfAndCountryClubGallery,
+  },
+  'Forest Park': { image: forestParkGallery[0], gallery: forestParkGallery },
+  'Peoples Park': { image: peoplesParkGallery[0], gallery: peoplesParkGallery },
+  'Bantayog ng Labintatlong Martyr ng Cavite': {
+    image: bantayogNgLabintatlongMartyrNgCaviteGallery[0],
+    gallery: bantayogNgLabintatlongMartyrNgCaviteGallery,
+  },
+  'St. Jude Thaddeus Church': {
+    image: stJudeThaddeusChurchGallery[0],
+    gallery: stJudeThaddeusChurchGallery,
+  },
+  'Mina Tunnel': { image: minaTunnelGallery[0], gallery: minaTunnelGallery },
+  'Mayang Falls': { image: mayangFallsGallery[0], gallery: mayangFallsGallery },
 };
 
 function lookupLocalEstablishmentMedia(name: string): { image: any; gallery: any[] } | undefined {
@@ -1162,12 +1676,6 @@ function lookupLocalEstablishmentMedia(name: string): { image: any; gallery: any
 }
 
 export function enrichPlaceWithLocalEstablishmentMedia(place: Place): Place {
-  if (place.source_slug?.startsWith('admin:') || place.lgu_slug === 'admin') {
-    return place;
-  }
-  if (place.image && typeof place.image === 'object' && 'uri' in place.image) {
-    return place;
-  }
   const entry = lookupLocalEstablishmentMedia(place.name);
   if (!entry) return place;
   return {
