@@ -959,6 +959,248 @@ const paradizooThemeFarmGallery = [
   u('Paradizoo_Theme_Farm_3.png'),
 ];
 
+const diocesanShrineOfSanAgustinParishOfStaCruzGallery = [
+  u('Diocesan_Shrine_of_San_Agustin_Parish_of_Sta._Cruz.png'),
+  u('Diocesan_Shrine_of_San_Agustin_Parish_of_Sta._Cruz_1.png'),
+  u('Diocesan_Shrine_of_San_Agustin_Parish_of_Sta._Cruz_2.png'),
+  u('Diocesan_Shrine_of_San_Agustin_Parish_of_Sta._Cruz_3.png'),
+];
+
+const juluganFishTerminalGallery = [
+  u('Julugan_Fish_Terminal.png'),
+  u('Julugan_Fish_Terminal_1.png'),
+  u('Julugan_Fish_Terminal_2.png'),
+  u('Julugan_Fish_Terminal_3.png'),
+];
+
+const plazaDeSanAgustinGallery = [
+  u('Plaza_de_San_Agustin.png'),
+  u('Plaza_de_San_Agustin_1.png'),
+  u('Plaza_de_San_Agustin_2.png'),
+  u('Plaza_de_San_Agustin_3.png'),
+];
+
+const staCruzConventMuseumGallery = [
+  u('Sta._Cruz_Convent_Museum.png'),
+  u('Sta._Cruz_Convent_Museum_1.png'),
+  u('Sta._Cruz_Convent_Museum_2.png'),
+  u('Sta._Cruz_Convent_Museum_3.png'),
+];
+
+const smTanzaGallery = [
+  u('SM_Tanza.png'),
+  u('SM_Tanza_1.png'),
+  u('SM_Tanza_2.png'),
+  u('SM_Tanza_3.png'),
+];
+
+const ardenBotanicalGardenGallery = [
+  u('Arden_Botanical_Garden.png'),
+  u('Arden_Botanical_Garden_1.png'),
+  u('Arden_Botanical_Garden_2.png'),
+  u('Arden_Botanical_Garden_3.png'),
+];
+
+const foodBazaarGallery = [
+  u('Food_Bazaar.png'),
+  u('Food_Bazaar_1.png'),
+  u('Food_Bazaar_2.png'),
+  u('Food_Bazaar_3.png'),
+];
+
+const vistaMallTanzaGallery = [
+  u('Vista_Mall_Tanza.png'),
+  u('Vista_Mall_Tanza_1.png'),
+  u('Vista_Mall_Tanza_2.png'),
+  u('Vista_Mall_Tanza_3.png'),
+];
+
+const casaHaciendaDeTanzaGallery = [
+  u('Casa_Hacienda_de_Tanza.png'),
+  u('Casa_Hacienda_de_Tanza_1.png'),
+  u('Casa_Hacienda_de_Tanza_2.png'),
+  u('Casa_Hacienda_de_Tanza_3.png'),
+];
+
+const ilogMariaHoneybeeFarmsGallery = [
+  u('Ilog_Maria_Honeybee_Farms.png'),
+  u('Ilog_Maria_Honeybee_Farms_1.png'),
+  u('Ilog_Maria_Honeybee_Farms_2.png'),
+  u('Ilog_Maria_Honeybee_Farms_3.png'),
+];
+
+const oldKanoFarmGallery = [
+  u('Old_Kano_Farm.png'),
+  u('Old_Kano_Farm_1.png'),
+  u('Old_Kano_Farm_2.png'),
+  u('Old_Kano_Farm_3.png'),
+];
+
+const rivieraGolfClubIncGallery = [
+  u('Riviera_Golf_Club__Inc..png'),
+  u('Riviera_Golf_Club__Inc._1.png'),
+  u('Riviera_Golf_Club__Inc._2.png'),
+  u('Riviera_Golf_Club__Inc._3.png'),
+];
+
+const aciendaDesignerOutletGallery = [
+  u('Acienda_Designer_Outlet.png'),
+  u('Acienda_Designer_Outlet_1.png'),
+  u('Acienda_Designer_Outlet_2.png'),
+  u('Acienda_Designer_Outlet_3.png'),
+];
+
+const gameroomArtsAndPlayCenterGallery = [
+  u('Gameroom_Arts_and_Play_Center.png'),
+  u('Gameroom_Arts_and_Play_Center_1.png'),
+  u('Gameroom_Arts_and_Play_Center_2.png'),
+  u('Gameroom_Arts_and_Play_Center_3.png'),
+];
+
+const cornerstonePotteryGallery = [
+  u('Cornerstone_Pottery.png'),
+  u('Cornerstone_Pottery_1.png'),
+  u('Cornerstone_Pottery_2.png'),
+  u('Cornerstone_Pottery_3.png'),
+];
+
+const santisDelicatessenGallery = [
+  u('Santis_Delicatessen.png'),
+  u('Santis_Delicatessen_1.png'),
+  u('Santis_Delicatessen_2.png'),
+  u('Santis_Delicatessen_3.png'),
+];
+
+const perlasNgSilangGallery = [
+  u('Perlas_ng_Silang.png'),
+  u('Perlas_ng_Silang_1.png'),
+  u('Perlas_ng_Silang_2.png'),
+  u('Perlas_ng_Silang_3.png'),
+];
+
+const division41stUssafeShrineGallery = [
+  u('41st_Division_USSAFE_Shrine.png'),
+  u('41st_Division_USSAFE_Shrine_1.png'),
+  u('41st_Division_USSAFE_Shrine_2.png'),
+  u('41st_Division_USSAFE_Shrine_3.png'),
+];
+
+const museoOrlinaGallery = [
+  u('Museo_Orlina.png'),
+  u('Museo_Orlina_1.png'),
+  u('Museo_Orlina_2.png'),
+  u('Museo_Orlina_3.png'),
+];
+
+const tagaytayPicnicGroveGallery = [
+  u('Tagaytay_Picnic_Grove.png'),
+  u('Tagaytay_Picnic_Grove_1.png'),
+  u('Tagaytay_Picnic_Grove_2.png'),
+  u('Tagaytay_Picnic_Grove_3.png'),
+];
+
+const skyranchTagaytayGallery = [
+  u('Skyranch_Tagaytay.png'),
+  u('Skyranch_Tagaytay_1.png'),
+  u('Skyranch_Tagaytay_2.png'),
+  u('Skyranch_Tagaytay_3.png'),
+];
+
+const residenceInnGallery = [
+  u('Residence_Inn.png'),
+  u('Residence_Inn_1.png'),
+  u('Residence_Inn_2.png'),
+  u('Residence_Inn_3.png'),
+];
+
+const pinkSistersConventGallery = [
+  u('Pink_Sisters_Convent.png'),
+  u('Pink_Sisters_Convent_1.png'),
+  u('Pink_Sisters_Convent_2.png'),
+  u('Pink_Sisters_Convent_3.png'),
+];
+
+const lolasPlatesAndPoursGallery = [
+  u('Lola_s_Plates_and_Pours.png'),
+  u('Lola_s_Plates_and_Pours_1.png'),
+  u('Lola_s_Plates_and_Pours_2.png'),
+  u('Lola_s_Plates_and_Pours_3.png'),
+];
+
+const publicoCafeAndRestaurantGallery = [
+  u('Publico_Caf__and_Restaurant.png'),
+  u('Publico_Caf__and_Restaurant_1.png'),
+  u('Publico_Caf__and_Restaurant_2.png'),
+  u('Publico_Caf__and_Restaurant_3.png'),
+];
+
+const oldCaviteProvincialCapitolBuildingGallery = [
+  u('Old_Cavite_Provincial_Capitol_Building.png'),
+];
+
+const newCaviteProvincialCapitolBuildingGallery = [
+  u('New_Cavite_Provincial_Capitol_BUilding.png'),
+  u('New_Cavite_Provincial_Capitol_BUilding_1.png'),
+  u('New_Cavite_Provincial_Capitol_BUilding_2.png'),
+  u('New_Cavite_Provincial_Capitol_BUilding_3.png'),
+];
+
+const kanlunganCafeGallery = [
+  u('Kanlungan_Caf_.png'),
+  u('Kanlungan_Caf__1.png'),
+  u('Kanlungan_Caf__2.png'),
+  u('Kanlungan_Caf__3.png'),
+];
+
+const sherwoodHillsGolfAndCountryClubGallery = [
+  u('Sherwood_Hills_Golf_and_Country_Club.png'),
+  u('Sherwood_Hills_Golf_and_Country_Club_1.png'),
+  u('Sherwood_Hills_Golf_and_Country_Club_2.png'),
+  u('Sherwood_Hills_Golf_and_Country_Club_3.png'),
+];
+
+const forestParkGallery = [
+  u('Forest_Park.png'),
+  u('Forest_Park_1.png'),
+  u('Forest_Park_2.png'),
+  u('Forest_Park_3.png'),
+];
+
+const bantayogNgLabintatlongMartyrNgCaviteGallery = [
+  u('Bantayog_ng_Labintatlong_Martyr_ng_Cavite.png'),
+  u('Bantayog_ng_Labintatlong_Martyr_ng_Cavite_1.png'),
+  u('Bantayog_ng_Labintatlong_Martyr_ng_Cavite_2.png'),
+  u('Bantayog_ng_Labintatlong_Martyr_ng_Cavite_3.png'),
+];
+
+const peoplesParkGallery = [
+  u('Peoples_Park.png'),
+  u('Peoples_Park_1.png'),
+  u('Peoples_Park_2.png'),
+  u('Peoples_Park_3.png'),
+];
+
+const minaTunnelGallery = [
+  u('Mina_Tunnel.png'),
+  u('Mina_Tunnel_1.png'),
+  u('Mina_Tunnel_2.png'),
+  u('Mina_Tunnel_3.png'),
+];
+
+const stJudeThaddeusChurchGallery = [
+  u('St._Jude_Thaddeus_Church.png'),
+  u('St._Jude_Thaddeus_Church_1.png'),
+  u('St._Jude_Thaddeus_Church_2.png'),
+  u('St._Jude_Thaddeus_Church_3.png'),
+];
+
+const mayangFallsGallery = [
+  u('Mayang_Falls.png'),
+  u('Mayang_Falls_1.png'),
+  u('Mayang_Falls_2.png'),
+  u('Mayang_Falls_3.png'),
+];
+
 const LOCAL_MEDIA = {
   Asador: asadorGallery,
   Arocarria: arocarriaGallery,
@@ -1098,6 +1340,42 @@ const LOCAL_MEDIA = {
   'St. Augustine Parish Church': stAugustineParishChurchGallery,
   "Yoki's Farm": yokisFarmGallery,
   'Paradizoo Theme Farm': paradizooThemeFarmGallery,
+  'Diocesan Shrine of San Agustin Parish of Sta. Cruz':
+    diocesanShrineOfSanAgustinParishOfStaCruzGallery,
+  'Julugan Fish Terminal': juluganFishTerminalGallery,
+  'Plaza de San Agustin': plazaDeSanAgustinGallery,
+  'Sta. Cruz Convent Museum': staCruzConventMuseumGallery,
+  'SM Tanza': smTanzaGallery,
+  'Vista Mall Tanza': vistaMallTanzaGallery,
+  'Arden Botanical Garden': ardenBotanicalGardenGallery,
+  'Food Bazaar': foodBazaarGallery,
+  'Casa Hacienda de Tanza': casaHaciendaDeTanzaGallery,
+  'Ilog Maria Honeybee Farms': ilogMariaHoneybeeFarmsGallery,
+  'Old Kano Farm': oldKanoFarmGallery,
+  'Riviera Golf Club, Inc.': rivieraGolfClubIncGallery,
+  'Acienda Designer Outlet': aciendaDesignerOutletGallery,
+  'Gameroom Arts and Play Center': gameroomArtsAndPlayCenterGallery,
+  'Cornerstone Pottery': cornerstonePotteryGallery,
+  'Santis Delicatessen': santisDelicatessenGallery,
+  'Perlas ng Silang': perlasNgSilangGallery,
+  '41st Division USSAFE Shrine': division41stUssafeShrineGallery,
+  'Museo Orlina': museoOrlinaGallery,
+  'Tagaytay Picnic Grove': tagaytayPicnicGroveGallery,
+  'Skyranch Tagaytay': skyranchTagaytayGallery,
+  'Residence Inn': residenceInnGallery,
+  'Pink Sisters Convent': pinkSistersConventGallery,
+  "Lola's Plates and Pours": lolasPlatesAndPoursGallery,
+  'Publico Café and Restaurant': publicoCafeAndRestaurantGallery,
+  'Old Cavite Provincial Capitol Building': oldCaviteProvincialCapitolBuildingGallery,
+  'New Cavite Provincial Capitol BUilding': newCaviteProvincialCapitolBuildingGallery,
+  'Kanlungan Café': kanlunganCafeGallery,
+  'Sherwood Hills Golf and Country Club': sherwoodHillsGolfAndCountryClubGallery,
+  'Forest Park': forestParkGallery,
+  'Peoples Park': peoplesParkGallery,
+  'Bantayog ng Labintatlong Martyr ng Cavite': bantayogNgLabintatlongMartyrNgCaviteGallery,
+  'St. Jude Thaddeus Church': stJudeThaddeusChurchGallery,
+  'Mina Tunnel': minaTunnelGallery,
+  'Mayang Falls': mayangFallsGallery,
 };
 
 function lookupLocalEstablishmentUrls(name) {
