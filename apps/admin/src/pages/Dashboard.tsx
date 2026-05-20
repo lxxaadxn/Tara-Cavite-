@@ -7,7 +7,9 @@ export function Dashboard() {
     <div className={styles.page}>
       <div className={styles.header}>
         <h1>Dashboard</h1>
-        <p>Overview of web and mobile usage. Analytics appear first; manage destinations under Content Management.</p>
+        <p className={styles.headerSubtitle}>
+          Overview of usage, destinations, and activity across the CaviTour web and mobile apps.
+        </p>
       </div>
 
       <section id="analytics" className={styles.analyticsSection} aria-label="Analytics">
@@ -139,16 +141,9 @@ export function Dashboard() {
 
       <div className={`${styles.card} ${styles.reviewPolicy}`}>
         <h3>Reviews &amp; visibility</h3>
-        <p>
-          Public reviews are filtered before they appear in the app or on the web. Low star ratings, abusive language, and
-          clearly malicious posts are withheld automatically using an AI-assisted sentiment check (with a safe fallback when
-          no model key is configured). Wire <code className={styles.code}>shouldPublishReview</code> from{' '}
-          <code className={styles.code}>src/lib/reviewSentiment.ts</code> into your reviews API so hidden items never reach
-          clients.
-        </p>
         <p className={styles.muted}>
-          Optional: set <code className={styles.code}>VITE_OPENAI_API_KEY</code> for chat-based classification in this admin
-          build (not recommended for production; use a backend secret instead).
+          Reviews are checked before they go live. Very low ratings, offensive language, and spam are held back so only
+          appropriate feedback is shown in the app and on the web.
         </p>
       </div>
     </div>

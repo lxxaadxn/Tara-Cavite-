@@ -1,17 +1,17 @@
 export const stats = {
-  touristSpots: 142,
-  spotsGrowth: 12,
-  routes: 38,
-  routesGrowth: 5,
-  activeUsers: 2847,
-  usersGrowth: 23,
-  mostVisited: { name: 'Corregidor Island', visits: 4230 },
+  touristSpots: 96,
+  spotsGrowth: 5,
+  routes: 22,
+  routesGrowth: 3,
+  activeUsers: 1184,
+  usersGrowth: 7,
+  mostVisited: { name: 'Corregidor Island', visits: 892 },
 };
 
 export const recentActivity = [
-  { id: '1', text: 'New spot added - Corregidor Island Historical Site', time: '2 hours ago', status: 'approved' },
-  { id: '2', text: 'Route updated - Manila to Tagaytay scenic route', time: '4 hours ago', status: 'approved' },
-  { id: '3', text: 'User review submitted - 5-star review for Aguinaldo Shrine', time: '6 hours ago', status: 'pending' },
+  { id: '1', text: 'New spot added - General Trias City Park', time: '3 hours ago', status: 'approved' },
+  { id: '2', text: 'Route updated - Kawit to Tagaytay (via Aguinaldo Highway)', time: 'Yesterday', status: 'approved' },
+  { id: '3', text: 'User review submitted - 3-star review for Picnic Grove', time: 'Yesterday', status: 'pending' },
 ];
 
 export const touristSpots = [
@@ -35,79 +35,327 @@ export const users = [
 ];
 
 export const monthlyVisitors = [
-  { month: 'Jan', visitors: 4200 },
-  { month: 'Feb', visitors: 6500 },
-  { month: 'Mar', visitors: 9800 },
-  { month: 'Apr', visitors: 7200 },
-  { month: 'May', visitors: 5500 },
-  { month: 'Jun', visitors: 3500 },
+  { month: 'Jan', visitors: 890 },
+  { month: 'Feb', visitors: 1020 },
+  { month: 'Mar', visitors: 1180 },
+  { month: 'Apr', visitors: 1090 },
+  { month: 'May', visitors: 980 },
+  { month: 'Jun', visitors: 840 },
 ];
 
 /** @deprecated use mostVisitedDestinations */
 export const topDestinations = [
-  { name: 'Corregidor', count: 1340 },
-  { name: 'Tagaytay Ridge', count: 1120 },
-  { name: "People's Park", count: 980 },
-  { name: 'Aguinaldo Shrine', count: 850 },
-  { name: 'Tagaytay Picnic Grove', count: 720 },
+  { name: 'Corregidor', count: 312 },
+  { name: 'Tagaytay Ridge', count: 268 },
+  { name: "People's Park", count: 221 },
+  { name: 'Aguinaldo Shrine', count: 198 },
+  { name: 'Tagaytay Picnic Grove', count: 164 },
 ];
 
 export const mostVisitedDestinations = [
-  { name: 'Corregidor Island', visits: 4230, city: 'Cavite City' },
-  { name: 'Tagaytay Ridge', visits: 3810, city: 'Tagaytay' },
-  { name: 'Aguinaldo Shrine', visits: 2940, city: 'Kawit' },
-  { name: "People's Park in the Sky", visits: 2680, city: 'Tagaytay' },
-  { name: 'Picnic Grove', visits: 2150, city: 'Tagaytay' },
+  { name: 'Corregidor Island', visits: 892, city: 'Cavite City' },
+  { name: 'Tagaytay Ridge', visits: 756, city: 'Tagaytay' },
+  { name: 'Aguinaldo Shrine', visits: 614, city: 'Kawit' },
+  { name: "People's Park in the Sky", visits: 521, city: 'Tagaytay' },
+  { name: 'Picnic Grove', visits: 438, city: 'Tagaytay' },
 ];
 
 export const mostSearchedLocations = [
-  { query: 'Tagaytay', searches: 2840 },
-  { query: 'Kawit heritage', searches: 1920 },
-  { query: 'Corregidor tour', searches: 1750 },
-  { query: 'Bacoor food spots', searches: 1480 },
-  { query: 'Dasmariñas parks', searches: 1210 },
+  { query: 'Tagaytay', searches: 612 },
+  { query: 'Kawit heritage', searches: 418 },
+  { query: 'Corregidor tour', searches: 385 },
+  { query: 'Bacoor food spots', searches: 296 },
+  { query: 'Dasmariñas parks', searches: 241 },
 ];
 
+/** Typical hourly active users on a weekend (combined web + app). */
 export const peakVisitorTimes = [
-  { label: '6 AM', visitors: 420 },
-  { label: '8 AM', visitors: 1280 },
-  { label: '10 AM', visitors: 2140 },
-  { label: '12 PM', visitors: 2680 },
-  { label: '2 PM', visitors: 2410 },
-  { label: '4 PM', visitors: 1980 },
-  { label: '6 PM', visitors: 1560 },
-  { label: '8 PM', visitors: 920 },
+  { label: '6 AM', visitors: 28 },
+  { label: '8 AM', visitors: 62 },
+  { label: '10 AM', visitors: 94 },
+  { label: '12 PM', visitors: 118 },
+  { label: '2 PM', visitors: 105 },
+  { label: '4 PM', visitors: 88 },
+  { label: '6 PM', visitors: 71 },
+  { label: '8 PM', visitors: 44 },
 ];
 
 export const topRatedDestinations = [
-  { name: 'Aguinaldo Shrine', rating: 4.9, reviews: 312 },
-  { name: 'Corregidor Island', rating: 4.8, reviews: 428 },
-  { name: 'Tagaytay Ridge', rating: 4.7, reviews: 356 },
-  { name: 'Baldomero Aguinaldo Museum', rating: 4.6, reviews: 189 },
-  { name: 'Museo ni Baldomero', rating: 4.5, reviews: 142 },
+  { name: 'Aguinaldo Shrine', rating: 4.6, reviews: 87 },
+  { name: 'Corregidor Island', rating: 4.5, reviews: 124 },
+  { name: 'Tagaytay Ridge', rating: 4.4, reviews: 96 },
+  { name: 'Baldomero Aguinaldo Museum', rating: 4.3, reviews: 41 },
+  { name: 'Museo ni Baldomero', rating: 4.2, reviews: 28 },
 ];
 
 export const userEngagementTrend = [
-  { period: 'Jan', sessions: 8200, saves: 1240, itineraries: 680, searches: 9100 },
-  { period: 'Feb', sessions: 9400, saves: 1480, itineraries: 790, searches: 10200 },
-  { period: 'Mar', sessions: 11200, saves: 1820, itineraries: 940, searches: 12800 },
-  { period: 'Apr', sessions: 10800, saves: 1710, itineraries: 910, searches: 11900 },
-  { period: 'May', sessions: 9600, saves: 1590, itineraries: 850, searches: 10500 },
-  { period: 'Jun', sessions: 8900, saves: 1420, itineraries: 780, searches: 9800 },
+  { period: 'Jan', sessions: 1180, saves: 142, itineraries: 68, searches: 1340 },
+  { period: 'Feb', sessions: 1250, saves: 158, itineraries: 72, searches: 1420 },
+  { period: 'Mar', sessions: 1380, saves: 171, itineraries: 81, searches: 1580 },
+  { period: 'Apr', sessions: 1320, saves: 165, itineraries: 76, searches: 1510 },
+  { period: 'May', sessions: 1280, saves: 159, itineraries: 74, searches: 1460 },
+  { period: 'Jun', sessions: 1210, saves: 148, itineraries: 69, searches: 1380 },
 ];
 
 export const engagementSummary = {
-  dailyActiveUsers: 486,
-  avgSessionMinutes: 12.4,
-  saveRatePercent: 34,
-  searchToDetailPercent: 68,
-  returningUserPercent: 41,
+  dailyActiveUsers: 82,
+  avgSessionMinutes: 5.6,
+  saveRatePercent: 14,
+  searchToDetailPercent: 47,
+  returningUserPercent: 28,
 };
 
 export const tourismTypes = [
-  { name: 'Beach', value: 35 },
-  { name: 'Mountain', value: 25 },
-  { name: 'Cultural', value: 15 },
-  { name: 'Historical', value: 15 },
-  { name: 'Parks', value: 10 },
+  { name: 'Beach', value: 28 },
+  { name: 'Mountain', value: 24 },
+  { name: 'Cultural', value: 18 },
+  { name: 'Historical', value: 17 },
+  { name: 'Parks', value: 13 },
+];
+
+export type TerminalRow = {
+  id: string;
+  name: string;
+  city: string;
+  route: string;
+  photos: number;
+  status: 'published' | 'draft' | 'hidden';
+  updated: string;
+};
+
+export const terminals: TerminalRow[] = [
+  {
+    id: 't1',
+    name: 'Bacoor Public Market Terminal',
+    city: 'Bacoor',
+    route: 'Bacoor — Zapote — Las Piñas',
+    photos: 4,
+    status: 'published',
+    updated: '2 days ago',
+  },
+  {
+    id: 't2',
+    name: 'Imus Poblacion Terminal',
+    city: 'Imus',
+    route: 'Imus — Kawit — Noveleta',
+    photos: 3,
+    status: 'published',
+    updated: '5 days ago',
+  },
+  {
+    id: 't3',
+    name: 'Dasmariñas Transport Terminal',
+    city: 'Dasmariñas',
+    route: 'Dasmariñas — Silang — Tagaytay',
+    photos: 2,
+    status: 'draft',
+    updated: '1 week ago',
+  },
+  {
+    id: 't4',
+    name: 'Tagaytay Olivarez Terminal',
+    city: 'Tagaytay',
+    route: 'Tagaytay — Santa Rosa',
+    photos: 5,
+    status: 'published',
+    updated: '3 days ago',
+  },
+  {
+    id: 't5',
+    name: 'General Trias Terminal Hub',
+    city: 'General Trias',
+    route: 'Gen. Trias — Tanza',
+    photos: 1,
+    status: 'hidden',
+    updated: '2 weeks ago',
+  },
+  {
+    id: 't6',
+    name: 'Kawit Aguinaldo Shrine Stop',
+    city: 'Kawit',
+    route: 'Kawit heritage loop',
+    photos: 3,
+    status: 'published',
+    updated: 'Yesterday',
+  },
+];
+
+export type ItineraryRow = {
+  id: string;
+  title: string;
+  owner: string;
+  stops: number;
+  dates: string;
+  status: 'published' | 'draft' | 'flagged';
+  featured: boolean;
+  updated: string;
+};
+
+export const itineraries: ItineraryRow[] = [
+  {
+    id: 'i1',
+    title: 'Weekend in Tagaytay',
+    owner: 'Maria Santos',
+    stops: 4,
+    dates: 'Mar 15–16, 2026',
+    status: 'published',
+    featured: true,
+    updated: '4 hours ago',
+  },
+  {
+    id: 'i2',
+    title: 'Kawit heritage walk',
+    owner: 'Juan dela Cruz',
+    stops: 3,
+    dates: 'Mar 22, 2026',
+    status: 'draft',
+    featured: false,
+    updated: 'Yesterday',
+  },
+  {
+    id: 'i3',
+    title: 'Family day in Bacoor',
+    owner: 'Ana Reyes',
+    stops: 5,
+    dates: 'Apr 2, 2026',
+    status: 'published',
+    featured: false,
+    updated: '2 days ago',
+  },
+  {
+    id: 'i4',
+    title: 'Corregidor day trip',
+    owner: 'Pedro Lim',
+    stops: 6,
+    dates: 'Apr 8, 2026',
+    status: 'published',
+    featured: true,
+    updated: '3 days ago',
+  },
+  {
+    id: 'i5',
+    title: 'Dasmariñas café crawl',
+    owner: 'Guest (unverified)',
+    stops: 2,
+    dates: '—',
+    status: 'flagged',
+    featured: false,
+    updated: '5 days ago',
+  },
+  {
+    id: 'i6',
+    title: 'Silang farm visits',
+    owner: 'Carla Mendoza',
+    stops: 4,
+    dates: 'May 10–11, 2026',
+    status: 'draft',
+    featured: false,
+    updated: '1 week ago',
+  },
+];
+
+export type SavedListRow = {
+  id: string;
+  name: string;
+  owner: string;
+  items: number;
+  visibility: 'private' | 'shared';
+  status: 'active' | 'hidden';
+  updated: string;
+};
+
+export const savedLists: SavedListRow[] = [
+  {
+    id: 's1',
+    name: 'Must-try cafés',
+    owner: 'Maria Santos',
+    items: 8,
+    visibility: 'private',
+    status: 'active',
+    updated: '3 hours ago',
+  },
+  {
+    id: 's2',
+    name: 'Weekend with kids',
+    owner: 'Juan dela Cruz',
+    items: 12,
+    visibility: 'shared',
+    status: 'active',
+    updated: 'Yesterday',
+  },
+  {
+    id: 's3',
+    name: 'Kawit heritage spots',
+    owner: 'Ana Reyes',
+    items: 5,
+    visibility: 'private',
+    status: 'active',
+    updated: '4 days ago',
+  },
+  {
+    id: 's4',
+    name: 'Tagaytay food crawl',
+    owner: 'Pedro Lim',
+    items: 7,
+    visibility: 'shared',
+    status: 'active',
+    updated: '2 days ago',
+  },
+  {
+    id: 's5',
+    name: 'Untitled list',
+    owner: 'Guest (unverified)',
+    items: 0,
+    visibility: 'private',
+    status: 'hidden',
+    updated: '1 week ago',
+  },
+  {
+    id: 's6',
+    name: 'Beach day picks',
+    owner: 'Carla Mendoza',
+    items: 4,
+    visibility: 'private',
+    status: 'active',
+    updated: '5 days ago',
+  },
+];
+
+export type MapLayerRow = {
+  id: string;
+  layer: string;
+  description: string;
+  enabled: boolean;
+  source: string;
+};
+
+export const mapLayers: MapLayerRow[] = [
+  {
+    id: 'm1',
+    layer: 'Establishments',
+    description: 'Published destinations from Content Management',
+    enabled: true,
+    source: 'Supabase · v_cavite_establishments',
+  },
+  {
+    id: 'm2',
+    layer: 'Jeepney terminals',
+    description: 'Terminal markers on the commute map',
+    enabled: true,
+    source: 'routeTerminals',
+  },
+  {
+    id: 'm3',
+    layer: 'Transit corridors',
+    description: 'OSRM route lines between major stops',
+    enabled: true,
+    source: 'OSRM API',
+  },
+  {
+    id: 'm4',
+    layer: 'NTDP labels',
+    description: 'Named transit departure points',
+    enabled: false,
+    source: 'Local JSON',
+  },
 ];

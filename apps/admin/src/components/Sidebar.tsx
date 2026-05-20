@@ -9,9 +9,6 @@ const MOBILE_NAV: NavItem[] = [
   { to: '/mobile/itineraries', icon: 'calendar', label: 'Itineraries' },
   { to: '/mobile/saved-lists', icon: 'bookmark', label: 'Saved lists' },
   { to: '/mobile/map-commute', icon: 'map', label: 'Map & commute' },
-  { to: '/mobile/notifications', icon: 'bell', label: 'Push notifications' },
-  { to: '/mobile/app-releases', icon: 'package', label: 'App releases' },
-  { to: '/mobile/onboarding', icon: 'sparkle', label: 'Onboarding' },
 ];
 
 const icons: Record<string, React.ReactNode> = {
@@ -113,24 +110,15 @@ function NavItems({ items, collapsed }: { items: NavItem[]; collapsed: boolean }
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''}`}>
-      {!collapsed && (
-        <p className={styles.platformHint} style={{ marginTop: 0 }}>
-          Web & mobile admin
-        </p>
-      )}
-
       <nav className={styles.nav} aria-label="Admin sections">
         <NavItems
           items={MAIN_ADMIN_NAV.map((item) => ({ to: item.to, icon: item.icon, label: item.label }))}
           collapsed={collapsed}
         />
-        {!collapsed && <p className={styles.navSectionLabel}>More</p>}
         <NavItems
           items={MORE_ADMIN_NAV.map((item) => ({ to: item.to, icon: item.icon, label: item.label }))}
           collapsed={collapsed}
         />
-        {!collapsed && <p className={styles.navSectionLabel}>Mobile app</p>}
-        {collapsed && <div className={styles.navDivider} aria-hidden />}
         <NavItems items={MOBILE_NAV} collapsed={collapsed} />
       </nav>
       <button className={styles.collapseBtn} onClick={onToggle} title={collapsed ? 'Expand' : 'Collapse'}>

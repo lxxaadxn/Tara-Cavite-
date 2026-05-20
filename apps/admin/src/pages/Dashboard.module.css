@@ -3,7 +3,7 @@
 }
 
 .header {
-  margin-bottom: 24px;
+  margin-bottom: 12px;
 }
 
 .header h1 {
@@ -13,9 +13,11 @@
   color: var(--text);
 }
 
-.header p {
+.header p,
+.headerSubtitle {
   margin: 0;
-  font-size: 15px;
+  font-size: 17px;
+  line-height: 1.5;
   color: var(--text-secondary);
 }
 
@@ -325,6 +327,6 @@
 
 .analyticsSection {
   margin-bottom: 28px;
-  margin-top: 0;
+  margin-top: -4px;
   scroll-margin-top: 24px;
 }

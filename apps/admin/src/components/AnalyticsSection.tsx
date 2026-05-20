@@ -72,13 +72,14 @@ export function AnalyticsSection() {
 
   return (
     <div className={styles.charts}>
-      <div className={styles.header} style={{ marginBottom: 16 }}>
-        <div>
-          <h2 className={styles.sectionTitle}>Analytics</h2>
-          <p className={styles.sectionDesc}>
-            Admin view of web and mobile behavior — visits, searches, peak times, ratings, and engagement.
-          </p>
-        </div>
+      <div className={styles.toolbar}>
+        <ul className={styles.checklist} aria-label="Analytics coverage">
+          <li>Most visited destinations</li>
+          <li>Most searched locations</li>
+          <li>Peak visitor times</li>
+          <li>Top-rated destinations</li>
+          <li>User engagement analytics</li>
+        </ul>
         <select
           className={styles.filter}
           value={dateFilter}
@@ -90,14 +91,6 @@ export function AnalyticsSection() {
           <option>1 Year</option>
         </select>
       </div>
-
-      <ul className={styles.checklist} aria-label="Analytics coverage">
-        <li>Most visited destinations</li>
-        <li>Most searched locations</li>
-        <li>Peak visitor times</li>
-        <li>Top-rated destinations</li>
-        <li>User engagement analytics</li>
-      </ul>
 
       <div className={styles.kpiRow}>
         <div className={styles.kpiCard}>

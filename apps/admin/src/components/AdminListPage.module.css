@@ -1,0 +1,258 @@
+.page {
+  max-width: 1400px;
+}
+
+.header {
+  margin-bottom: 20px;
+}
+
+.header h1 {
+  margin: 0 0 6px;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.header p {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-secondary);
+  max-width: 42rem;
+  line-height: 1.5;
+}
+
+.sourceNote {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--primary-dark, #556b2f);
+}
+
+.errorBanner {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 14px;
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.stat {
+  background: var(--card);
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius);
+  padding: 12px 18px;
+  min-width: 120px;
+}
+
+.statLabel {
+  display: block;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.statValue {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+  align-items: center;
+}
+
+.search {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--card);
+  border-radius: var(--radius);
+  border: 1px solid #e2e8f0;
+}
+
+.search input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  background: transparent;
+}
+
+.filter {
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  border: 1px solid #e2e8f0;
+  font-size: 14px;
+  background: var(--card);
+}
+
+.primaryBtn {
+  padding: 10px 18px;
+  background: var(--primary);
+  color: white;
+  border-radius: var(--radius);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.primaryBtn:hover {
+  background: var(--primary-dark);
+}
+
+.tableWrap {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  text-align: left;
+  padding: 14px 18px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--bg);
+}
+
+.table td {
+  padding: 14px 18px;
+  font-size: 14px;
+  border-top: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+.row:hover {
+  background: var(--bg);
+}
+
+.nameCell strong {
+  display: block;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.nameCell span {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.badgePublished,
+.badgeActive {
+  background: rgba(107, 142, 35, 0.18);
+  color: var(--primary-dark, #556b2f);
+}
+
+.badgeDraft {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.badgeHidden {
+  background: #e2e8f0;
+  color: var(--text-secondary);
+}
+
+.badgeFlagged {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.badgeShared {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.badgePrivate {
+  background: #f1f5f9;
+  color: var(--text-secondary);
+}
+
+.tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(107, 142, 35, 0.12);
+  color: var(--primary);
+}
+
+.actionBtn {
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--primary);
+  font-weight: 500;
+  border-radius: 6px;
+}
+
+.actionBtn:hover {
+  background: rgba(107, 142, 35, 0.1);
+}
+
+.empty {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.toggle {
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  background: #cbd5e1;
+  position: relative;
+  transition: background 0.2s;
+}
+
+.toggleOn {
+  background: var(--primary);
+}
+
+.knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: white;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.toggleOn .knob {
+  transform: translateX(20px);
+}
