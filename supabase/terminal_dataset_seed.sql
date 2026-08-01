@@ -1,4 +1,4 @@
--- CaviTour terminal dataset (matches data/sheets/*.csv column semantics)
+-- Tara, Cavite! terminal dataset (matches data/sheets/*.csv column semantics)
 -- Tables are prefixed to avoid collisions with existing public tables.
 BEGIN;
 TRUNCATE cavitour_terminal_routes, cavitour_routes, cavitour_terminals, cavitour_transport_types RESTART IDENTITY CASCADE;

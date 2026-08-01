@@ -1,0 +1,257 @@
+.page {
+  max-width: 1100px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.back {
+  align-self: flex-start;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.back:hover {
+  color: var(--primary-dark);
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.kicker {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+}
+
+.title {
+  margin: 6px 0 2px;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.ref {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.approved {
+  background: rgba(34, 197, 94, 0.16);
+  color: #15803d;
+}
+
+.pending {
+  background: rgba(234, 179, 8, 0.22);
+  color: #b45309;
+}
+
+.review {
+  background: rgba(59, 130, 246, 0.16);
+  color: #2563eb;
+}
+
+.flagged {
+  background: rgba(239, 68, 68, 0.14);
+  color: #dc2626;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 22px;
+  box-shadow: var(--shadow);
+}
+
+.cardTitle {
+  margin: 0 0 16px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.detailList {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.detailRow {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.detailRow dt {
+  color: var(--text-secondary);
+}
+
+.detailRow dd {
+  margin: 0;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.docList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.docItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.docMark {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.docDone {
+  background: rgba(34, 197, 94, 0.18);
+  color: #15803d;
+}
+
+.docMissing {
+  background: rgba(239, 68, 68, 0.16);
+  color: #dc2626;
+}
+
+.docStatus {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.actionBtn {
+  flex: 1;
+  min-width: 90px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.actionBtn:hover {
+  transform: translateY(-1px);
+  opacity: 0.94;
+}
+
+.approve {
+  background: var(--primary);
+}
+
+.reject {
+  background: #dc2626;
+}
+
+.flag {
+  background: #f59e0b;
+}
+
+.notesLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.notes {
+  width: 100%;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 14px;
+  color: var(--text);
+  resize: vertical;
+  outline: none;
+}
+
+.notes:focus {
+  border-color: var(--primary);
+}
+
+.decisionNote {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(107, 142, 35, 0.12);
+  color: var(--primary-dark);
+  font-size: 13px;
+}
+
+.empty {
+  color: var(--text-secondary);
+  font-size: 14px;
+}

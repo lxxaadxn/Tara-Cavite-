@@ -173,14 +173,7 @@ export const CAVITOUR_LEAFLET_HTML = `<!DOCTYPE html>
           userLayer.clearLayers();
           if (userLat != null && userLng != null && !isNaN(userLat) && !isNaN(userLng)) {
             var clamped = clampLatLng(userLat, userLng);
-            L.circleMarker([userLat, userLng], {
-              radius: 9,
-              fillColor: '#2563eb',
-              color: '#ffffff',
-              weight: 2,
-              opacity: 1,
-              fillOpacity: 0.9
-            }).addTo(userLayer);
+            L.circleMarker([userLat, userLng], greenUserDotStyle(9)).addTo(userLayer);
             if (!didCenterUser) {
               didCenterUser = true;
               map.setView(clamped, 14);

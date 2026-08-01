@@ -10,7 +10,7 @@ interface HeaderProps {
   onBackPress?: () => void;
   showNotification?: boolean;
   showLogo?: boolean;
-  /** Home wordmark: “C” + “Tour” Pacifico, “avi” Poppins; bell + filter in gray circle */
+  /** Home wordmark: Tara, Cavite! in Pacifico; bell + filter in gray circle */
   homeBranding?: boolean;
   onNotificationPress?: () => void;
   onMenuPress?: () => void;
@@ -46,11 +46,12 @@ export const Header: React.FC<HeaderProps> = ({
             style={styles.wordmarkRow}
             accessible
             accessibilityRole="header"
-            accessibilityLabel="CaviTour"
+            accessibilityLabel="Tara, Cavite!"
           >
-            <Text style={styles.wordmarkC}>C</Text>
-            <Text style={styles.wordmarkAvi}>avi</Text>
-            <Text style={styles.wordmarkTour}>Tour</Text>
+            <Text style={styles.wordmark}>
+              <Text style={styles.wordmarkAccent}>Tara</Text>
+              <Text style={styles.wordmarkPrimary}>, Cavite!</Text>
+            </Text>
           </View>
           <View style={styles.homeRightColumn}>
             {showNotification ? (
@@ -111,7 +112,7 @@ export const Header: React.FC<HeaderProps> = ({
           source={require('../assets/images/cavitour-logo.png')}
           style={styles.logo}
           resizeMode="contain"
-          accessibilityLabel="CaviTour logo"
+          accessibilityLabel="Tara, Cavite! logo"
         />
       ) : (
         <Text style={[styles.title, { color: textColor }]}>{title}</Text>
@@ -209,23 +210,16 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
     flexShrink: 1,
   },
-  wordmarkC: {
+  wordmark: {
     fontFamily: 'Pacifico_400Regular',
     fontSize: 30,
-    color: Colors.accent,
     lineHeight: 36,
   },
-  wordmarkAvi: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 30,
+  wordmarkAccent: {
     color: Colors.accent,
-    lineHeight: 36,
   },
-  wordmarkTour: {
-    fontFamily: 'Pacifico_400Regular',
-    fontSize: 30,
+  wordmarkPrimary: {
     color: Colors.primary,
-    lineHeight: 36,
   },
   homeRightColumn: {
     alignItems: 'flex-end',

@@ -28,7 +28,7 @@ const PLACEHOLDER_INPUT = '#B3AAAA';
 const H_PAD = 16;
 
 const SAVED_PLACES_SELECT =
-  'id, name, address, type, hours, latitude, longitude, image_url, description, ntdp_category, city_mun';
+  'establishment_public_id, ta_name, address, type, hours, latitude, longitude, picture, description, ntdp_category, city_mun';
 
 export type SavedListDetailParams = {
   listId: string;
@@ -108,36 +108,38 @@ export default function SavedListDetailScreen() {
       const placeIds = (placeLinks ?? []).map((r) => (r as { place_id: string }).place_id);
       if (placeIds.length > 0) {
         const { data: pRows, error } = await supabase
-          .from('places')
+          .from('v_tourist_attractions_catalog')
           .select(SAVED_PLACES_SELECT)
-          .in('id', placeIds);
+          .in('establishment_public_id', placeIds);
         if (error) throw error;
         for (const row of pRows ?? []) {
           const placeRow = row as {
-            id: string;
-            name: string;
+            establishment_public_id: string;
+            ta_name: string;
             address: string;
             type: string | null;
             hours: string | null;
             latitude: number | null;
             longitude: number | null;
+            picture: string | null;
             description: string | null;
             ntdp_category: string | null;
             city_mun: string | null;
           };
           if (placeRow.latitude == null || placeRow.longitude == null) continue;
           const p: Place = {
-            id: placeRow.id,
-            name: placeRow.name,
+            id: placeRow.establishment_public_id,
+            name: placeRow.ta_name,
             address: placeRow.address,
-            type: placeRow.type ?? 'Place',
+            type: placeRow.type || 'Place',
             hours: placeRow.hours ?? '',
             latitude: placeRow.latitude,
             longitude: placeRow.longitude,
-            description: placeRow.description ?? undefined,
-            ntdp_category: placeRow.ntdp_category ?? undefined,
-            city_mun: placeRow.city_mun ?? undefined,
           };
+          if (placeRow.picture) p.image = placeRow.picture;
+          if (placeRow.description) p.description = placeRow.description;
+          if (placeRow.ntdp_category) p.ntdp_category = placeRow.ntdp_category;
+          if (placeRow.city_mun) p.city_mun = placeRow.city_mun;
           rows.push({
             kind: 'establishment',
             key: `e-${p.id}`,

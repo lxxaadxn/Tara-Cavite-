@@ -294,7 +294,7 @@ export async function fetchAdminMapLayers(client: SupabaseClient): Promise<{
   terminalCount: number;
 }> {
   const [placesRes, termRes] = await Promise.all([
-    client.from('places').select('id', { count: 'exact', head: true }),
+    client.from('tourist_attractions').select('establishment_public_id', { count: 'exact', head: true }),
     client.from('cavitour_terminals').select('terminal_id', { count: 'exact', head: true }),
   ]);
 

@@ -370,7 +370,7 @@ export default function AboutEstablishmentScreen() {
       if (!isSupabasePlaceId(place.id)) {
         Alert.alert(
           'Can’t save this place',
-          'Only places from the CaviTour catalog (with a database id) can be added to a saved list. Try opening this spot from search or the map.'
+          'Only places from the Tara, Cavite! catalog (with a database id) can be added to a saved list. Try opening this spot from search or the map.'
         );
         return;
       }

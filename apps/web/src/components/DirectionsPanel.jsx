@@ -68,6 +68,8 @@ export function DirectionsPanel({
   destinationLng,
   destMunicipality = null,
   userCoords,
+  onRequestLocation,
+  locationStatus = null,
   fallbackDistanceKm,
   seedId = 'route',
 }) {
@@ -294,7 +296,29 @@ export function DirectionsPanel({
                           <p className="mt-0.5 font-medium text-neutral-900">
                             {userCoords ? 'Your location' : 'Current location'}
                           </p>
-                          {userCoords ? <p className="mt-0.5 text-xs text-neutral-500">GPS</p> : null}
+                          {userCoords ? (
+                            <p className="mt-0.5 text-xs text-neutral-500">GPS · green dot on map</p>
+                          ) : (
+                            <div className="mt-2 space-y-1.5">
+                              <p className="text-xs text-neutral-500">
+                                {locationStatus === 'denied'
+                                  ? 'Location blocked — allow it in the browser, then try again.'
+                                  : locationStatus === 'locating'
+                                    ? 'Getting your GPS…'
+                                    : 'Allow location so the route starts from where you are.'}
+                              </p>
+                              {typeof onRequestLocation === 'function' ? (
+                                <button
+                                  type="button"
+                                  onClick={onRequestLocation}
+                                  disabled={locationStatus === 'locating'}
+                                  className="rounded-lg bg-[#7EA00E] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#6d8c0c] disabled:opacity-60"
+                                >
+                                  {locationStatus === 'locating' ? 'Locating…' : 'Use my location'}
+                                </button>
+                              ) : null}
+                            </div>
+                          )}
                         </div>
                         <div className="h-px bg-neutral-200" />
                         <div>
@@ -356,7 +380,7 @@ export function DirectionsPanel({
                             start={userCoords}
                             end={destEnd}
                             routeId={displayRoute?.id ?? 'main-road'}
-                            lineColor={displayRoute?.color ?? '#2563eb'}
+                            lineColor={displayRoute?.color ?? '#7EA00E'}
                           />
                         </div>
                       ) : null}

@@ -22,20 +22,12 @@ export async function resolveCanonicalPlaceId(placeRefId) {
   if (!ref) return null;
 
   const { data: byId, error: byIdError } = await supabase
-    .from('places')
-    .select('id')
-    .eq('id', ref)
+    .from('tourist_attractions')
+    .select('establishment_public_id')
+    .eq('establishment_public_id', ref)
     .maybeSingle();
   if (byIdError) throw byIdError;
-  if (byId?.id) return byId.id;
-
-  const { data: bySlug, error: bySlugError } = await supabase
-    .from('places')
-    .select('id')
-    .eq('source_slug', ref)
-    .maybeSingle();
-  if (bySlugError) throw bySlugError;
-  if (bySlug?.id) return bySlug.id;
+  if (byId?.establishment_public_id) return byId.establishment_public_id;
   return null;
 }
 
@@ -73,13 +65,16 @@ async function getListForUser(userId, listId) {
 }
 
 function mapPlaceRowToItem(placeRow, savedAt) {
+  const id = placeRow.establishment_public_id ?? placeRow.id;
+  const name = placeRow.ta_name ?? placeRow.name;
+  const image = placeRow.picture ?? placeRow.image_url ?? '';
   const tag = placeRow.ntdp_category
     ? formatNtdpCategoryTagLabel(placeRow.ntdp_category)
     : placeRow.type ?? '';
   return {
-    id: placeRow.id,
-    name: placeRow.name ?? 'Unnamed place',
-    image: placeRow.image_url ?? '',
+    id,
+    name: name ?? 'Unnamed place',
+    image,
     subtitle: placeRow.address ?? 'Cavite, Philippines',
     establishmentTag: tag,
     savedAt: savedAt ?? placeRow.created_at ?? null,
@@ -133,15 +128,19 @@ export async function fetchSavedListsForUser(userId) {
     const placeIds = (placeLinksRes.data ?? []).map((r) => r.place_id);
     if (placeIds.length > 0) {
       const { data: placeRows, error: placesErr } = await supabase
-        .from('places')
-        .select('id, name, address, type, image_url, ntdp_category, created_at')
-        .in('id', placeIds);
+        .from('v_tourist_attractions_catalog')
+        .select(
+          'establishment_public_id, ta_name, address, type, picture, ntdp_category, created_at'
+        )
+        .in('establishment_public_id', placeIds);
       if (placesErr) throw placesErr;
       const savedAtByPlaceId = new Map(
         (placeLinksRes.data ?? []).map((r) => [r.place_id, r.created_at]),
       );
       for (const row of placeRows ?? []) {
-        items.push(mapPlaceRowToItem(row, savedAtByPlaceId.get(row.id)));
+        items.push(
+          mapPlaceRowToItem(row, savedAtByPlaceId.get(row.establishment_public_id))
+        );
       }
     }
 

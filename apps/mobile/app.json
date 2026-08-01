@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "CaviTour",
+    "name": "Tara, Cavite!",
     "slug": "cavitour",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -44,8 +44,8 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Allow CaviTour to use your location to show where you are on the map.",
-          "locationAlwaysAndWhenInUsePermission": "Allow CaviTour to use your location to show where you are on the map."
+          "locationWhenInUsePermission": "Allow Tara, Cavite! to use your location to show where you are on the map.",
+          "locationAlwaysAndWhenInUsePermission": "Allow Tara, Cavite! to use your location to show where you are on the map."
         }
       ],
       "@react-native-community/datetimepicker",

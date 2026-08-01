@@ -29,7 +29,7 @@ import { applyPasswordRecoveryFromUrl, isPasswordRecoveryUrl } from './lib/authR
 import { isStoredSessionInvalidError } from './lib/authHelpers';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 
-// Keep native splash (CaviTour logo) visible until app is ready
+// Keep native splash (Tara, Cavite! logo) visible until app is ready
 SplashScreen.preventAutoHideAsync();
 
 // Screens
@@ -60,10 +60,12 @@ import CreateItineraryScreen from './screens/CreateItineraryScreen';
 import CategoriesScreen from './screens/CategoriesScreen';
 import ItineraryDetailScreen from './screens/ItineraryDetailScreen';
 import FullRouteMapScreen from './screens/FullRouteMapScreen';
+import { LocationPermissionModal, markMobileLocationPromptPending, clearMobileLocationPromptDismissed } from './components/LocationPermissionModal';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
-const REQUIRE_SIGN_IN_ON_EACH_LAUNCH = true;
+/** Keep false so Google/email sessions persist and OAuth callbacks are not cleared on launch. */
+const REQUIRE_SIGN_IN_ON_EACH_LAUNCH = false;
 
 const navigationRef = createNavigationContainerRef();
 
@@ -334,6 +336,7 @@ export default function App() {
   });
   const [authHydrated, setAuthHydrated] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [sessionUserId, setSessionUserId] = useState<string | null>(null);
   const [unauthedStackKey, setUnauthedStackKey] = useState(0);
   const [blockMainForRecovery, setBlockMainForRecovery] = useState(false);
   const didClearAuthRef = useRef(false);
@@ -372,6 +375,8 @@ export default function App() {
           const ok = await applyOAuthCallbackFromUrl(supabase, initialUrl);
           if (ok) {
             skipStartupSignOut = true;
+            await AsyncStorage.setItem('isAuthenticated', 'true');
+            setIsAuthenticated(true);
           }
         } else if (Platform.OS === 'web' && typeof window !== 'undefined') {
           const webUrl = window.location.href;
@@ -379,6 +384,8 @@ export default function App() {
             const ok = await applyOAuthCallbackFromUrl(supabase, webUrl);
             if (ok) {
               skipStartupSignOut = true;
+              await AsyncStorage.setItem('isAuthenticated', 'true');
+              setIsAuthenticated(true);
               window.history.replaceState({}, '', window.location.pathname || '/');
             }
           }
@@ -418,7 +425,20 @@ export default function App() {
   useEffect(() => {
     const sub = Linking.addEventListener('url', ({ url }) => {
       if (isOAuthCallbackUrl(url)) {
-        void applyOAuthCallbackFromUrl(supabase, url);
+        void (async () => {
+          const ok = await applyOAuthCallbackFromUrl(supabase, url);
+          if (ok) {
+            await AsyncStorage.setItem('isAuthenticated', 'true');
+            setIsAuthenticated(true);
+            await markMobileLocationPromptPending();
+            try {
+              const { data } = await supabase.auth.getSession();
+              setSessionUserId(data.session?.user?.id ?? null);
+            } catch {
+              /* ignore */
+            }
+          }
+        })();
         return;
       }
       if (!isPasswordRecoveryUrl(url)) {
@@ -448,6 +468,7 @@ export default function App() {
           didClearAuthRef.current = false;
           await AsyncStorage.setItem('isAuthenticated', 'true');
           setIsAuthenticated(true);
+          setSessionUserId(session.user?.id ?? null);
           return;
         }
         if (error && isStoredSessionInvalidError(error) && !didClearAuthRef.current) {
@@ -460,6 +481,7 @@ export default function App() {
         }
         await AsyncStorage.setItem('isAuthenticated', 'false');
         setIsAuthenticated(false);
+        setSessionUserId(null);
       } catch {
         if (!didClearAuthRef.current) {
           didClearAuthRef.current = true;
@@ -470,6 +492,7 @@ export default function App() {
           }
         }
         setIsAuthenticated(false);
+        setSessionUserId(null);
       }
     };
 
@@ -483,7 +506,12 @@ export default function App() {
       const isSignedIn = !!session;
       await AsyncStorage.setItem('isAuthenticated', isSignedIn ? 'true' : 'false');
       setIsAuthenticated(isSignedIn);
+      setSessionUserId(session?.user?.id ?? null);
+      if (event === 'SIGNED_IN' && session?.user?.id) {
+        await markMobileLocationPromptPending();
+      }
       if (event === 'SIGNED_OUT') {
+        await clearMobileLocationPromptDismissed();
         setUnauthedStackKey((k) => k + 1);
       }
     });
@@ -504,6 +532,7 @@ export default function App() {
       if (session) {
         didClearAuthRef.current = false;
         setIsAuthenticated(true);
+        setSessionUserId(session.user?.id ?? null);
         return;
       }
       if (error && isStoredSessionInvalidError(error)) {
@@ -517,6 +546,7 @@ export default function App() {
         }
         await AsyncStorage.setItem('isAuthenticated', 'false');
         setIsAuthenticated(false);
+        setSessionUserId(null);
         return;
       }
       if (error) {
@@ -591,6 +621,10 @@ export default function App() {
             )}
           </Stack.Navigator>
         </NavigationContainer>
+        <LocationPermissionModal
+          isAuthenticated={showMainTabs}
+          userId={sessionUserId}
+        />
       </AuthRecoveryProvider>
     </SafeAreaProvider>
   );

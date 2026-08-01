@@ -1,6 +1,6 @@
-# CaviTour Admin Dashboard
+# Tara, Cavite! Admin Dashboard
 
-A modern, nature-inspired web admin dashboard for CaviTour tourism platform.
+A modern, nature-inspired web admin dashboard for the Tara, Cavite! tourism platform.
 
 ## Design
 - **Primary**: Olive green / Sage (#6B8E23)

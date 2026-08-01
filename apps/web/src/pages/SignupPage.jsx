@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { LogoWordmark } from '../components/LogoWordmark';
+import { GoogleAuthButton, GoogleLogoMark } from '../components/GoogleAuthButton';
 import { getAdminReservedEmailMessage, isAdminReservedEmail } from '../lib/adminReservedEmail';
+import { startGoogleOAuth } from '../lib/startGoogleOAuth';
 
 const MIN_PASSWORD_LENGTH = 8;
 const teal = 'var(--ct-teal)';
@@ -15,6 +17,9 @@ function toFriendlySignupError(err) {
   if (normalized.includes('user already registered') || normalized.includes('already exists')) {
     return 'This email is already registered. Please log in instead. If you previously used Google, choose "Sign in with Google".';
   }
+  if (normalized.includes('error sending') || normalized.includes('confirmation email')) {
+    return 'We could not send the confirmation email. Check spam, wait a minute, then use Resend on the login page.';
+  }
   return message || 'Sign up failed';
 }
 
@@ -25,17 +30,20 @@ export function SignupPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showGoogleConsent, setShowGoogleConsent] = useState(false);
+  const [showConfirmEmailNotice, setShowConfirmEmailNotice] = useState(false);
   const [error, setError] = useState('');
 
+  const goToLoginAfterNotice = () => {
+    setShowConfirmEmailNotice(false);
+    navigate('/login', { replace: true });
+  };
   const handleGoogleAuth = async () => {
     setError('');
     setLoading(true);
-    const { error: err } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/google` },
-    });
-    if (err) {
-      setError(err.message || 'Google sign up failed');
+    try {
+      await startGoogleOAuth({ next: '/search' });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Google sign up failed');
       setLoading(false);
     }
   };
@@ -62,19 +70,30 @@ export function SignupPage() {
     const trimmedName = name.trim() || trimmedEmail.split('@')[0];
     setLoading(true);
     try {
+      const emailRedirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent('/login?confirmed=1')}`;
       const { data, error: err } = await supabase.auth.signUp({
         email: trimmedEmail,
         password,
-        options: { data: { username: trimmedName } },
+        options: {
+          data: { username: trimmedName },
+          emailRedirectTo,
+        },
       });
       if (err) throw err;
 
+      // Confirm-email ON: existing accounts return a fake user with empty identities (no email sent).
+      const identities = data.user?.identities ?? [];
+      if (data.user && identities.length === 0) {
+        throw new Error('User already registered');
+      }
+
       if (data.session) {
         navigate('/search', { replace: true });
-      } else {
+      } else if (data.user) {
         setError('');
-        alert('Check your email. We sent you a confirmation link. Open it to activate your account, then sign in.');
-        navigate('/login', { replace: true });
+        setShowConfirmEmailNotice(true);
+      } else {
+        throw new Error('Sign up failed. Please try again.');
       }
     } catch (err) {
       setError(toFriendlySignupError(err));
@@ -85,6 +104,52 @@ export function SignupPage() {
 
   return (
     <div className="min-h-screen px-4 py-6 font-['Inter',sans-serif] sm:px-8 sm:py-8" style={{ backgroundColor: cream }}>
+      {showConfirmEmailNotice ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="signup-confirm-email-title"
+          aria-describedby="signup-confirm-email-desc"
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-[0_24px_60px_rgba(0,0,0,0.18)]">
+            <div
+              className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full"
+              style={{ backgroundColor: 'rgba(31, 79, 89, 0.1)' }}
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5v-11Z"
+                  stroke={teal}
+                  strokeWidth="1.75"
+                />
+                <path
+                  d="m5.5 7.5 6.1 4.4a.75.75 0 0 0 .9 0L18.5 7.5"
+                  stroke={teal}
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+            <p id="signup-confirm-email-title" className="text-center text-base font-semibold text-neutral-900">
+              Check your email
+            </p>
+            <p id="signup-confirm-email-desc" className="mt-2 text-center text-sm text-neutral-600">
+              We sent you a confirmation link. Open it to activate your account, then sign in.
+            </p>
+            <button
+              type="button"
+              className="mt-5 h-10 w-full rounded-full text-sm font-semibold text-white transition"
+              style={{ backgroundColor: teal }}
+              onClick={goToLoginAfterNotice}
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {showGoogleConsent ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4"
@@ -94,11 +159,14 @@ export function SignupPage() {
           aria-describedby="google-signup-consent-desc"
         >
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-[0_24px_60px_rgba(0,0,0,0.18)]">
-            <p id="google-signup-consent-title" className="text-base font-semibold text-neutral-900">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-neutral-100">
+              <GoogleLogoMark className="h-7 w-7" />
+            </div>
+            <p id="google-signup-consent-title" className="text-center text-base font-semibold text-neutral-900">
               Sign up with Google
             </p>
-            <p id="google-signup-consent-desc" className="mt-2 text-sm text-neutral-600">
-              Allow CaviTour to create or link your account with Google? You will be redirected to Google to continue.
+            <p id="google-signup-consent-desc" className="mt-2 text-center text-sm text-neutral-600">
+              Allow Tara, Cavite! to create or link your account with Google? You will be redirected to Google to continue.
             </p>
             <div className="mt-5 flex gap-3">
               <button
@@ -124,26 +192,14 @@ export function SignupPage() {
         </div>
       ) : null}
 
-      <div className="mx-auto grid w-full max-w-5xl overflow-hidden rounded-[1.7rem] bg-white p-3 shadow-[0_24px_60px_rgba(0,0,0,0.10)] sm:p-4 lg:grid-cols-[1fr_1.05fr] lg:gap-6">
-        <div className="hidden lg:block">
-          <div className="relative h-full min-h-[620px] overflow-hidden rounded-[1.2rem] bg-neutral-100">
-            <img
-              src="https://images.unsplash.com/photo-1463320726281-696a485928c7?w=1300&q=80"
-              alt="Floral collage"
-              className="h-full w-full object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
-          </div>
-        </div>
-
-        <div className="flex items-center justify-center px-2 py-2 sm:px-4">
-          <div className="w-full max-w-md">
+      <div className="mx-auto w-full max-w-md overflow-hidden rounded-[1.7rem] bg-white p-3 shadow-[0_24px_60px_rgba(0,0,0,0.10)] sm:p-6">
+          <div className="w-full px-2 py-2 sm:px-4">
             <div className="mb-6 text-center">
               <Link to="/" className="inline-flex items-center justify-center">
                 <LogoWordmark className="text-sm" />
               </Link>
               <h1 className="mt-4 font-['Poppins',sans-serif] text-3xl font-semibold" style={{ color: ink }}>Create your account</h1>
-              <p className="mt-2 text-sm text-neutral-500">Enter your details to get started with CaviTour.</p>
+              <p className="mt-2 text-sm text-neutral-500">Enter your details to get started with Tara, Cavite!</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -206,14 +262,11 @@ export function SignupPage() {
             </div>
 
             <div className="space-y-3">
-              <button
-                type="button"
-                onClick={() => setShowGoogleConsent(true)}
+              <GoogleAuthButton
+                mode="sign-up"
                 disabled={loading}
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-neutral-100 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-200/70 disabled:opacity-60"
-              >
-                Sign up with Google
-              </button>
+                onClick={() => setShowGoogleConsent(true)}
+              />
             </div>
 
             <p className="mt-5 text-center text-sm text-neutral-500">
@@ -223,7 +276,6 @@ export function SignupPage() {
               </Link>
             </p>
           </div>
-        </div>
       </div>
     </div>
   );

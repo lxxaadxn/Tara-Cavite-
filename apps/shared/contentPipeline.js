@@ -5,9 +5,9 @@
 
 export const CONTENT_PIPELINE = {
   /** Admin writes curated destinations here (source_slug prefix admin:) */
-  adminPlacesTable: 'places',
-  /** Public read model for web + mobile search, maps, detail */
-  establishmentsView: 'v_cavite_establishments',
+  adminPlacesTable: 'tourist_attractions',
+  /** Public read model for web + mobile (flat view over normalized tourist_attractions) */
+  establishmentsView: 'v_tourist_attractions_catalog',
   adminSourcePrefix: 'admin:',
   imageStorageBucket: 'place-images',
   /** Same Supabase project for admin, web, mobile */

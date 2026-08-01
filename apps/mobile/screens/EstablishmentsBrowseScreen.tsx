@@ -76,16 +76,6 @@ export default function EstablishmentsBrowseScreen() {
         showNotification
         onNotificationPress={() => navigation.navigate('Notifications' as never)}
       />
-      <View style={styles.intro}>
-        <Text style={styles.introText}>
-          Demo catalog — tap any listing for the full About establishment screen.
-        </Text>
-        {!loading && !error ? (
-          <Text style={styles.count}>
-            {filtered.length} of {places.length}
-          </Text>
-        ) : null}
-      </View>
       <View style={styles.searchWrap}>
         <JamIcon name="search" size={18} color={Colors.text.light} />
         <TextInput
@@ -151,14 +141,12 @@ export default function EstablishmentsBrowseScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  intro: { paddingHorizontal: Theme.spacing.md, paddingBottom: Theme.spacing.sm },
-  introText: { fontSize: 13, color: Colors.text.secondary, lineHeight: 18 },
-  count: { marginTop: 4, fontSize: 12, fontWeight: '600', color: Colors.primary },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginHorizontal: Theme.spacing.md,
+    marginTop: Theme.spacing.sm,
     marginBottom: Theme.spacing.sm,
     paddingHorizontal: 12,
     paddingVertical: 10,

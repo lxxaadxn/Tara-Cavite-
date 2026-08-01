@@ -4,10 +4,10 @@ const ICON_COLOR_CLASS = 'ft-titleIcon';
 export function TitleScreen() {
     const year = useMemo(() => '2026', []);
     return (<main className="ft-screen ft-titleScreen" role="main" aria-label="Title Screen">
-      <div className="ft-titleCard" role="region" aria-label="CaviTour title">
+      <div className="ft-titleCard" role="region" aria-label="Tara, Cavite! title">
         <div className="ft-titleLogoWrap">
-          <div className="ft-titleLogo" aria-label="CaviTour">
-            CaviTour
+          <div className="ft-titleLogo" aria-label="Tara, Cavite!">
+            Tara, Cavite!
           </div>
         </div>
 
@@ -18,7 +18,7 @@ export function TitleScreen() {
         </div>
 
         <div className="ft-titleFooter" aria-label="Copyright">
-          © CaviTour {year}
+          © Tara, Cavite! {year}
         </div>
       </div>
     </main>);

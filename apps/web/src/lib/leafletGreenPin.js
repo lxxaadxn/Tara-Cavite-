@@ -2,6 +2,9 @@ import L from 'leaflet';
 
 export const CAVITOUR_PIN_GREEN = '#7EA00E';
 
+/** Filled green dot for the user's GPS position (“you”). */
+export const CAVITOUR_USER_DOT_GREEN = '#7EA00E';
+
 const MARKER_SHADOW = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png';
 
 function pinSvg(fill, width, height) {
@@ -19,3 +22,14 @@ export const greenLeafletPinIcon = L.icon({
   shadowSize: [41, 41],
   shadowAnchor: [12, 41],
 });
+
+/** Leaflet circleMarker options for the user's location. */
+export function greenUserDotOptions({ radius = 8 } = {}) {
+  return {
+    radius,
+    color: '#ffffff',
+    weight: 2,
+    fillColor: CAVITOUR_USER_DOT_GREEN,
+    fillOpacity: 1,
+  };
+}

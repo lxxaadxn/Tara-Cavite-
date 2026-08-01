@@ -10,7 +10,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
 const jsonPath = join(root, 'data', 'dasmarinasSta2025Geocoded.json');
 
-const UA = 'CaviTour/1.0 (https://github.com/cavitour; barangay fallback geocode)';
+const UA = 'TaraCavite/1.0 (barangay fallback geocode)';
 
 async function geocode(query) {
   const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`;

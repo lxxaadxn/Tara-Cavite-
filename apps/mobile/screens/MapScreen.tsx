@@ -302,12 +302,13 @@ export default function MapScreen() {
               style={styles.wordmarkRow}
               accessible
               accessibilityRole="header"
-              accessibilityLabel="CaviTour"
+              accessibilityLabel="Tara, Cavite!"
               pointerEvents="none"
             >
-              <Text style={styles.wordmarkC}>C</Text>
-              <Text style={styles.wordmarkAvi}>avi</Text>
-              <Text style={styles.wordmarkTour}>Tour</Text>
+              <Text style={styles.wordmark}>
+                <Text style={styles.wordmarkAccent}>Tara</Text>
+                <Text style={styles.wordmarkPrimary}>, Cavite!</Text>
+              </Text>
             </View>
 
             <View style={styles.searchWrap} accessibilityRole="search" pointerEvents="auto">
@@ -501,22 +502,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 10,
   },
-  wordmarkC: {
+  wordmark: {
     fontFamily: 'Pacifico_400Regular',
     fontSize: 34,
     lineHeight: 40,
+  },
+  wordmarkAccent: {
     color: GREEN,
   },
-  wordmarkAvi: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 34,
-    lineHeight: 40,
-    color: GREEN,
-  },
-  wordmarkTour: {
-    fontFamily: 'Pacifico_400Regular',
-    fontSize: 34,
-    lineHeight: 40,
+  wordmarkPrimary: {
     color: TEAL,
   },
   searchWrap: {

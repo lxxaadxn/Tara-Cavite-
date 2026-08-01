@@ -72,7 +72,7 @@ function deriveProfile(user: User | null, profileRow: Record<string, unknown> | 
     (meta.nickname as string) ||
     (meta.username as string) ||
     (user?.email ? user.email.split('@')[0] : '') ||
-    'CaviTour User';
+    'Tara, Cavite! User';
   const fullName =
     (meta.full_name as string) ||
     (meta.name as string) ||
@@ -490,7 +490,7 @@ const ProfileScreen: React.FC = () => {
             </View>
             <View style={styles.infoRow}>
               <JamIcon name="world" size={16} color="#a3a3a3" />
-              <Text style={styles.infoText}>CaviTour traveler</Text>
+              <Text style={styles.infoText}>Tara, Cavite! traveler</Text>
             </View>
           </View>
 
@@ -592,7 +592,7 @@ const ProfileScreen: React.FC = () => {
           <Text style={styles.signOutBtnText}>Sign out</Text>
         </TouchableOpacity>
 
-        <Text style={styles.footerTag}>CaviTour · Explore Cavite & beyond</Text>
+        <Text style={styles.footerTag}>Tara, Cavite! · Explore Cavite & beyond</Text>
       </ScrollView>
     </View>
   );

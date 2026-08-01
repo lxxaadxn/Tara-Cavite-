@@ -13,9 +13,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import * as Linking from 'expo-linking';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { JamIcon } from '../components/JamIcon';
+import { GoogleLogoMark } from '../components/GoogleLogoMark';
 import { Colors } from '../constants/theme';
 import { Button } from '../components/Button';
 import {
@@ -85,20 +87,28 @@ const SignUpScreen: React.FC = () => {
     }
     setLoading(true);
     try {
+      const emailRedirectTo = Linking.createURL('auth/callback');
       const { data, error } = await withAuthRetry(() =>
         supabase.auth.signUp({
           email: trimmedEmail,
           password,
+          options: { emailRedirectTo },
         })
       );
       if (error) throw error;
+      const identities = data.user?.identities ?? [];
+      if (data.user && identities.length === 0) {
+        throw new Error('User already registered');
+      }
       if (data.session) {
         await AsyncStorage.setItem('isAuthenticated', 'true');
-      } else {
+      } else if (data.user) {
         setFormError(
           'Check your email. We sent you a confirmation link. Open it to activate your account, then sign in.'
         );
         navigation.goBack();
+      } else {
+        throw new Error('Sign up failed. Please try again.');
       }
     } catch (error: unknown) {
       const message = isNetworkErrorMsg(error)
@@ -142,7 +152,8 @@ const SignUpScreen: React.FC = () => {
       <Modal visible={googleAuthInProgress} transparent animationType="fade" statusBarTranslucent>
         <View style={styles.authOverlay}>
           <View style={styles.authCard}>
-            <ActivityIndicator size="large" color={Colors.accent} />
+            <GoogleLogoMark size={32} />
+            <ActivityIndicator size="large" color={Colors.accent} style={styles.authSpinner} />
             <Text style={styles.authTitle}>Signing up with Google</Text>
             <Text style={styles.authSubtitle}>Complete sign-in in the Google window.</Text>
           </View>
@@ -173,7 +184,7 @@ const SignUpScreen: React.FC = () => {
 
           <View style={styles.brandBlock}>
             <Text style={styles.brandMark}>Create account</Text>
-            <Text style={styles.brandTagline}>Join CaviTour to save places and plan trips.</Text>
+            <Text style={styles.brandTagline}>Join Tara, Cavite! to save places and plan trips.</Text>
           </View>
 
           <View style={styles.card}>
@@ -249,7 +260,7 @@ const SignUpScreen: React.FC = () => {
               onPress={handleSignUp}
               loading={loading}
               disabled={loading}
-              accessibilityLabel="Create your CaviTour account"
+              accessibilityLabel="Create your Tara, Cavite! account"
               style={styles.primaryBtn}
               textStyle={styles.primaryBtnText}
             />
@@ -268,8 +279,8 @@ const SignUpScreen: React.FC = () => {
               accessibilityRole="button"
               accessibilityLabel="Continue with Google"
             >
-              <JamIcon ionicon="logo-google" size={20} color={Colors.primary} />
-              <Text style={styles.googleBtnText}>Continue with Google</Text>
+              <GoogleLogoMark size={20} />
+              <Text style={styles.googleBtnText}>Sign up with Google</Text>
             </TouchableOpacity>
           </View>
 
@@ -479,6 +490,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 24,
     alignItems: 'center',
+  },
+  authSpinner: {
+    marginTop: 14,
   },
   authTitle: {
     marginTop: 14,

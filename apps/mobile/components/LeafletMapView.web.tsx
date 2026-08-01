@@ -81,7 +81,7 @@ export function LeafletMapView({
           backgroundColor: '#E8E8E8',
         },
         sandbox: 'allow-scripts allow-same-origin',
-        title: 'CaviTour map',
+        title: 'Tara, Cavite! map',
         onLoad: pushToFrame,
       })}
     </View>

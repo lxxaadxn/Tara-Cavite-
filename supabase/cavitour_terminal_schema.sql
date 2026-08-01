@@ -1,4 +1,4 @@
--- CaviTour: sheet-aligned terminal model (matches Google Sheets tabs).
+-- Tara, Cavite!: sheet-aligned terminal model (matches Google Sheets tabs).
 -- Safe table names (cavitour_* prefix). Run once before terminal_dataset_seed.sql
 
 CREATE TABLE IF NOT EXISTS public.cavitour_transport_types (

@@ -8,7 +8,7 @@ import { Colors } from '../constants/theme';
 const LANDING_MS = 3200;
 
 /**
- * Brief CaviTour landing — wordmark matches dashboard Header; then navigates to sign-in.
+ * Brief Tara, Cavite! landing — wordmark matches dashboard Header; then navigates to sign-in.
  * Shown on every app launch while logged out (no AsyncStorage flag — see App Unauthed stack).
  */
 const OnboardingScreen: React.FC = () => {
@@ -28,11 +28,12 @@ const OnboardingScreen: React.FC = () => {
           style={styles.wordmarkRow}
           accessible
           accessibilityRole="header"
-          accessibilityLabel="CaviTour"
+          accessibilityLabel="Tara, Cavite!"
         >
-          <Text style={styles.wordmarkC}>C</Text>
-          <Text style={styles.wordmarkAvi}>avi</Text>
-          <Text style={styles.wordmarkTour}>Tour</Text>
+          <Text style={styles.wordmark}>
+            <Text style={styles.wordmarkAccent}>Tara</Text>
+            <Text style={styles.wordmarkPrimary}>, Cavite!</Text>
+          </Text>
         </View>
       </View>
     </SafeAreaView>
@@ -53,22 +54,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'baseline',
   },
-  wordmarkC: {
+  wordmark: {
     fontFamily: 'Pacifico_400Regular',
     fontSize: 42,
     lineHeight: 50,
+  },
+  wordmarkAccent: {
     color: Colors.accent,
   },
-  wordmarkAvi: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 42,
-    lineHeight: 50,
-    color: Colors.accent,
-  },
-  wordmarkTour: {
-    fontFamily: 'Pacifico_400Regular',
-    fontSize: 42,
-    lineHeight: 50,
+  wordmarkPrimary: {
     color: Colors.primary,
   },
 });

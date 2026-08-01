@@ -1,6 +1,7 @@
 import { useId, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
+import { markLocationPromptPending } from '../../lib/promptLocationOnLogin';
 const MIN_PASSWORD_LENGTH = 8;
 function isValidEmail(email) {
     // Simple email validation; supabase will enforce final validation too.
@@ -15,6 +16,7 @@ export function AuthScreen({ variant }) {
     const [remember, setRemember] = useState(false);
     const [loading, setLoading] = useState(false);
     const [formError, setFormError] = useState(null);
+    const [showConfirmEmailNotice, setShowConfirmEmailNotice] = useState(false);
     const isSignIn = variant === 'sign-in';
     const title = isSignIn ? 'Sign in' : 'Sign up';
     const subtitle = isSignIn
@@ -58,12 +60,13 @@ export function AuthScreen({ variant }) {
         setLoading(true);
         try {
             if (isSignIn) {
-                const { error } = await supabase.auth.signInWithPassword({
+                const { data, error } = await supabase.auth.signInWithPassword({
                     email: trimmedEmail,
                     password,
                 });
                 if (error)
                     throw error;
+                markLocationPromptPending(data.session?.user?.id ?? data.user?.id);
                 navigate('/search', { replace: true });
             }
             else {
@@ -75,12 +78,18 @@ export function AuthScreen({ variant }) {
                 });
                 if (error)
                     throw error;
+                const identities = data.user?.identities ?? [];
+                if (data.user && identities.length === 0) {
+                    throw new Error('This email is already registered. Please log in instead.');
+                }
                 if (data.session) {
                     navigate('/search', { replace: true });
                 }
+                else if (data.user) {
+                    setShowConfirmEmailNotice(true);
+                }
                 else {
-                    navigate('/prototype/sign-in', { replace: true });
-                    alert('Check your email. We sent you a confirmation link. Open it to activate your account, then sign in.');
+                    throw new Error('Sign up failed. Please try again.');
                 }
             }
         }
@@ -92,6 +101,34 @@ export function AuthScreen({ variant }) {
         }
     }
     return (<main className="ft-screen ft-authScreen" aria-label="Authentication screen">
+      {showConfirmEmailNotice ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="auth-confirm-email-title"
+          aria-describedby="auth-confirm-email-desc"
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-[0_24px_60px_rgba(0,0,0,0.18)]">
+            <p id="auth-confirm-email-title" className="text-center text-base font-semibold text-neutral-900">
+              Check your email
+            </p>
+            <p id="auth-confirm-email-desc" className="mt-2 text-center text-sm text-neutral-600">
+              We sent you a confirmation link. Open it to activate your account, then sign in.
+            </p>
+            <button
+              type="button"
+              className="mt-5 h-10 w-full rounded-full bg-[var(--ct-teal)] text-sm font-semibold text-white"
+              onClick={() => {
+                setShowConfirmEmailNotice(false);
+                navigate('/login', { replace: true });
+              }}
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      ) : null}
       <section className="ft-authCard" role="region" aria-label={title}>
         <header className="ft-authHeader">
           <Link to="/" className="ft-iconBtn ft-iconBtn--back" aria-label="Back" title="Back">

@@ -9,7 +9,7 @@ import {
   CAVITE_MAP_MAX_ZOOM,
   lockMapToCaviteViewport,
 } from '../lib/caviteMapBounds';
-import { greenLeafletPinIcon } from '../lib/leafletGreenPin';
+import { CAVITOUR_USER_DOT_GREEN, greenLeafletPinIcon, greenUserDotOptions } from '../lib/leafletGreenPin';
 
 /**
  * @param {{ id: string; name: string; lat: number; lng: number }[]} places
@@ -74,21 +74,15 @@ export function PlacesLeafletMap({ places, userLocation, onMarkerClick, onMarker
 
       if (hasUserLocation) {
         const userLatLng = [userLocation.lat, userLocation.lng];
-        L.circleMarker(userLatLng, {
-          radius: 8,
-          color: '#ffffff',
-          weight: 2,
-          fillColor: '#2563eb',
-          fillOpacity: 1,
-        })
+        L.circleMarker(userLatLng, greenUserDotOptions({ radius: 8 }))
           .addTo(layer)
           .bindPopup('You are here');
 
         L.circle(userLatLng, {
           radius: 220,
-          color: '#2563eb',
+          color: CAVITOUR_USER_DOT_GREEN,
           weight: 1,
-          fillColor: '#2563eb',
+          fillColor: CAVITOUR_USER_DOT_GREEN,
           fillOpacity: 0.12,
         }).addTo(layer);
       }

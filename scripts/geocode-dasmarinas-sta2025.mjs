@@ -21,7 +21,7 @@ if (!arrMatch) {
 /** Minimal eval of array literal (trusted local file). */
 const places = new Function(`return ${arrMatch[1]}`)();
 
-const UA = 'CaviTour/1.0 (https://github.com/cavitour; tourism inventory geocode)';
+const UA = 'TaraCavite/1.0 (tourism inventory geocode)';
 
 async function geocode(query) {
   const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`;

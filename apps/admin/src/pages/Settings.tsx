@@ -33,13 +33,13 @@ export function Settings() {
         <div className={styles.row}>
           <div>
             <span className={styles.label}>Application Name</span>
-            <p className={styles.value}>CaviTour Admin</p>
+            <p className={styles.value}>Tara, Cavite! Admin</p>
           </div>
         </div>
         <div className={styles.row}>
           <div>
             <span className={styles.label}>Contact Email</span>
-            <p className={styles.value}>admin@cavitour.com</p>
+            <p className={styles.value}>admin@taracavite.com</p>
           </div>
         </div>
       </div>

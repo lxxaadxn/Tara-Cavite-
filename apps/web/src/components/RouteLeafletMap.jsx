@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { greenLeafletPinIcon, greenUserDotOptions } from '../lib/leafletGreenPin';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -53,26 +54,31 @@ function drawSegmentPolylines(map, points, lineColor) {
   }).addTo(map);
 }
 
+function hasValidPoint(p) {
+  return (
+    p &&
+    Number.isFinite(p.lat) &&
+    Number.isFinite(p.lng) &&
+    !(p.lat === 0 && p.lng === 0)
+  );
+}
+
 /**
  * @param {Object} props
- * @param {{ lat: number; lng: number } | null} [props.start]
- * @param {{ lat: number; lng: number }} props.end
+ * @param {{ lat: number; lng: number } | null} [props.start] — user GPS (green dot); omit until location is known
+ * @param {{ lat: number; lng: number }} props.end — establishment (green pin)
  * @param {string} [props.routeId]
- * @param {string} [props.lineColor] — markers / accent; road line uses OSRM blue for multi-segment
- * @param {Array<Array<[number, number]>>} [props.externalSegments] — precomputed [lat,lng][] per OSRM leg (terminal chain)
- * @param {string} [props.className] — tailwind height/width (default h-[350px] w-full)
+ * @param {string} [props.lineColor] — unused for markers (kept for callers); road stays OSRM blue
+ * @param {Array<Array<[number, number]>>} [props.externalSegments]
+ * @param {string} [props.className]
  */
 export function RouteLeafletMap({ start, end, routeId = 'fastest', lineColor = '#0ea5e9', externalSegments, className }) {
   const containerRef = useRef(null);
 
   useEffect(() => {
-    if (!containerRef.current || !end) return;
+    if (!containerRef.current || !hasValidPoint(end)) return;
 
-    const fallbackStart = {
-      lat: end.lat - 0.018,
-      lng: end.lng - 0.024,
-    };
-    const from = start ?? fallbackStart;
+    const from = hasValidPoint(start) ? start : null;
 
     const map = L.map(containerRef.current, { scrollWheelZoom: true, zoomControl: true });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -81,25 +87,13 @@ export function RouteLeafletMap({ start, end, routeId = 'fastest', lineColor = '
     }).addTo(map);
 
     const drawEndpoints = () => {
-      L.circleMarker([from.lat, from.lng], {
-        radius: 7,
-        color: '#ffffff',
-        weight: 3,
-        fillColor: lineColor,
-        fillOpacity: 1,
-      })
-        .addTo(map)
-        .bindPopup('Start');
+      if (from) {
+        L.circleMarker([from.lat, from.lng], greenUserDotOptions({ radius: 8 }))
+          .addTo(map)
+          .bindPopup('You');
+      }
 
-      L.circleMarker([end.lat, end.lng], {
-        radius: 8,
-        color: '#ffffff',
-        weight: 3,
-        fillColor: lineColor,
-        fillOpacity: 1,
-      })
-        .addTo(map)
-        .bindPopup('Destination');
+      L.marker([end.lat, end.lng], { icon: greenLeafletPinIcon }).addTo(map).bindPopup('Destination');
     };
 
     const drawRoute = (points, durationSec = null) => {
@@ -132,8 +126,13 @@ export function RouteLeafletMap({ start, end, routeId = 'fastest', lineColor = '
       }
       if (flat.length > 1) {
         map.fitBounds(L.latLngBounds(flat), { padding: [40, 40], maxZoom: 14 });
+      } else if (from) {
+        map.fitBounds(L.latLngBounds([[from.lat, from.lng], [end.lat, end.lng]]), {
+          padding: [40, 40],
+          maxZoom: 14,
+        });
       } else {
-        map.fitBounds(L.latLngBounds([[from.lat, from.lng], [end.lat, end.lng]]), { padding: [40, 40], maxZoom: 14 });
+        map.setView([end.lat, end.lng], 15);
       }
     };
 
@@ -141,14 +140,6 @@ export function RouteLeafletMap({ start, end, routeId = 'fastest', lineColor = '
       Array.isArray(externalSegments) &&
       externalSegments.length > 0 &&
       externalSegments.some((seg) => seg && seg.length > 1);
-
-    const curveByRoute = {
-      'main-road': 0.06,
-      fastest: 0.08,
-      scenic: 0.28,
-      budget: -0.22,
-    };
-    const fallbackPoints = buildRoutePoints(from, end, curveByRoute[routeId] ?? 0.12);
 
     let cancelled = false;
 
@@ -159,6 +150,24 @@ export function RouteLeafletMap({ start, end, routeId = 'fastest', lineColor = '
         map.remove();
       };
     }
+
+    // No GPS yet — show destination pin only (do not invent a fake start).
+    if (!from) {
+      drawEndpoints();
+      map.setView([end.lat, end.lng], 15);
+      return () => {
+        cancelled = true;
+        map.remove();
+      };
+    }
+
+    const curveByRoute = {
+      'main-road': 0.06,
+      fastest: 0.08,
+      scenic: 0.28,
+      budget: -0.22,
+    };
+    const fallbackPoints = buildRoutePoints(from, end, curveByRoute[routeId] ?? 0.12);
 
     (async () => {
       try {

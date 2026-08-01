@@ -17,7 +17,7 @@ import { dirname, join } from 'path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
-const UA = 'CaviTour/1.0 (coordinate refresh; contact: github.com/emncrpz/CaviTour)';
+const UA = 'TaraCavite/1.0 (coordinate refresh)';
 const DELAY_MS = 1100;
 const GOOGLE_KEY = process.env.GOOGLE_MAPS_API_KEY?.trim() || '';
 

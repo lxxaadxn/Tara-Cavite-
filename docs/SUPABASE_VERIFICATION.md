@@ -122,7 +122,7 @@ ORDER BY event_object_table;
 
 Verify:
 - [ ] Email authentication is enabled
-- [ ] Confirm email is enabled (or disabled for testing)
+- [ ] Confirm email is enabled (required for password signup verification before login)
 - [ ] Site URL is set correctly
 
 ---

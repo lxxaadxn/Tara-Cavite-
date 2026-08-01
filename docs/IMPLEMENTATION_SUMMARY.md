@@ -1,4 +1,4 @@
-# CaviTour Mobile App - Implementation Summary
+# Tara, Cavite! Mobile App - Implementation Summary
 
 ## Overview
 All screens have been updated to match the Figma designs with full CRUD functionality, accessibility, and performance optimizations.

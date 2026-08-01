@@ -2,7 +2,7 @@
 
 | Path | What it is |
 |------|------------|
-| `apps/mobile/` | **CaviTour mobile app** — Expo (React Native), `expo-router`, screens under `app/`. |
+| `apps/mobile/` | **Tara, Cavite! mobile app** — Expo (React Native), `expo-router`, screens under `app/`. |
 | `apps/web/` | **Marketing / web app** — Vite + React + Tailwind (landing, auth pages). |
 | `apps/admin/` | **Admin dashboard** — Vite + React (port `3001` in dev). |
 | `supabase/` | Database migrations, seeds, Supabase config. |

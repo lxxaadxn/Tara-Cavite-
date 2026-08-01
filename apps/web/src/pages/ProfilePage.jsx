@@ -34,7 +34,7 @@ function deriveProfile(user, profileRow) {
     meta.name ||
     [meta.first_name, meta.last_name].filter(Boolean).join(' ') ||
     nickname ||
-    (user?.email ? user.email.split('@')[0] : 'CaviTour User');
+    (user?.email ? user.email.split('@')[0] : 'Tara, Cavite! User');
   const created = user?.created_at ? new Date(user.created_at) : null;
   const daysOnPlatform = created ? Math.max(1, Math.floor((Date.now() - created.getTime()) / 86400000)) : 0;
   return {
@@ -758,7 +758,7 @@ export function ProfilePage() {
                     <path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" strokeLinecap="round" strokeLinejoin="round" />
                     <rect width="20" height="14" x="2" y="6" rx="2" />
                   </svg>
-                  CaviTour traveler
+                  Tara, Cavite! traveler
                 </p>
               </div>
             </div>

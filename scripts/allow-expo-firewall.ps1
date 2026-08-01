@@ -5,7 +5,7 @@
 #   cd "path\to\CaviTour"
 #   .\scripts\allow-expo-firewall.ps1
 
-$ruleName = "Expo Metro (CaviTour)"
+$ruleName = "Expo Metro (Tara, Cavite!)"
 $port = 8081
 
 $existing = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue

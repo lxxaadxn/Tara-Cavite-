@@ -1,10 +1,9 @@
-/**
- * Inline Leaflet JS for WebView maps — matches apps/web/src/lib/leafletGreenPin.js
- */
 export const CAVITOUR_PIN_GREEN = '#7EA00E';
+export const CAVITOUR_USER_DOT_GREEN = '#7EA00E';
 
 export const LEAFLET_GREEN_PIN_SNIPPET = `
       var CAVITOUR_PIN_GREEN = '${CAVITOUR_PIN_GREEN}';
+      var CAVITOUR_USER_DOT_GREEN = '${CAVITOUR_USER_DOT_GREEN}';
       var LEAFLET_MARKER_SHADOW = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png';
       function cavitourPinSvg(fill, width, height) {
         return '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '" viewBox="0 0 25 41" aria-hidden="true">' +
@@ -24,4 +23,13 @@ export const LEAFLET_GREEN_PIN_SNIPPET = `
         });
       }
       var greenPinIcon = createGreenPinIcon();
+      function greenUserDotStyle(radius) {
+        return {
+          radius: radius || 8,
+          fillColor: CAVITOUR_USER_DOT_GREEN,
+          color: '#ffffff',
+          weight: 2,
+          fillOpacity: 1
+        };
+      }
 `;

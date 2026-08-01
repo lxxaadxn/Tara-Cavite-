@@ -1,6 +1,6 @@
-# CaviTour
+# Tara, Cavite!
 
-Monorepo for the CaviTour Cavite travel guide: **mobile** (Expo), **marketing web** (Vite), **admin** (Vite), and **Supabase** backend assets.
+Monorepo for the Tara, Cavite! travel guide: **mobile** (Expo), **marketing web** (Vite), **admin** (Vite), and **Supabase** backend assets.
 
 ## Repository layout
 

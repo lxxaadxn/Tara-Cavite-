@@ -22,7 +22,7 @@ export function MobileExpoOAuthBridgePage() {
 
     const expoRedirect = search.get('expo_redirect');
     if (!expoRedirect) {
-      setMessage('Missing expo_redirect. Sign in again from the CaviTour mobile app.');
+      setMessage('Missing expo_redirect. Sign in again from the Tara, Cavite! mobile app.');
       return;
     }
 
@@ -48,7 +48,7 @@ export function MobileExpoOAuthBridgePage() {
       return;
     }
 
-    setMessage('Opening CaviTour…');
+    setMessage('Opening Tara, Cavite!…');
     window.location.replace(target.toString());
   }, []);
 

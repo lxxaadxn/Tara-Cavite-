@@ -91,7 +91,7 @@ export async function persistOAuthRedirectMode(mode: OAuthRedirectMode): Promise
   await AsyncStorage.setItem(OAUTH_REDIRECT_MODE_KEY, mode);
 }
 
-/** One working strategy per sign-in — no manual env toggles. */
+/** Prefer LAN bridge in dev (Supabase often blocks exp://). */
 export async function resolveOAuthRedirectModes(): Promise<OAuthRedirectMode[]> {
   if (Platform.OS === 'web') {
     return ['web'];
@@ -111,8 +111,7 @@ export async function resolveOAuthRedirectModes(): Promise<OAuthRedirectMode[]> 
     return ['expo'];
   }
 
-  // First sign-in (or unknown): try fast exp:// once; fall back to bridge only if needed.
-  return bridgeReady ? ['expo', 'bridge'] : ['expo'];
+  return bridgeReady ? ['bridge', 'expo'] : ['expo'];
 }
 
 export function patchOAuthAuthorizeUrl(oauthUrl: string, redirectTo: string): string {
@@ -133,7 +132,10 @@ export function isOAuthCallbackUrl(url: string): boolean {
   return /auth\/callback|auth\/mobile-callback/i.test(url);
 }
 
-export async function createSessionFromOAuthUrl(url: string): Promise<void> {
+export async function createSessionFromOAuthUrl(
+  url: string,
+  client: SupabaseClient = supabase,
+): Promise<void> {
   const params = parseAuthParams(url);
   const oauthError = params.get('error');
   const oauthErrorDescription = params.get('error_description');
@@ -143,8 +145,12 @@ export async function createSessionFromOAuthUrl(url: string): Promise<void> {
 
   const code = params.get('code');
   if (code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { error } = await client.auth.exchangeCodeForSession(code);
     if (error) {
+      const { data: existing } = await client.auth.getSession();
+      if (existing.session) {
+        return;
+      }
       throw error;
     }
     return;
@@ -153,13 +159,18 @@ export async function createSessionFromOAuthUrl(url: string): Promise<void> {
   const accessToken = params.get('access_token');
   const refreshToken = params.get('refresh_token');
   if (accessToken && refreshToken) {
-    const { error } = await supabase.auth.setSession({
+    const { error } = await client.auth.setSession({
       access_token: accessToken,
       refresh_token: refreshToken,
     });
     if (error) {
       throw error;
     }
+    return;
+  }
+
+  const { data: existing } = await client.auth.getSession();
+  if (existing.session) {
     return;
   }
 
@@ -174,42 +185,14 @@ export async function applyOAuthCallbackFromUrl(
     return false;
   }
   try {
-    const params = parseAuthParams(url);
-    const oauthError = params.get('error');
-    if (oauthError) {
-      if (__DEV__) {
-        console.warn('[authOAuth]', params.get('error_description') || oauthError);
-      }
-      return false;
-    }
-
-    const code = params.get('code');
-    if (code) {
-      const { error } = await supabaseClient.auth.exchangeCodeForSession(code);
-      if (error && __DEV__) {
-        console.warn('[authOAuth] exchangeCodeForSession:', error.message);
-      }
-      return !error;
-    }
-
-    const accessToken = params.get('access_token') ?? '';
-    const refreshToken = params.get('refresh_token') ?? '';
-    if (accessToken && refreshToken) {
-      const { error } = await supabaseClient.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-      });
-      if (error && __DEV__) {
-        console.warn('[authOAuth] setSession:', error.message);
-      }
-      return !error;
-    }
+    await createSessionFromOAuthUrl(url, supabaseClient);
+    return true;
   } catch (err) {
     if (__DEV__) {
       console.warn('[authOAuth] applyOAuthCallbackFromUrl:', err);
     }
+    return false;
   }
-  return false;
 }
 
 export class OAuthLocalhostRedirectError extends Error {

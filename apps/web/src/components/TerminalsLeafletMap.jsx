@@ -9,7 +9,7 @@ import {
   CAVITE_MAP_MAX_ZOOM,
   lockMapToCaviteViewport,
 } from '../lib/caviteMapBounds';
-import { greenLeafletPinIcon } from '../lib/leafletGreenPin';
+import { CAVITOUR_USER_DOT_GREEN, greenLeafletPinIcon, greenUserDotOptions } from '../lib/leafletGreenPin';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -60,21 +60,15 @@ export function TerminalsLeafletMap({ terminals, selectedId, userLocation, onSel
 
     if (hasUser) {
       const userLatLng = [userLocation.lat, userLocation.lng];
-      L.circleMarker(userLatLng, {
-        radius: 9,
-        color: '#ffffff',
-        weight: 2,
-        fillColor: '#2563eb',
-        fillOpacity: 1,
-      })
+      L.circleMarker(userLatLng, greenUserDotOptions({ radius: 9 }))
         .addTo(layer)
         .bindPopup('You are here');
 
       L.circle(userLatLng, {
         radius: 3500,
-        color: '#2563eb',
+        color: CAVITOUR_USER_DOT_GREEN,
         weight: 1,
-        fillColor: '#2563eb',
+        fillColor: CAVITOUR_USER_DOT_GREEN,
         fillOpacity: 0.08,
       }).addTo(layer);
     }

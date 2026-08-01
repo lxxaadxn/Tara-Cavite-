@@ -16,7 +16,7 @@ const outPath = join(root, 'data', 'cavite_sta_v3_geocoded.json');
 
 const { flat } = JSON.parse(readFileSync(inPath, 'utf8'));
 
-const UA = 'CaviTour/1.0 (https://github.com/emncrpz/CaviTour; STA Cavite geocode)';
+const UA = 'TaraCavite/1.0 (STA Cavite geocode)';
 const DELAY_MS = 1100;
 
 async function geocode(query) {

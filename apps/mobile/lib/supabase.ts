@@ -5,7 +5,6 @@ import { createClient } from '@supabase/supabase-js';
 /**
  * Public anon client — never put the service_role key here.
  * Env vars override defaults when set (see `apps/mobile/.env.example`).
- * Defaults match `apps/web/src/lib/supabase.js` so the app works on fresh installs without a local `.env`.
  */
 const DEFAULT_SUPABASE_URL = 'https://bmsftpvixpvtjrlclnlz.supabase.co';
 const DEFAULT_SUPABASE_ANON_KEY =
@@ -17,7 +16,6 @@ const SUPABASE_ANON_KEY =
 
 const configured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 
-/** @deprecated Kept for any legacy checks; client is always configured when defaults are present. */
 export const SUPABASE_ENV_MISSING_MESSAGE =
   'Supabase is not configured on this device. Create apps/mobile/.env with EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY, then restart Expo.';
 
@@ -33,6 +31,7 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
+    flowType: 'pkce',
   },
 });
 

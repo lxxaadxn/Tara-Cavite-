@@ -2,7 +2,7 @@
   "name": "cavitour",
   "private": true,
   "version": "1.0.0",
-  "description": "CaviTour monorepo — mobile (Expo), marketing web + embedded admin at /admin (Vite), optional standalone admin on :3001",
+  "description": "Tara, Cavite! monorepo — mobile (Expo), marketing web + embedded admin at /admin (Vite), optional standalone admin on :3001",
   "workspaces": [
     "apps/*"
   ],
@@ -37,7 +37,8 @@
     "cavite:seed": "node scripts/generate-cavite-lgu-seed.mjs",
     "cavite:sql-all": "node scripts/build-cavite-sta-complete-sql.mjs",
     "cavite:verify-view": "node scripts/verify-v-cavite-establishments.js",
-    "cavite:verify-places": "node scripts/verify-places-catalog.js"
+    "cavite:verify-places": "node scripts/verify-places-catalog.js",
+    "cavite:upload-establishment-images": "node scripts/upload-local-establishment-images.mjs"
   },
   "devDependencies": {
     "xlsx": "^0.18.5"

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { LandingPageClean } from './pages/LandingPageClean';
 import { LoginPage } from './pages/LoginPage';
@@ -10,10 +10,9 @@ import { PrototypeTitlePage } from './pages/PrototypeTitlePage';
 import { PrototypeStartupFeaturesPage } from './pages/PrototypeStartupFeaturesPage';
 import { PrototypeSignInPage } from './pages/PrototypeSignInPage';
 import { PrototypeSignUpPage } from './pages/PrototypeSignUpPage';
-import { GoogleAuthProcessingPage } from './pages/GoogleAuthProcessingPage';
+import { OAuthCallbackPage } from './pages/OAuthCallbackPage';
 import { MobileExpoOAuthBridgePage } from './pages/MobileExpoOAuthBridgePage';
 import { SearchPage } from './pages/SearchPage';
-import { EstablishmentsPage } from './pages/EstablishmentsPage';
 import { PlaceDetailPage } from './pages/PlaceDetailPage';
 import { SavedPage } from './pages/SavedPage';
 import { ItineraryPage } from './pages/ItineraryPage';
@@ -29,6 +28,11 @@ import {
 } from '../../admin/src/embed';
 import { ADMIN_APP_HOME_PATH } from './lib/adminPortalPath';
 import { isAdminReservedEmail } from './lib/adminReservedEmail';
+
+function AuthGoogleLegacyRedirect() {
+  const { search } = useLocation();
+  return <Navigate to={`/auth/callback${search}`} replace />;
+}
 
 function ProtectedRoute({ children }) {
   const [sessionUser, setSessionUser] = useState(undefined);
@@ -70,7 +74,8 @@ export default function App() {
         <Route path="/prototype/startup" element={<PrototypeStartupFeaturesPage />} />
         <Route path="/prototype/sign-in" element={<PrototypeSignInPage />} />
         <Route path="/prototype/sign-up" element={<PrototypeSignUpPage />} />
-        <Route path="/auth/google" element={<GoogleAuthProcessingPage />} />
+        <Route path="/auth/callback" element={<OAuthCallbackPage />} />
+        <Route path="/auth/google" element={<AuthGoogleLegacyRedirect />} />
         <Route path="/auth/mobile-callback" element={<MobileExpoOAuthBridgePage />} />
 
         {/* Admin (apps/admin) — same dev server as marketing web */}
@@ -90,14 +95,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/establishments"
-          element={
-            <ProtectedRoute>
-              <EstablishmentsPage />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/establishments" element={<Navigate to="/search" replace />} />
         <Route
           path="/saved"
           element={

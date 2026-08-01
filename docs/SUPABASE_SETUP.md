@@ -39,7 +39,16 @@
 3. Set it to **Public**
 4. Click **"Create bucket"**
 
-### 6. Verify Row Level Security (RLS)
+### 6. Email confirmation (password signups)
+
+1. Go to **Authentication** → **Providers** → **Email**
+2. Enable **Confirm email** so new password accounts must verify before login
+3. Under **URL Configuration**, allow redirects used by the apps:
+   - Web: `http://localhost:5173/**` (and your production web origin)
+   - Mobile: `cavitour://**`, `exp://**`
+4. Signup creates a row in `user_profiles` automatically (trigger `on_auth_user_created`) for both email and Google users
+
+### 7. Verify Row Level Security (RLS)
 1. Go to **"Authentication"** → **"Policies"**
 2. You should see RLS policies for all tables
 3. All tables should have the green shield icon indicating RLS is enabled

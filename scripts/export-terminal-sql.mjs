@@ -29,7 +29,7 @@ const terminalRoutes = JSON.parse(
 );
 
 const lines = [];
-lines.push('-- CaviTour terminal dataset (matches data/sheets/*.csv column semantics)');
+lines.push('-- Tara, Cavite! terminal dataset (matches data/sheets/*.csv column semantics)');
 lines.push('-- Tables are prefixed to avoid collisions with existing public tables.');
 lines.push('BEGIN;');
 lines.push(

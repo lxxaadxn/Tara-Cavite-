@@ -91,13 +91,7 @@ export const DIRECTIONS_LEAFLET_HTML = `<!DOCTYPE html>
           L.marker([dLat, dLng], { icon: greenPinIcon }).bindPopup('Destination').addTo(markersLayer);
 
           if (uLat != null && uLng != null && !isNaN(uLat) && !isNaN(uLng)) {
-            L.circleMarker([uLat, uLng], {
-              radius: 8,
-              fillColor: '#2563eb',
-              color: '#ffffff',
-              weight: 2,
-              fillOpacity: 0.95
-            }).bindPopup('You').addTo(markersLayer);
+            L.circleMarker([uLat, uLng], greenUserDotStyle(8)).bindPopup('You').addTo(markersLayer);
           }
 
           var boundsPoints = [[dLat, dLng]];

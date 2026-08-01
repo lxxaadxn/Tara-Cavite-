@@ -5,6 +5,7 @@ import {
   buildOAuthRedirectUrl,
   createSessionFromOAuthUrl,
   getDevOAuthBridgeBaseUrl,
+  getExpoOAuthCallbackUrl,
   getRedirectToFromAuthorizeUrl,
   isLocalhostAuthUrl,
   OAuthLocalhostRedirectError,
@@ -16,20 +17,14 @@ import {
 
 WebBrowser.maybeCompleteAuthSession();
 
-const SUPABASE_PROJECT_REF = 'bmsftpvixpvtjrlclnlz';
-
-export function getSupabaseAuthConfigUrl(): string {
-  return `https://supabase.com/dashboard/project/${SUPABASE_PROJECT_REF}/auth/url-configuration`;
-}
-
 function getOAuthSetupHint(mode: OAuthRedirectMode): string {
   const bridgeBase = getDevOAuthBridgeBaseUrl();
   if (mode === 'bridge' && bridgeBase) {
     return (
-      `Google sign-in needs the web dev server.\n\n` +
-      `1. Run: npm run web\n` +
-      `2. In Supabase Redirect URLs add: ${bridgeBase}/**\n` +
-      `3. Set Site URL to ${bridgeBase} (not localhost)`
+      `Google sign-in needs the web dev server on your PC.\n\n` +
+      `1. In apps/web run: npm run dev\n` +
+      `2. Supabase → Redirect URLs: ${bridgeBase}/**\n` +
+      `3. Add exp://** and cavitour://** as well`
     );
   }
   return 'Add exp://** and cavitour://** under Supabase → Authentication → Redirect URLs.';
@@ -37,6 +32,7 @@ function getOAuthSetupHint(mode: OAuthRedirectMode): string {
 
 async function runGoogleOAuthWithMode(mode: OAuthRedirectMode): Promise<void> {
   const redirectTo = buildOAuthRedirectUrl(mode);
+  const expoReturnUrl = getExpoOAuthCallbackUrl();
 
   if (__DEV__) {
     console.info(`[authOAuth] mode=${mode} redirectTo=`, redirectTo.split('?')[0]);
@@ -72,13 +68,18 @@ async function runGoogleOAuthWithMode(mode: OAuthRedirectMode): Promise<void> {
     return;
   }
 
-  const result = await WebBrowser.openAuthSessionAsync(authorizeUrl, redirectTo);
+  // Native: wait for exp:// (bridge page forwards here after LAN callback).
+  const result = await WebBrowser.openAuthSessionAsync(authorizeUrl, expoReturnUrl);
 
   if (result.type === 'success' && result.url) {
     if (isLocalhostAuthUrl(result.url)) {
       throw new OAuthLocalhostRedirectError();
     }
     await createSessionFromOAuthUrl(result.url);
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) {
+      throw new Error('Google sign in did not return a valid session.');
+    }
     return;
   }
 
@@ -106,7 +107,7 @@ export async function signInWithGoogleMobile(): Promise<void> {
       await runGoogleOAuthWithMode(mode);
       await persistOAuthRedirectMode(mode);
       if (__DEV__ && mode === 'bridge') {
-        console.info('[authOAuth] Using LAN bridge (saved for next sign-in). Keep npm run web running.');
+        console.info('[authOAuth] Using LAN bridge. Keep apps/web `npm run dev` running.');
       }
       return;
     } catch (err) {
@@ -114,9 +115,15 @@ export async function signInWithGoogleMobile(): Promise<void> {
       lastError = error;
 
       const localhostFailure = err instanceof OAuthLocalhostRedirectError;
+      if (localhostFailure && hasFallback && mode === 'bridge') {
+        if (__DEV__) {
+          console.info('[authOAuth] LAN bridge failed — retrying with exp://…');
+        }
+        continue;
+      }
       if (localhostFailure && hasFallback && mode === 'expo') {
         if (__DEV__) {
-          console.info('[authOAuth] exp:// blocked by Supabase — retrying via LAN bridge…');
+          console.info('[authOAuth] exp:// blocked — retrying via LAN bridge…');
         }
         continue;
       }

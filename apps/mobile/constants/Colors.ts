@@ -1,5 +1,5 @@
 /**
- * Design system colors - CaviTour
+ * Design system colors - Tara, Cavite!
  * Dark teal #2D545E, lime green #9ACD32, off-white #F8F8F8
  */
 export const Colors = {

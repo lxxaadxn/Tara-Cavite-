@@ -1,8 +1,12 @@
 /**
- * Cavite establishments via public.places (synced from STA inventory + admin destinations).
+ * Cavite establishments via normalized public.tourist_attractions
+ * (read through v_tourist_attractions_catalog).
  */
 import { getDemoEstablishmentById } from 'cavitour-shared/demoPlaces';
+import { CONTENT_PIPELINE } from 'cavitour-shared';
 import { enrichPlaceWithLocalEstablishmentMedia } from './establishmentLocalImages';
+
+const CATALOG_TABLE = CONTENT_PIPELINE.establishmentsView;
 
 /** Log PostgREST errors in dev (missing table, RLS, column mismatch). */
 export function logPlacesFetchError(context, error) {
@@ -25,16 +29,8 @@ export function haversineDistanceKm(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
-/** Columns present on all deployed `places` tables (live DB may lack searchable_text, lgu_slug, gallery_urls). */
-const PLACES_SELECT_CORE =
-  'id, name, address, type, hours, latitude, longitude, image_url, description, ntdp_category, type_code, city_mun, barangay, source_slug, created_at';
-
-const PLACES_SELECT_VARIANTS = [
-  PLACES_SELECT_CORE,
-  `${PLACES_SELECT_CORE}, gallery_urls`,
-  `${PLACES_SELECT_CORE}, searchable_text, lgu_slug`,
-  `${PLACES_SELECT_CORE}, searchable_text, lgu_slug, gallery_urls`,
-];
+const CATALOG_SELECT =
+  'establishment_public_id, ta_name, address, type, hours, latitude, longitude, picture, gallery_urls, description, ntdp_category, type_code, city_mun, is_published, created_at';
 
 function parseCoord(v) {
   if (v == null) return null;
@@ -54,65 +50,82 @@ function applyCatalogMedia(place) {
   return enrichPlaceWithLocalEstablishmentMedia(place);
 }
 
+/** Normalize catalog view (or demo) row → internal catalog row. */
+function normalizeCatalogRow(row) {
+  if (!row || typeof row !== 'object') return null;
+  return {
+    id: row.establishment_public_id ?? row.id,
+    name: row.ta_name ?? row.name,
+    address: row.address,
+    type: row.type,
+    hours: row.hours,
+    latitude: row.latitude,
+    longitude: row.longitude,
+    image_url: row.picture ?? row.image_url ?? null,
+    gallery_urls: row.gallery_urls ?? null,
+    description: row.description,
+    ntdp_category: row.ntdp_category,
+    type_code: row.type_code,
+    city_mun: row.city_mun,
+    is_published: row.is_published,
+    created_at: row.created_at,
+  };
+}
+
 /** Published catalog rows with coordinates. */
-function publishedPlacesQuery(client, selectCols = PLACES_SELECT_CORE) {
+function publishedCatalogQuery(client) {
   return client
-    .from('places')
-    .select(selectCols)
+    .from(CATALOG_TABLE)
+    .select(CATALOG_SELECT)
     .not('latitude', 'is', null)
     .not('longitude', 'is', null);
 }
 
 async function queryPublishedPlaces(client, builder) {
   let lastError = null;
-  for (const selectCols of PLACES_SELECT_VARIANTS) {
-    const base = publishedPlacesQuery(client, selectCols);
-    const attempts = [
-      () => builder(base),
-      () => builder(base.or('is_published.is.null,is_published.eq.true')),
-    ];
-    for (const run of attempts) {
-      const { data, error } = await run();
-      if (!error) return data ?? [];
-      lastError = error;
-      const msg = String(error.message ?? '');
-      if (/column.*does not exist/i.test(msg) && msg.includes('is_published')) continue;
-      break;
-    }
+  const base = publishedCatalogQuery(client);
+  const attempts = [
+    () => builder(base),
+    () => builder(base.or('is_published.is.null,is_published.eq.true')),
+  ];
+  for (const run of attempts) {
+    const { data, error } = await run();
+    if (!error) return (data ?? []).map(normalizeCatalogRow).filter(Boolean);
+    lastError = error;
+    const msg = String(error.message ?? '');
+    if (/column.*does not exist/i.test(msg) && msg.includes('is_published')) continue;
+    break;
   }
-  throw new Error(lastError?.message ?? 'places query failed');
+  throw new Error(lastError?.message ?? 'tourist_attractions catalog query failed');
 }
 
-/** Normalize Supabase places row → UI place */
+/** Normalize catalog row → UI place */
 export function rowToPlace(row) {
-  const lat = parseCoord(row.latitude);
-  const lng = parseCoord(row.longitude);
+  const normalized = normalizeCatalogRow(row) ?? row;
+  const lat = parseCoord(normalized.latitude);
+  const lng = parseCoord(normalized.longitude);
   if (lat == null || lng == null) return null;
 
-  const galleryUrls = normalizeGalleryUrls(row.gallery_urls);
-  const imageUrl = row.image_url?.trim() || galleryUrls[0] || null;
-  const taCategory = row.type?.trim() || null;
+  const galleryUrls = normalizeGalleryUrls(normalized.gallery_urls);
+  const imageUrl = normalized.image_url?.trim() || galleryUrls[0] || null;
+  const taCategory = normalized.type?.trim() || null;
 
   return applyCatalogMedia({
-    id: row.id,
-    name: row.name,
-    address: row.address ?? '',
-    type: taCategory || row.type_code || 'Place',
-    hours: row.hours ?? '',
+    id: normalized.id,
+    name: normalized.name,
+    address: normalized.address ?? '',
+    type: taCategory || normalized.type_code || 'Place',
+    hours: normalized.hours ?? '',
     lat,
     lng,
     imageUrl,
     galleryUrls: galleryUrls.length ? galleryUrls : imageUrl ? [imageUrl] : [],
-    description: row.description,
-    ntdp_category: row.ntdp_category,
-    city_mun: row.city_mun ?? null,
-    barangay: row.barangay ?? null,
-    lgu_slug: row.lgu_slug,
+    description: normalized.description,
+    ntdp_category: normalized.ntdp_category,
+    city_mun: normalized.city_mun ?? null,
     ta_category: taCategory,
-    type_code: row.type_code ?? null,
-    created_at: row.created_at ?? null,
-    searchable_text: row.searchable_text ?? null,
-    source_slug: row.source_slug ?? null,
+    type_code: normalized.type_code ?? null,
+    created_at: normalized.created_at ?? null,
   });
 }
 
@@ -133,7 +146,7 @@ export async function searchPlacesByText(client, rawQuery, limit = 40) {
   const fetchCap = Math.min(Math.max(limit * 4, 80), 500);
 
   const orFilter = [
-    `name.ilike.${pattern}`,
+    `ta_name.ilike.${pattern}`,
     `type.ilike.${pattern}`,
     `address.ilike.${pattern}`,
     `city_mun.ilike.${pattern}`,
@@ -199,7 +212,9 @@ export async function fetchPlaceById(client, id) {
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key);
   if (isUuid) {
     try {
-      const rows = await queryPublishedPlaces(client, (q) => q.eq('id', key).limit(1));
+      const rows = await queryPublishedPlaces(client, (q) =>
+        q.eq('establishment_public_id', key).limit(1)
+      );
       if (rows[0]) return rowToPlace(rows[0]);
     } catch {
       /* fall through to bundled demo */

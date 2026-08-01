@@ -1,4 +1,4 @@
--- CaviTour Supabase Schema
+-- Tara, Cavite! Supabase Schema
 -- Run this SQL in your Supabase SQL Editor to create all necessary tables
 
 -- Enable UUID extension
@@ -8,6 +8,9 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE IF NOT EXISTS public.user_profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   username TEXT,
+  display_name TEXT,
+  email TEXT,
+  auth_provider TEXT,
   avatar_url TEXT,
   city TEXT,
   street TEXT,
@@ -17,6 +20,9 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
 );
 
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS auth_provider TEXT;
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS display_name TEXT;
 
 -- Saved Lists table
 CREATE TABLE IF NOT EXISTS public.saved_lists (

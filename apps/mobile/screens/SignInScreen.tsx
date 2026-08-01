@@ -13,9 +13,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import * as Linking from 'expo-linking';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { JamIcon } from '../components/JamIcon';
+import { GoogleLogoMark } from '../components/GoogleLogoMark';
 import { Colors } from '../constants/theme';
 import { Button } from '../components/Button';
 import {
@@ -26,6 +27,7 @@ import {
 import { withAuthRetry, isNetworkErrorMsg, NETWORK_ERROR_USER_MESSAGE } from '../lib/authHelpers';
 import { signInWithGoogleMobile } from '../lib/googleAuth';
 import { getAdminReservedEmailMessage, isAdminReservedEmail } from '../lib/adminReservedEmail';
+import { markMobileLocationPromptPending } from '../components/LocationPermissionModal';
 
 const MUTED = '#6B7280';
 const BORDER = 'rgba(17, 24, 39, 0.1)';
@@ -34,6 +36,9 @@ const FIELD_BG = '#F9FAFB';
 function toFriendlyLoginError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error ?? '');
   const normalized = message.toLowerCase();
+  if (normalized.includes('email not confirmed') || normalized.includes('email_not_confirmed')) {
+    return 'Verify your email first. Open the confirmation link we sent, then sign in. You can resend it below.';
+  }
   if (normalized.includes('invalid login credentials')) {
     return 'Email or password is incorrect. If this account was created with Google, use Google sign in or reset your password.';
   }
@@ -48,9 +53,41 @@ const SignInScreen: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [googleAuthInProgress, setGoogleAuthInProgress] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [resendLoading, setResendLoading] = useState(false);
+  const needsEmailConfirm =
+    !!formError && /verify your email|email not confirmed|confirmation link/i.test(formError);
+
+  const handleResendConfirmation = async () => {
+    setFormError(null);
+    setInfoMessage(null);
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail) {
+      setFormError('Enter your email above, then tap resend.');
+      return;
+    }
+    setResendLoading(true);
+    try {
+      const emailRedirectTo = Linking.createURL('auth/callback');
+      const { error } = await withAuthRetry(() =>
+        supabase.auth.resend({
+          type: 'signup',
+          email: trimmedEmail,
+          options: { emailRedirectTo },
+        })
+      );
+      if (error) throw error;
+      setInfoMessage('Confirmation email sent. Check your inbox (and spam).');
+    } catch (error: unknown) {
+      setFormError(error instanceof Error ? error.message : 'Could not resend confirmation email.');
+    } finally {
+      setResendLoading(false);
+    }
+  };
 
   const handleSignIn = async () => {
     setFormError(null);
+    setInfoMessage(null);
     if (!isSupabaseConfigured) {
       setFormError(SUPABASE_ENV_MISSING_MESSAGE);
       return;
@@ -76,6 +113,7 @@ const SignInScreen: React.FC = () => {
       );
       if (error) throw error;
       await AsyncStorage.setItem('isAuthenticated', 'true');
+      await markMobileLocationPromptPending();
     } catch (error: unknown) {
       const message = isNetworkErrorMsg(error)
         ? NETWORK_ERROR_USER_MESSAGE
@@ -118,7 +156,8 @@ const SignInScreen: React.FC = () => {
       <Modal visible={googleAuthInProgress} transparent animationType="fade" statusBarTranslucent>
         <View style={styles.authOverlay}>
           <View style={styles.authCard}>
-            <ActivityIndicator size="large" color={Colors.accent} />
+            <GoogleLogoMark size={32} />
+            <ActivityIndicator size="large" color={Colors.accent} style={styles.authSpinner} />
             <Text style={styles.authTitle}>Signing in with Google</Text>
             <Text style={styles.authSubtitle}>Complete sign-in in the Google window.</Text>
           </View>
@@ -139,7 +178,7 @@ const SignInScreen: React.FC = () => {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.brandBlock}>
-            <Text style={styles.brandMark}>CaviTour</Text>
+            <Text style={styles.brandMark}>Tara, Cavite!</Text>
             <Text style={styles.brandTagline}>Mabuhay — explore Cavite with ease.</Text>
           </View>
 
@@ -195,10 +234,27 @@ const SignInScreen: React.FC = () => {
               <Text style={styles.forgotText}>Forgot password?</Text>
             </TouchableOpacity>
 
+            {infoMessage ? (
+              <Text style={styles.infoText} accessibilityRole="text">
+                {infoMessage}
+              </Text>
+            ) : null}
             {formError ? (
               <Text style={styles.errorText} accessibilityRole="alert">
                 {formError}
               </Text>
+            ) : null}
+            {needsEmailConfirm ? (
+              <TouchableOpacity
+                onPress={handleResendConfirmation}
+                disabled={resendLoading || loading}
+                accessibilityRole="button"
+                accessibilityLabel="Resend confirmation email"
+              >
+                <Text style={styles.resendText}>
+                  {resendLoading ? 'Sending…' : 'Resend confirmation email'}
+                </Text>
+              </TouchableOpacity>
             ) : null}
 
             <Button
@@ -206,7 +262,7 @@ const SignInScreen: React.FC = () => {
               onPress={handleSignIn}
               loading={loading}
               disabled={loading}
-              accessibilityLabel="Sign in to your CaviTour account"
+              accessibilityLabel="Sign in to your Tara, Cavite! account"
               style={styles.primaryBtn}
               textStyle={styles.primaryBtnText}
             />
@@ -225,8 +281,8 @@ const SignInScreen: React.FC = () => {
               accessibilityRole="button"
               accessibilityLabel="Continue with Google"
             >
-              <JamIcon ionicon="logo-google" size={20} color={Colors.primary} />
-              <Text style={styles.googleBtnText}>Continue with Google</Text>
+              <GoogleLogoMark size={20} />
+              <Text style={styles.googleBtnText}>Sign in with Google</Text>
             </TouchableOpacity>
           </View>
 
@@ -258,11 +314,10 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   brandMark: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 32,
-    lineHeight: 38,
+    fontFamily: 'Pacifico_400Regular',
+    fontSize: 34,
+    lineHeight: 42,
     color: Colors.accent,
-    letterSpacing: -0.5,
   },
   brandTagline: {
     marginTop: 6,
@@ -350,6 +405,21 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     lineHeight: 18,
   },
+  infoText: {
+    fontSize: 13,
+    color: '#047857',
+    fontFamily: 'Inter_400Regular',
+    marginTop: 12,
+    marginBottom: 4,
+    lineHeight: 18,
+  },
+  resendText: {
+    fontSize: 13,
+    color: Colors.accent,
+    fontFamily: 'Inter_600SemiBold',
+    marginTop: 8,
+    textDecorationLine: 'underline',
+  },
   primaryBtn: {
     width: '100%',
     marginTop: 20,
@@ -431,6 +501,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 24,
     alignItems: 'center',
+  },
+  authSpinner: {
+    marginTop: 14,
   },
   authTitle: {
     marginTop: 14,

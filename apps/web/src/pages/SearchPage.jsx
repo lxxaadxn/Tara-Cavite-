@@ -10,6 +10,7 @@ import { countActiveFilters, placePassesAppliedFilters } from '../lib/placeFilte
 import { AppHeader } from '../components/AppHeader';
 import { FilterModal } from '../components/FilterModal';
 import { PlacesLeafletMap } from '../components/PlacesLeafletMap';
+import { readCachedUserLocation } from '../lib/promptLocationOnLogin';
 
 const PLACEHOLDER_IMG = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80';
 
@@ -56,9 +57,23 @@ export function SearchPage() {
   const [displayPlaces, setDisplayPlaces] = useState([]);
   const [dataSource, setDataSource] = useState('loading');
   const [fetchError, setFetchError] = useState('');
-  const [userCoords, setUserCoords] = useState(null);
+  const [userCoords, setUserCoords] = useState(() => {
+    const cached = readCachedUserLocation();
+    return cached ? { lat: cached.lat, lng: cached.lng } : null;
+  });
   const [previewPlaceId, setPreviewPlaceId] = useState(null);
   const trendingRef = useRef([]);
+
+  useEffect(() => {
+    const onCached = (ev) => {
+      const d = ev?.detail;
+      if (d && Number.isFinite(d.lat) && Number.isFinite(d.lng)) {
+        setUserCoords({ lat: d.lat, lng: d.lng });
+      }
+    };
+    window.addEventListener('cavitour:user-location', onCached);
+    return () => window.removeEventListener('cavitour:user-location', onCached);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
