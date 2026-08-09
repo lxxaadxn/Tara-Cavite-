@@ -118,12 +118,23 @@ ORDER BY event_object_table;
 
 ### 5. Authentication Setup Check
 
-**Go to:** Authentication → Settings
+**Go to:** Authentication → URL Configuration (and Providers → Email)
 
 Verify:
 - [ ] Email authentication is enabled
 - [ ] Confirm email is enabled (required for password signup verification before login)
-- [ ] Site URL is set correctly
+- [ ] Site URL is set correctly (dev: `http://localhost:5173`)
+- [ ] Redirect URLs include password reset + auth callbacks, for example:
+  - `http://localhost:5173/**`
+  - `http://localhost:5173/reset-password`
+  - `http://localhost:5173/auth/callback`
+  - `http://YOUR_LAN_IP:5173/**`
+  - `exp://**`
+  - `cavitour://**`
+
+Forgot-password emails must be allowed to redirect to `/reset-password`. If that URL is missing from Redirect URLs, Supabase falls back to Site URL (the marketing home page) and the reset form never opens.
+
+No SQL is required for password reset — only Auth URL settings.
 
 ---
 

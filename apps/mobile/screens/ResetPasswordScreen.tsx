@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   TextInput,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -75,6 +76,7 @@ const ResetPasswordScreen: React.FC = () => {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
       await AsyncStorage.setItem('isAuthenticated', 'true');
+      Alert.alert('Password updated', 'Your password was successfully changed.');
       endPasswordRecoveryFlow();
     } catch (error: unknown) {
       setFormError(error instanceof Error ? error.message : 'Could not update password.');

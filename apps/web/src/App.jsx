@@ -6,6 +6,8 @@ import { LoginPage } from './pages/LoginPage';
 import { SignupPage } from './pages/SignupPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
+import { CheckinPage } from './pages/CheckinPage';
+import { CheckinQrPosterPage } from './pages/CheckinQrPosterPage';
 import { PrototypeTitlePage } from './pages/PrototypeTitlePage';
 import { PrototypeStartupFeaturesPage } from './pages/PrototypeStartupFeaturesPage';
 import { PrototypeSignInPage } from './pages/PrototypeSignInPage';
@@ -28,6 +30,7 @@ import {
 } from '../../admin/src/embed';
 import { ADMIN_APP_HOME_PATH } from './lib/adminPortalPath';
 import { isAdminReservedEmail } from './lib/adminReservedEmail';
+import { PasswordRecoveryRedirect } from './components/PasswordRecoveryRedirect';
 
 function AuthGoogleLegacyRedirect() {
   const { search } = useLocation();
@@ -64,12 +67,16 @@ function ProtectedRoute({ children }) {
 export default function App() {
   return (
     <BrowserRouter>
+      <PasswordRecoveryRedirect />
       <Routes>
         <Route path="/" element={<LandingPageClean />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/checkin" element={<CheckinPage />} />
+        <Route path="/checkin/:code" element={<CheckinPage />} />
+        <Route path="/checkin/poster/:code" element={<CheckinQrPosterPage />} />
         <Route path="/prototype/title" element={<PrototypeTitlePage />} />
         <Route path="/prototype/startup" element={<PrototypeStartupFeaturesPage />} />
         <Route path="/prototype/sign-in" element={<PrototypeSignInPage />} />

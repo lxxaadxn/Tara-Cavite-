@@ -1,0 +1,47 @@
+{
+  "schema": {
+    "type": "object",
+    "properties": {
+      "icon": { "type": "string", "meta": { "asset": true } },
+      "splash": {
+        "type": "object",
+        "properties": {
+          "image": { "type": "string", "meta": { "asset": true } },
+          "tabletImage": { "type": "string", "meta": { "asset": true } }
+        }
+      },
+      "notification": {
+        "type": "object",
+        "properties": {
+          "icon": { "type": "string", "meta": { "asset": true } }
+        }
+      },
+      "android": {
+        "type": "object",
+        "properties": {
+          "icon": { "type": "string", "meta": { "asset": true } },
+          "adaptiveIcon": {
+            "type": "object",
+            "properties": {
+              "foregroundImage": { "type": "string", "meta": { "asset": true } },
+              "backgroundImage": { "type": "string", "meta": { "asset": true } },
+              "monochromeImage": { "type": "string", "meta": { "asset": true } }
+            }
+          }
+        }
+      },
+      "ios": {
+        "type": "object",
+        "properties": {
+          "icon": { "type": "string", "meta": { "asset": true } }
+        }
+      },
+      "web": {
+        "type": "object",
+        "properties": {
+          "favicon": { "type": "string", "meta": { "asset": true } }
+        }
+      }
+    }
+  }
+}

@@ -419,3 +419,86 @@
 .saveBtn:hover {
   background: var(--primary-dark);
 }
+
+.qrCell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.qrCell img {
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+}
+
+.qrCode {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.muted {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.qrPanel {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin: 12px 0 8px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius);
+  background: #f8fafc;
+}
+
+.qrPanel img {
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+}
+
+.qrPanelTitle {
+  margin: 0 0 6px;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.qrPanelHint {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  max-width: 28rem;
+}
+
+.qrActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.qrActionBtn,
+.qrActionBtnPrimary {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.qrActionBtn {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #0f172a;
+}
+
+.qrActionBtnPrimary {
+  background: #1f4f59;
+  color: #fff;
+}

@@ -22,11 +22,24 @@ export function isLocalhostAuthUrl(url: string | undefined): boolean {
   return /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(url);
 }
 
+function extractLanHost(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const match = raw.match(LAN_IPV4);
+  if (!match?.[1] || match[1] === '127.0.0.1') return null;
+  return match[1];
+}
+
 function getDevMachineLanHost(): string | null {
   const candidates: string[] = [];
-  if (Constants.expoConfig?.hostUri) {
-    candidates.push(Constants.expoConfig.hostUri);
-  }
+
+  // Current Metro / Expo Go debugger host (most reliable for “this PC”).
+  const expoGo = (Constants as { expoGoConfig?: { debuggerHost?: string } }).expoGoConfig;
+  if (expoGo?.debuggerHost) candidates.push(expoGo.debuggerHost);
+
+  const manifest = Constants.manifest as { debuggerHost?: string } | null;
+  if (manifest?.debuggerHost) candidates.push(manifest.debuggerHost);
+
+  if (Constants.expoConfig?.hostUri) candidates.push(Constants.expoConfig.hostUri);
   if (typeof Constants.linkingUri === 'string' && Constants.linkingUri) {
     candidates.push(Constants.linkingUri);
   }
@@ -35,30 +48,81 @@ function getDevMachineLanHost(): string | null {
   } catch {
     // ignore
   }
+
   for (const raw of candidates) {
-    const match = raw.match(LAN_IPV4);
-    if (match?.[1] && match[1] !== '127.0.0.1') {
-      return match[1];
-    }
+    const host = extractLanHost(raw);
+    if (host) return host;
   }
   return null;
 }
 
 export function getDevOAuthBridgeBaseUrl(): string | null {
-  const explicit = process.env.EXPO_PUBLIC_OAUTH_BRIDGE_BASE_URL?.trim();
-  if (explicit) {
-    return explicit.replace(/\/$/, '');
-  }
-  const host = getDevMachineLanHost();
-  if (!host) {
-    return null;
-  }
   const port = (process.env.EXPO_PUBLIC_WEB_DEV_PORT ?? DEFAULT_WEB_DEV_PORT).trim() || DEFAULT_WEB_DEV_PORT;
-  return `http://${host}:${port}`;
+  const host = getDevMachineLanHost();
+  const fromMetro = host ? `http://${host}:${port}` : null;
+
+  const explicit = process.env.EXPO_PUBLIC_OAUTH_BRIDGE_BASE_URL?.trim()?.replace(/\/$/, '') || null;
+  // Wi‑Fi IPs change often — never keep a stale EXPO_PUBLIC_OAUTH_BRIDGE_BASE_URL
+  // that doesn't match the Expo Go / Metro LAN host.
+  if (explicit && host && !explicit.includes(host)) {
+    if (__DEV__) {
+      console.warn(
+        '[authOAuth] Ignoring stale EXPO_PUBLIC_OAUTH_BRIDGE_BASE_URL=',
+        explicit,
+        '→ using Metro host',
+        fromMetro
+      );
+    }
+    return fromMetro;
+  }
+  return explicit || fromMetro;
+}
+
+/** Phone must reach this URL after Google — wrong Wi‑Fi IP = blank white page. */
+export async function isOAuthBridgeReachable(baseUrl?: string | null, timeoutMs = 2500): Promise<boolean> {
+  const base = (baseUrl ?? getDevOAuthBridgeBaseUrl())?.replace(/\/$/, '');
+  if (!base) return false;
+
+  const tryOnce = async (method: 'HEAD' | 'GET') => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(`${base}/`, { method, signal: controller.signal });
+      return res.status > 0;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  try {
+    return await tryOnce('HEAD');
+  } catch {
+    try {
+      return await tryOnce('GET');
+    } catch {
+      return false;
+    }
+  }
 }
 
 export function getExpoOAuthCallbackUrl(): string {
-  return Linking.createURL(AUTH_CALLBACK_PATH);
+  if (Platform.OS === 'web') {
+    return Linking.createURL(AUTH_CALLBACK_PATH);
+  }
+
+  // Prefer the app scheme (app.json "scheme": "cavitour").
+  // exp://IP:port/… breaks when Wi‑Fi IP changes and often fails to return
+  // from Google/ASWebAuthenticationSession on iOS (stuck on accounts.google.com).
+  try {
+    const withScheme = Linking.createURL(AUTH_CALLBACK_PATH, { scheme: 'cavitour' });
+    if (/^cavitour:/i.test(withScheme)) {
+      return withScheme;
+    }
+  } catch {
+    /* fall through */
+  }
+
+  return 'cavitour://auth/callback';
 }
 
 export function buildOAuthRedirectUrl(mode: OAuthRedirectMode): string {
@@ -91,27 +155,14 @@ export async function persistOAuthRedirectMode(mode: OAuthRedirectMode): Promise
   await AsyncStorage.setItem(OAUTH_REDIRECT_MODE_KEY, mode);
 }
 
-/** Prefer LAN bridge in dev (Supabase often blocks exp://). */
+/**
+ * Mobile Google uses Expo / app deep links only — apps/web is NOT required.
+ */
 export async function resolveOAuthRedirectModes(): Promise<OAuthRedirectMode[]> {
   if (Platform.OS === 'web') {
     return ['web'];
   }
-
-  if (!__DEV__) {
-    return ['expo'];
-  }
-
-  const saved = await getSavedOAuthRedirectMode();
-  const bridgeReady = Boolean(getDevOAuthBridgeBaseUrl());
-
-  if (saved === 'bridge' && bridgeReady) {
-    return ['bridge'];
-  }
-  if (saved === 'expo') {
-    return ['expo'];
-  }
-
-  return bridgeReady ? ['bridge', 'expo'] : ['expo'];
+  return ['expo'];
 }
 
 export function patchOAuthAuthorizeUrl(oauthUrl: string, redirectTo: string): string {
@@ -129,7 +180,11 @@ export function getRedirectToFromAuthorizeUrl(oauthUrl: string): string {
 }
 
 export function isOAuthCallbackUrl(url: string): boolean {
-  return /auth\/callback|auth\/mobile-callback/i.test(url);
+  if (/auth\/callback|auth\/mobile-callback/i.test(url)) {
+    return true;
+  }
+  // App-scheme return from Google/Supabase (may omit path in some clients).
+  return /^cavitour:/i.test(url) && /(?:[?&#]code=|access_token=)/i.test(url);
 }
 
 export async function createSessionFromOAuthUrl(
@@ -147,6 +202,9 @@ export async function createSessionFromOAuthUrl(
   if (code) {
     const { error } = await client.auth.exchangeCodeForSession(code);
     if (error) {
+      if (__DEV__) {
+        console.warn('[authOAuth] exchangeCodeForSession:', error.message);
+      }
       const { data: existing } = await client.auth.getSession();
       if (existing.session) {
         return;
@@ -177,6 +235,9 @@ export async function createSessionFromOAuthUrl(
   throw new Error('Google sign in did not return a valid session.');
 }
 
+/** One exchange at a time — App.tsx + SignIn both see the deep link. */
+let oauthCallbackInFlight: Promise<boolean> | null = null;
+
 export async function applyOAuthCallbackFromUrl(
   supabaseClient: SupabaseClient,
   url: string,
@@ -184,15 +245,34 @@ export async function applyOAuthCallbackFromUrl(
   if (!isOAuthCallbackUrl(url)) {
     return false;
   }
-  try {
-    await createSessionFromOAuthUrl(url, supabaseClient);
-    return true;
-  } catch (err) {
-    if (__DEV__) {
-      console.warn('[authOAuth] applyOAuthCallbackFromUrl:', err);
-    }
-    return false;
+
+  if (oauthCallbackInFlight) {
+    return oauthCallbackInFlight;
   }
+
+  oauthCallbackInFlight = (async () => {
+    try {
+      const { data: existing } = await supabaseClient.auth.getSession();
+      if (existing.session) {
+        return true;
+      }
+      await createSessionFromOAuthUrl(url, supabaseClient);
+      return true;
+    } catch (err) {
+      const { data: existing } = await supabaseClient.auth.getSession();
+      if (existing.session) {
+        return true;
+      }
+      if (__DEV__) {
+        console.warn('[authOAuth] applyOAuthCallbackFromUrl:', err);
+      }
+      return false;
+    } finally {
+      oauthCallbackInFlight = null;
+    }
+  })();
+
+  return oauthCallbackInFlight;
 }
 
 export class OAuthLocalhostRedirectError extends Error {

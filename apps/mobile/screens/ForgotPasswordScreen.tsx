@@ -22,11 +22,20 @@ import {
   supabase,
 } from '../lib/supabase';
 import { isNetworkErrorMsg, NETWORK_ERROR_USER_MESSAGE } from '../lib/authHelpers';
-import { getAdminReservedEmailMessage, isAdminReservedEmail } from '../lib/adminReservedEmail';
+import { getDevOAuthBridgeBaseUrl } from '../lib/authOAuth';
 
 const TURQUOISE = '#54C0CC';
 const MUTED = '#7A7878';
 const LINE = 'rgba(122, 120, 120, 0.45)';
+
+function getPasswordResetRedirectUrl(): string {
+  const bridge = getDevOAuthBridgeBaseUrl();
+  if (bridge) return `${bridge}/reset-password`;
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
+    return `${window.location.origin}/reset-password`;
+  }
+  return Linking.createURL('reset-password');
+}
 
 const ForgotPasswordScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
@@ -52,13 +61,9 @@ const ForgotPasswordScreen: React.FC = () => {
       setFormError('Please enter a valid email address.');
       return;
     }
-    if (isAdminReservedEmail(trimmed)) {
-      setFormError(getAdminReservedEmailMessage());
-      return;
-    }
     setLoading(true);
     try {
-      const redirectTo = Linking.createURL('reset-password');
+      const redirectTo = getPasswordResetRedirectUrl();
       const { error } = await supabase.auth.resetPasswordForEmail(trimmed, { redirectTo });
       if (error) throw error;
       setSent(true);

@@ -16,6 +16,7 @@ import * as Location from 'expo-location';
 import { JamIcon } from '../components/JamIcon';
 import { FilterModal } from '../components/FilterModal';
 import { Header } from '../components/Header';
+import { CheckinScannerModal, ScanCheckinButton } from '../components/CheckinScannerModal';
 import type { Place } from '../data/mockData';
 import { supabase } from '../lib/supabase';
 import {
@@ -59,6 +60,7 @@ const HomeScreen: React.FC = () => {
   const [catalogFromSupabase, setCatalogFromSupabase] = useState(false);
   const [catalogError, setCatalogError] = useState('');
   const [userPt, setUserPt] = useState<{ lat: number; lng: number } | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -189,6 +191,9 @@ const HomeScreen: React.FC = () => {
           <JamIcon name="filter" size={20} color={TEAL} />
         </TouchableOpacity>
       </View>
+      <View style={styles.scanRow}>
+        <ScanCheckinButton onPress={() => setScannerOpen(true)} label="Scan poster QR" />
+      </View>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -248,6 +253,7 @@ const HomeScreen: React.FC = () => {
         places={catalogPlaces}
         resultNoun="place"
       />
+      <CheckinScannerModal visible={scannerOpen} onClose={() => setScannerOpen(false)} />
     </SafeAreaView>
   );
 };
@@ -271,6 +277,10 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     paddingBottom: 12,
     gap: 10,
+  },
+  scanRow: {
+    paddingHorizontal: H_PAD,
+    paddingBottom: 8,
   },
   searchPill: {
     flex: 1,

@@ -41,6 +41,11 @@ import {
   SAVE_TO_LIST_CREATE_BUSY_ID,
   suggestedSaveListName,
 } from '../lib/saveToListModalHelpers';
+import { fetchPlaceCheckinDisplay, recordCheckinByCode } from 'cavitour-shared/placeCheckin';
+import { buildMobileCheckinDeepLink, getMobileCheckinWebOrigin } from '../lib/checkinDeepLink';
+import { thankYouVisitMessage } from '../lib/confirmCheckin';
+import { CheckinScannerModal, ScanCheckinButton } from '../components/CheckinScannerModal';
+import { CheckinQrMark } from '../components/CheckinQrMark';
 const GREEN = '#7EA00E';
 const TEAL = '#1F4F59';
 const TITLE = '#241D13';
@@ -204,6 +209,13 @@ export default function AboutEstablishmentScreen() {
   const [listNameDraft, setListNameDraft] = useState('');
   const [saveListBusyId, setSaveListBusyId] = useState<string | null>(null);
   const [checkingSaved, setCheckingSaved] = useState(false);
+  const [checkinInfo, setCheckinInfo] = useState<{
+    code: string;
+    qrValue: string;
+    checkinUrl: string;
+  } | null>(null);
+  const [checkinBusy, setCheckinBusy] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   useEffect(() => {
     if (routePlace) {
@@ -249,6 +261,62 @@ export default function AboutEstablishmentScreen() {
       };
     }
   }, [routePlace?.id, routePlaceId, isItinerary]);
+
+  useEffect(() => {
+    const id = place?.id;
+    if (!id || isItinerary || !isSupabasePlaceId(id)) {
+      setCheckinInfo(null);
+      return;
+    }
+    let cancelled = false;
+    const origin = getMobileCheckinWebOrigin();
+    void fetchPlaceCheckinDisplay(supabase, id, origin)
+      .then((info) => {
+        if (cancelled || !info) {
+          if (!cancelled) setCheckinInfo(null);
+          return;
+        }
+        // Poster QR encodes deep link / web URL. Same-phone check-in uses Check in here (no camera).
+        const deep = buildMobileCheckinDeepLink(info.code);
+        setCheckinInfo({
+          code: info.code,
+          checkinUrl: info.checkinUrl,
+          qrValue: deep || info.checkinUrl || info.code,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setCheckinInfo(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [place?.id, isItinerary]);
+
+  const onCheckinHere = useCallback(async () => {
+    if (!checkinInfo?.code) {
+      Alert.alert('Check-in', 'No QR for this establishment yet. Run the check-in SQL in Supabase.');
+      return;
+    }
+    setCheckinBusy(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Sign in', 'Sign in to check in at this establishment.');
+        return;
+      }
+      const result = await recordCheckinByCode(supabase, checkinInfo.code, 'qr');
+      Alert.alert(
+        result.alreadyCheckedIn ? 'Already checked in' : 'Thank you for visiting!',
+        thankYouVisitMessage(result.placeName, result.alreadyCheckedIn)
+      );
+    } catch (e) {
+      Alert.alert('Check-in', e instanceof Error ? e.message : 'Could not check in.');
+    } finally {
+      setCheckinBusy(false);
+    }
+  }, [checkinInfo?.code]);
 
   const categoryLabel = useMemo(() => (place ? getCategoryLabel(place) : ''), [place]);
   const photoSlides = useMemo(() => (place ? collectPhotoSlides(place) : []), [place]);
@@ -648,6 +716,53 @@ export default function AboutEstablishmentScreen() {
         </View>
 
         <View style={styles.actionsBlock}>
+          {checkinInfo ? (
+            <View style={styles.qrCard}>
+              <Text style={styles.qrTitle}>Check in at this place</Text>
+              <Text style={styles.qrHint}>
+                You are already on this establishment. Tap Check in here to count your visit — the camera
+                cannot scan a QR on this same phone screen.
+              </Text>
+              <TouchableOpacity
+                onPress={() => void onCheckinHere()}
+                disabled={checkinBusy}
+                activeOpacity={0.9}
+                accessibilityRole="button"
+                accessibilityLabel="Tap to check in at this establishment"
+                style={{ alignSelf: 'center' }}
+              >
+                <CheckinQrMark value={checkinInfo.qrValue} size={200} />
+              </TouchableOpacity>
+              <Text style={styles.qrCodeText}>{checkinInfo.code}</Text>
+              <TouchableOpacity
+                onPress={() => void onCheckinHere()}
+                style={styles.checkinButton}
+                activeOpacity={0.92}
+                disabled={checkinBusy}
+                accessibilityRole="button"
+                accessibilityLabel="Check in at this establishment"
+              >
+                {checkinBusy ? (
+                  <ActivityIndicator color={TEAL} />
+                ) : (
+                  <Text style={styles.checkinButtonLabel}>CHECK IN HERE</Text>
+                )}
+              </TouchableOpacity>
+              <Text style={styles.qrPosterHint}>
+                Have a printed poster for a different place? Use Scan poster QR below.
+              </Text>
+              <ScanCheckinButton onPress={() => setScannerOpen(true)} label="Scan poster QR" />
+            </View>
+          ) : (
+            <View style={styles.qrCard}>
+              <Text style={styles.qrTitle}>Check in with QR</Text>
+              <Text style={styles.qrHint}>
+                Point your camera at a printed establishment poster QR. Scanning the QR on this phone
+                screen will not work — open that place and tap Check in here instead.
+              </Text>
+              <ScanCheckinButton onPress={() => setScannerOpen(true)} label="Scan poster QR" />
+            </View>
+          )}
           <TouchableOpacity
             onPress={openStartCaviTrip}
             style={styles.caviTripButton}
@@ -672,6 +787,7 @@ export default function AboutEstablishmentScreen() {
         busyListId={saveListBusyId}
         countLabel={isItinerary ? 'items' : 'places'}
       />
+      <CheckinScannerModal visible={scannerOpen} onClose={() => setScannerOpen(false)} />
     </View>
   );
 }
@@ -903,6 +1019,76 @@ const styles = StyleSheet.create({
   actionsBlock: {
     marginTop: 20,
     gap: 12,
+  },
+  qrCard: {
+    alignSelf: 'stretch',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(31, 79, 89, 0.2)',
+    backgroundColor: '#F8FAFB',
+    padding: 16,
+    alignItems: 'center',
+  },
+  qrTitle: {
+    alignSelf: 'stretch',
+    fontFamily: 'Inter_700Bold',
+    fontSize: 12,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    color: MUTED,
+  },
+  qrHint: {
+    alignSelf: 'stretch',
+    marginTop: 6,
+    marginBottom: 12,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#525252',
+  },
+  qrImage: {
+    width: 180,
+    height: 180,
+    borderRadius: 12,
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  qrCodeText: {
+    marginTop: 10,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 16,
+    letterSpacing: 1,
+    color: TITLE,
+  },
+  qrPosterHint: {
+    marginTop: 14,
+    marginBottom: 2,
+    alignSelf: 'stretch',
+    textAlign: 'center',
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#6b7280',
+  },
+  checkinButton: {
+    marginTop: 12,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    minHeight: 50,
+    borderRadius: 14,
+    backgroundColor: WHITE,
+    borderWidth: 2,
+    borderColor: TEAL,
+  },
+  checkinButtonLabel: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 15,
+    letterSpacing: 0.8,
+    color: TEAL,
   },
   caviTripButton: {
     alignSelf: 'stretch',

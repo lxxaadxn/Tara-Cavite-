@@ -1,4 +1,5 @@
 import 'react-native-url-polyfill/auto';
+import './polyfillCrypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 
@@ -31,8 +32,37 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
+    // Same as web — PKCE (polyfillCrypto provides SHA-256 on Expo Go).
     flowType: 'pkce',
   },
 });
 
 export const isSupabaseConfigured = configured;
+
+/** Clear a broken persisted session so Expo Go does not red-screen after bundle. */
+export async function clearBrokenAuthSession(): Promise<void> {
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      await supabase.auth.signOut({ scope: 'local' });
+      await AsyncStorage.setItem('isAuthenticated', 'false');
+      return;
+    }
+    if (!data.session) return;
+    const { error: userError } = await supabase.auth.getUser();
+    if (userError) {
+      const msg = String(userError.message || '').toLowerCase();
+      if (/invalid refresh token|refresh token not found|session/.test(msg)) {
+        await supabase.auth.signOut({ scope: 'local' });
+        await AsyncStorage.setItem('isAuthenticated', 'false');
+      }
+    }
+  } catch {
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch {
+      /* ignore */
+    }
+    await AsyncStorage.setItem('isAuthenticated', 'false');
+  }
+}

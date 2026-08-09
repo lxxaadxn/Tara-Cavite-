@@ -16,7 +16,7 @@ export function LoginPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
-    const trimmed = email.trim();
+    const trimmed = email.trim().toLowerCase();
     if (!trimmed || !password) {
       setError('Enter email and password.');
       return;
@@ -28,11 +28,19 @@ export function LoginPage() {
 
     setLoading(true);
     try {
-      const { error: err } = await supabase.auth.signInWithPassword({
-        email: trimmed.toLowerCase(),
+      const { data, error: err } = await supabase.auth.signInWithPassword({
+        email: trimmed,
         password,
       });
       if (err) throw err;
+
+      const signedInEmail = data.user?.email?.trim().toLowerCase() ?? '';
+      if (!isAllowedAdminEmail(signedInEmail)) {
+        await supabase.auth.signOut();
+        setError(`Only ${ADMIN_ALLOWED_EMAIL} can access the admin app.`);
+        return;
+      }
+
       navigate(dashboardHref, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign in failed.');
@@ -49,6 +57,9 @@ export function LoginPage() {
           <span className={styles.badge}>Admin</span>
         </div>
         <h1 className={styles.title}>Sign in</h1>
+        <p className={styles.hint}>
+          Only <strong>{ADMIN_ALLOWED_EMAIL}</strong> can log in here.
+        </p>
 
         <form onSubmit={handleSubmit} className={styles.form}>
           <label className={styles.label}>
@@ -82,6 +93,11 @@ export function LoginPage() {
           <button type="submit" className={styles.submit} disabled={loading}>
             {loading ? 'Signing in…' : 'Log in'}
           </button>
+          <p className={styles.forgotRow}>
+            <a href="/forgot-password" className={styles.forgotLink}>
+              Forgot password?
+            </a>
+          </p>
         </form>
       </div>
     </div>

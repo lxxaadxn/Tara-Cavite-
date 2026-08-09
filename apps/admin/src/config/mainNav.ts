@@ -28,7 +28,7 @@ export const ADMIN_NAV: AdminNavNode[] = [
     label: 'Tourism Management',
     icon: 'tourism',
     children: [
-      { key: 'tourism-attractions', label: 'Tourist Attractions', to: '/web/tourism/attractions' },
+      { key: 'tourism-attractions', label: 'Destinations (QR visits)', to: '/web/tourism/attractions' },
       { key: 'tourism-filters', label: 'Categories/Filters', to: '/web/tourism/filters' },
       { key: 'tourism-municipalities', label: 'Municipalities', to: '/web/tourism/municipalities' },
       { key: 'tourism-featured', label: 'Featured Destinations', to: '/web/tourism/featured' },
@@ -54,7 +54,7 @@ export const ADMIN_NAV: AdminNavNode[] = [
         key: 'biz-est',
         label: 'Tourism Establishments',
         children: [
-          { key: 'biz-est-approved', label: 'Approved Businesses', to: '/web/business/establishments/approved' },
+          { key: 'biz-est-approved', label: 'Approved (visits & QR)', to: '/web/business/establishments/approved' },
           { key: 'biz-est-pending', label: 'Pending Publication', to: '/web/business/establishments/pending' },
           { key: 'biz-est-suspended', label: 'Suspended', to: '/web/business/establishments/suspended' },
           { key: 'biz-est-archive', label: 'Archive', to: '/web/business/establishments/archive' },

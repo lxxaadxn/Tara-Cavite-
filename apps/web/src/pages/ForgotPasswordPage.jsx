@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { LogoWordmark } from '../components/LogoWordmark';
-import { getAdminReservedEmailMessage, isAdminReservedEmail } from '../lib/adminReservedEmail';
 
 const teal = 'var(--ct-teal)';
 const ink = 'var(--ct-ink)';
@@ -20,10 +19,6 @@ export function ForgotPasswordPage() {
     const trimmed = email.trim();
     if (!trimmed) {
       setError('Please enter your email.');
-      return;
-    }
-    if (isAdminReservedEmail(trimmed)) {
-      setError(getAdminReservedEmailMessage());
       return;
     }
     setLoading(true);
@@ -59,7 +54,11 @@ export function ForgotPasswordPage() {
         {sent ? (
           <div className="rounded-2xl border border-neutral-200 bg-white p-6 text-center shadow-sm">
             <p className="text-sm text-neutral-700">
-              Check your inbox. Open the link in the email to set a new password.
+              Check your inbox (and spam). Open the reset link — it should open the Set new password page so you can choose a new password.
+            </p>
+            <p className="mt-3 text-xs text-neutral-500">
+              Tip: In Supabase → Authentication → URL Configuration, add your app URL plus{' '}
+              <code className="rounded bg-neutral-100 px-1">/reset-password</code> to Redirect URLs.
             </p>
             <Link to="/login" className="mt-4 inline-block text-sm font-semibold hover:underline" style={{ color: teal }}>
               Back to login

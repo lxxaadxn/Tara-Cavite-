@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AppHeader } from '../components/AppHeader';
 import {
@@ -11,6 +11,12 @@ import {
   hasCustomAvatarFromSources,
   resolveAvatarFromSources,
 } from 'cavitour-shared/defaultAvatar';
+import {
+  CHANGE_PASSWORD_MIN_LENGTH,
+  CHANGE_PASSWORD_SUCCESS_MESSAGE,
+  CHANGE_PASSWORD_SUCCESS_TITLE,
+  changePasswordWithSupabase,
+} from 'cavitour-shared/changePassword';
 import { deleteUserAvatarFiles } from '../lib/avatarStorage';
 import { supabase } from '../lib/supabase';
 
@@ -199,6 +205,11 @@ export function ProfilePage() {
   const [signingOut, setSigningOut] = useState(false);
   const [editNickname, setEditNickname] = useState('');
   const [editEmail, setEditEmail] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordSuccessOpen, setPasswordSuccessOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [publicListsRefresh, setPublicListsRefresh] = useState(0);
@@ -328,7 +339,36 @@ export function ProfilePage() {
   const openEdit = () => {
     setEditNickname(profile.nickname || profile.name || '');
     setEditEmail(profile.email === 'No email on account' ? '' : profile.email);
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
     setEditOpen(true);
+  };
+
+  const changePassword = async () => {
+    setChangingPassword(true);
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      const u = authData?.user;
+      if (!u?.email) {
+        window.alert('Sign in with an email account to change your password.');
+        return;
+      }
+      await changePasswordWithSupabase(supabase, {
+        email: u.email,
+        currentPassword,
+        newPassword,
+        confirmPassword,
+      });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setPasswordSuccessOpen(true);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Could not change password.');
+    } finally {
+      setChangingPassword(false);
+    }
   };
 
   const saveEdits = async () => {
@@ -928,7 +968,7 @@ export function ProfilePage() {
 
       {editOpen ? (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-[28px] border border-neutral-200 bg-white p-5 shadow-xl">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[28px] border border-neutral-200 bg-white p-5 shadow-xl">
             <p className="font-['Poppins',sans-serif] text-lg font-semibold text-neutral-900">Edit profile</p>
             <label className="mt-4 block text-xs font-semibold text-neutral-600" htmlFor="pf-nick">
               Nickname
@@ -953,12 +993,61 @@ export function ProfilePage() {
             <p className="mt-1.5 text-[11px] text-neutral-500">
               Google and email accounts can change address here. If you change email, confirm the link we send to the new inbox.
             </p>
+
+            <div className="mt-5 border-t border-neutral-100 pt-4">
+              <p className="text-sm font-semibold text-neutral-900">Change password</p>
+              <p className="mt-1 text-[11px] text-neutral-500">
+                Enter your current password, then choose a new one (at least {CHANGE_PASSWORD_MIN_LENGTH} characters).
+              </p>
+              <label className="mt-3 block text-xs font-semibold text-neutral-600" htmlFor="pf-current-password">
+                Current password
+              </label>
+              <input
+                id="pf-current-password"
+                type="password"
+                autoComplete="current-password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                className="mt-1.5 h-11 w-full rounded-xl border border-neutral-200 px-3 text-sm outline-none focus:ring-2 focus:ring-[rgba(126,160,14,0.22)]"
+              />
+              <label className="mt-3 block text-xs font-semibold text-neutral-600" htmlFor="pf-new-password">
+                New password
+              </label>
+              <input
+                id="pf-new-password"
+                type="password"
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="mt-1.5 h-11 w-full rounded-xl border border-neutral-200 px-3 text-sm outline-none focus:ring-2 focus:ring-[rgba(126,160,14,0.22)]"
+              />
+              <label className="mt-3 block text-xs font-semibold text-neutral-600" htmlFor="pf-confirm-password">
+                Confirm password
+              </label>
+              <input
+                id="pf-confirm-password"
+                type="password"
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="mt-1.5 h-11 w-full rounded-xl border border-neutral-200 px-3 text-sm outline-none focus:ring-2 focus:ring-[rgba(126,160,14,0.22)]"
+              />
+              <button
+                type="button"
+                onClick={() => void changePassword()}
+                disabled={saving || uploading || deletingAccount || changingPassword}
+                className="mt-3 w-full rounded-xl border border-neutral-200 bg-neutral-50 py-2 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-100 disabled:opacity-50"
+              >
+                {changingPassword ? 'Updating password…' : 'Update password'}
+              </button>
+            </div>
+
             {profile.hasCustomPhoto ? (
               <button
                 type="button"
                 onClick={openRemoveAvatarConfirm}
-                disabled={uploading || saving}
-                className="mt-2 w-full rounded-xl border border-red-200 bg-red-50 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+                disabled={uploading || saving || changingPassword}
+                className="mt-4 w-full rounded-xl border border-red-200 bg-red-50 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-50"
               >
                 {uploading ? 'Removing…' : 'Remove profile photo'}
               </button>
@@ -967,7 +1056,7 @@ export function ProfilePage() {
               <button
                 type="button"
                 onClick={() => setDeleteAccountConfirmOpen(true)}
-                disabled={saving || uploading || deletingAccount}
+                disabled={saving || uploading || deletingAccount || changingPassword}
                 className="w-full rounded-xl border border-red-200 bg-white py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
               >
                 Delete account
@@ -981,18 +1070,48 @@ export function ProfilePage() {
                 type="button"
                 onClick={() => setEditOpen(false)}
                 className="rounded-xl border border-neutral-200 px-4 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-50"
-                disabled={saving || deletingAccount}
+                disabled={saving || deletingAccount || changingPassword}
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={() => void saveEdits()}
-                disabled={saving || deletingAccount}
+                disabled={saving || deletingAccount || changingPassword}
                 className="rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
                 style={{ backgroundColor: '#1f4f59' }}
               >
                 {saving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {passwordSuccessOpen ? (
+        <div
+          className="fixed inset-0 z-[1003] flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="password-success-title"
+          onClick={() => setPasswordSuccessOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-[28px] border border-neutral-200 bg-white p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p id="password-success-title" className="font-['Poppins',sans-serif] text-lg font-semibold text-neutral-900">
+              {CHANGE_PASSWORD_SUCCESS_TITLE}
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-neutral-600">{CHANGE_PASSWORD_SUCCESS_MESSAGE}</p>
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setPasswordSuccessOpen(false)}
+                className="rounded-xl px-4 py-2 text-sm font-semibold text-white"
+                style={{ backgroundColor: '#1f4f59' }}
+              >
+                OK
               </button>
             </div>
           </div>

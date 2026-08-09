@@ -13,6 +13,8 @@
     "./mallTerminalsSeed": "./mallTerminalsSeed.js",
     "./terminalCoordinates.json": "./terminalCoordinates.json",
     "./defaultAvatar": "./defaultAvatar.js",
+    "./changePassword": "./changePassword.js",
+    "./placeCheckin": "./placeCheckin.js",
     "./commuterGuideBuilder": "./commuterGuideBuilder.js",
     "./demoPlaces": "./demoPlaces.js"
   }

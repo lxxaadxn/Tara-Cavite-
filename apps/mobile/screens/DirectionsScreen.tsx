@@ -57,6 +57,7 @@ import {
   type TerminalTransitPlan,
 } from '../lib/terminalTransitPlanner';
 import { recordDestinationReached } from '../lib/destinationReachedActivity';
+import { recordPlaceVisit } from 'cavitour-shared/placeCheckin';
 import { fetchPlaceById, haversineDistanceKm } from '../lib/placesFromSupabase';
 import { DirectionsMapView } from '../components/DirectionsMapView';
 
@@ -798,6 +799,11 @@ const DirectionsScreen: React.FC = () => {
         name: place.name,
         image: placeImageUriForActivity(place),
       });
+      try {
+        await recordPlaceVisit(supabase, place.id, 'destination_reached');
+      } catch {
+        // Local visit still saved; cloud visit may fail if SQL not applied yet.
+      }
       destinationRecordedRef.current = true;
       Alert.alert('', 'Thank You and Enjoy your trip');
       return true;

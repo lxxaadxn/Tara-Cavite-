@@ -21,3 +21,22 @@ export {
   resolveAvatarFromSources,
   hasCustomAvatarFromSources,
 } from './defaultAvatar.js';
+export {
+  CHANGE_PASSWORD_MIN_LENGTH,
+  CHANGE_PASSWORD_SUCCESS_MESSAGE,
+  CHANGE_PASSWORD_SUCCESS_TITLE,
+  changePasswordWithSupabase,
+  validateChangePasswordInput,
+} from './changePassword.js';
+export {
+  CHECKIN_PATH_PREFIX,
+  CHECKIN_APP_PATH,
+  buildCheckinUrl,
+  extractCheckinCodeFromText,
+  fetchPlaceCheckinDisplay,
+  normalizeCheckinCode,
+  qrImageUrl,
+  recordCheckinByCode,
+  recordPlaceVisit,
+  resolveCheckinWebOrigin,
+} from './placeCheckin.js';

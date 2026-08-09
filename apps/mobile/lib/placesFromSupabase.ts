@@ -2,7 +2,6 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { CONTENT_PIPELINE } from 'cavitour-shared';
 import { getDemoEstablishmentById } from 'cavitour-shared/demoPlaces';
 import type { Place } from '../data/mockData';
-import { enrichPlaceWithLocalEstablishmentMedia } from './establishmentLocalImages';
 import { normalizeNtdpCopy } from './ntdpDisplayLabels';
 
 const CATALOG_TABLE = CONTENT_PIPELINE.establishmentsView;
@@ -109,13 +108,10 @@ function galleryToImageSources(urls: string[]): Array<{ uri: string }> {
 }
 
 function applyCatalogMedia(place: Place): Place {
-  const hasImage =
-    (typeof place.image === 'string' && place.image.trim()) ||
-    typeof place.image === 'number' ||
-    (typeof place.image === 'object' && place.image != null);
-  const hasGallery = Boolean(place.gallery?.length);
-  if (hasImage || hasGallery) return place;
-  return enrichPlaceWithLocalEstablishmentMedia(place);
+  // Prefer remote Supabase/CDN images only.
+  // Do NOT pull in `establishmentLocalImages` (700+ PNGs / ~120MB) — that makes Expo Go
+  // hang or fail right after "iOS Bundled" while downloading assets over LAN.
+  return place;
 }
 
 function normalizeCatalogRow(row: TouristAttractedRow | PlacesCatalogRow): PlacesCatalogRow | null {

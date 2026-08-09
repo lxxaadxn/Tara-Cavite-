@@ -16,9 +16,9 @@ export const CONTENT_PIPELINE = {
 
 export const SYNC_MESSAGES = {
   live:
-    'Live listings from Admin Content Management (same on web and mobile). Analytics may still use demo numbers.',
+    'Live listings from Admin Content Management (same on web and mobile). Visit analytics use QR check-ins + destination reached after place_checkin_visits.sql.',
   demo:
     'Demo catalog — web and app show the same sample places. Connect Supabase to show what you publish in admin.',
   adminHint:
-    'Destinations saved here appear on web Search and the mobile app after migration 20260510120004 is applied.',
+    'Destinations saved here appear on web Search and the mobile app. Each place gets a unique check-in QR after place_checkin_visits.sql.',
 };

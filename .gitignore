@@ -12,6 +12,7 @@ nul/
 dist/
 web-build/
 expo-env.d.ts
+apps/mobile/expo-go-qr.png
 
 # Native
 .kotlin/
@@ -38,7 +39,11 @@ yarn-error.*
 .env
 .env*.local
 
-cd *.tsbuildinfo
+*.tsbuildinfo
+
+# Expo local export / temp artifacts (do not commit)
+apps/mobile/.expo-export-test/
+apps/mobile/.tmp/
 
 app-example
 

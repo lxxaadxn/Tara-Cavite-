@@ -22,6 +22,12 @@ import {
   hasCustomAvatarFromSources,
   resolveAvatarFromSources,
 } from 'cavitour-shared/defaultAvatar';
+import {
+  CHANGE_PASSWORD_MIN_LENGTH,
+  CHANGE_PASSWORD_SUCCESS_MESSAGE,
+  CHANGE_PASSWORD_SUCCESS_TITLE,
+  changePasswordWithSupabase,
+} from 'cavitour-shared/changePassword';
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 
@@ -52,6 +58,10 @@ const UserDetailsScreen: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const loadProfile = useCallback(async () => {
     const { data: { user: u } } = await supabase.auth.getUser();
@@ -376,7 +386,31 @@ const UserDetailsScreen: React.FC = () => {
     }
   };
 
-  const busy = saving || uploading || deletingAccount;
+  const changePassword = async () => {
+    if (!user?.email) {
+      Alert.alert('Change password', 'Sign in with an email account to change your password.');
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      await changePasswordWithSupabase(supabase, {
+        email: user.email,
+        currentPassword,
+        newPassword,
+        confirmPassword,
+      });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      Alert.alert(CHANGE_PASSWORD_SUCCESS_TITLE, CHANGE_PASSWORD_SUCCESS_MESSAGE);
+    } catch (e) {
+      Alert.alert('Change password', e instanceof Error ? e.message : 'Could not change password.');
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  const busy = saving || uploading || deletingAccount || changingPassword;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -457,6 +491,71 @@ const UserDetailsScreen: React.FC = () => {
               Google and email accounts can change address here. If you change email, confirm the link we send to the
               new inbox.
             </Text>
+
+            <View style={styles.passwordSection}>
+              <Text style={styles.sectionTitle}>Change password</Text>
+              <Text style={styles.hint}>
+                Enter your current password, then choose a new one (at least {CHANGE_PASSWORD_MIN_LENGTH} characters).
+              </Text>
+
+              <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>Current password</Text>
+              <TextInput
+                style={styles.input}
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
+                placeholder="Current password"
+                placeholderTextColor={MUTED}
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+                textContentType="password"
+                editable={!busy}
+                accessibilityLabel="Current password"
+              />
+
+              <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>New password</Text>
+              <TextInput
+                style={styles.input}
+                value={newPassword}
+                onChangeText={setNewPassword}
+                placeholder="New password"
+                placeholderTextColor={MUTED}
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+                textContentType="newPassword"
+                editable={!busy}
+                accessibilityLabel="New password"
+              />
+
+              <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>Confirm password</Text>
+              <TextInput
+                style={styles.input}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                placeholder="Confirm password"
+                placeholderTextColor={MUTED}
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+                textContentType="newPassword"
+                editable={!busy}
+                accessibilityLabel="Confirm password"
+              />
+
+              <TouchableOpacity
+                style={styles.changePasswordBtn}
+                onPress={() => void changePassword()}
+                disabled={busy}
+                accessibilityRole="button"
+              >
+                {changingPassword ? (
+                  <ActivityIndicator size="small" color={TEAL} />
+                ) : (
+                  <Text style={styles.changePasswordBtnText}>Update password</Text>
+                )}
+              </TouchableOpacity>
+            </View>
 
             {hasCustomPhoto ? (
               <TouchableOpacity
@@ -605,6 +704,33 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 16,
     color: MUTED,
+  },
+  passwordSection: {
+    marginTop: 20,
+    paddingTop: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#f0f0f0',
+  },
+  sectionTitle: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    color: TITLE,
+  },
+  changePasswordBtn: {
+    marginTop: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: '#f8fafb',
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  changePasswordBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    color: TEAL,
   },
   removePhotoBtn: {
     marginTop: 12,

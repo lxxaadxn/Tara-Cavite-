@@ -11,7 +11,7 @@ import { BusinessApplication } from './pages/BusinessApplication';
 import { ApplicationReview } from './pages/ApplicationReview';
 import { ContentOverview } from './pages/content/ContentOverview';
 import { ContentFilters } from './pages/content/ContentFilters';
-import { ContentEstablishments } from './pages/content/ContentEstablishments';
+import { TouristSpots } from './pages/TouristSpots';
 import { ContentItineraries } from './pages/content/ContentItineraries';
 import { ContentMaps } from './pages/content/ContentMaps';
 import { ContentTerminals } from './pages/content/ContentTerminals';
@@ -35,7 +35,7 @@ export function adminLayoutChildRoutes() {
     <Route key="web-dash" path="web/dashboard" element={<Dashboard />} />,
     <Route key="web-analytics" path="web/analytics" element={<Analytics />} />,
 
-    <Route key="tour-attr" path="web/tourism/attractions" element={<ContentEstablishments />} />,
+    <Route key="tour-attr" path="web/tourism/attractions" element={<TouristSpots />} />,
     <Route key="tour-filters" path="web/tourism/filters" element={<ContentFilters />} />,
     <Route
       key="tour-muni"
@@ -70,7 +70,7 @@ export function adminLayoutChildRoutes() {
         'Export archive for records',
       ])}
     />,
-    <Route key="biz-est-approved" path="web/business/establishments/approved" element={<ContentEstablishments />} />,
+    <Route key="biz-est-approved" path="web/business/establishments/approved" element={<TouristSpots />} />,
     <Route
       key="biz-est-pending"
       path="web/business/establishments/pending"

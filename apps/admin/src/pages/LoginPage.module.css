@@ -118,3 +118,19 @@
   opacity: 0.65;
   cursor: not-allowed;
 }
+
+.forgotRow {
+  margin: 4px 0 0;
+  text-align: center;
+}
+
+.forgotLink {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--primary-dark);
+  text-decoration: none;
+}
+
+.forgotLink:hover {
+  text-decoration: underline;
+}
