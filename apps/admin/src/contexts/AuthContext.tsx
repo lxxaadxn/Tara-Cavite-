@@ -42,12 +42,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
-    void supabase.auth.getSession().then(async ({ data: { session: s } }) => {
-      const next = await normalizeSession(s);
+    // Always start on the login screen (no sticky admin session across reloads / npm run dev).
+    void (async () => {
+      try {
+        await supabase.auth.signOut({ scope: 'local' });
+      } catch {
+        /* ignore */
+      }
       if (!mounted) return;
-      setSession(next);
+      setSession(null);
       setLoading(false);
-    });
+    })();
 
     const {
       data: { subscription },
@@ -55,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       void normalizeSession(s).then((next) => {
         if (!mounted) return;
         setSession(next);
+        setLoading(false);
       });
     });
 

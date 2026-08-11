@@ -230,7 +230,12 @@ export function TouristSpots() {
     return <span className={styles.thumb}>?</span>;
   };
 
-  const list = filtered();
+  const list = filtered().slice().sort((a, b) => {
+    const va = checkins.get(a.id)?.totalVisits ?? 0;
+    const vb = checkins.get(b.id)?.totalVisits ?? 0;
+    if (vb !== va) return vb - va;
+    return a.name.localeCompare(b.name);
+  });
 
   return (
     <div className={styles.page}>
@@ -327,13 +332,13 @@ export function TouristSpots() {
                   <td>{spot.city}</td>
                   <td>{ci?.totalVisits ?? 0}</td>
                   <td>
-                    {ci ? (
+                    {ci?.code ? (
                       <div className={styles.qrCell}>
                         <img src={ci.qrUrl} alt={`QR for ${spot.name}`} width={56} height={56} />
                         <code className={styles.qrCode}>{ci.code}</code>
                       </div>
                     ) : (
-                      <span className={styles.muted}>Run check-in SQL</span>
+                      <span className={styles.muted}>No QR yet</span>
                     )}
                   </td>
                   <td>
@@ -372,7 +377,7 @@ export function TouristSpots() {
             onClick={(e) => e.stopPropagation()}
           >
             <h2 id="dest-modal-title">{editingId ? 'Edit destination' : 'Add destination'}</h2>
-            {editingId && checkins.get(editingId) ? (
+            {editingId && checkins.get(editingId)?.code ? (
               <div className={styles.qrPanel}>
                 <img
                   src={checkins.get(editingId)!.qrUrl}
@@ -418,7 +423,7 @@ export function TouristSpots() {
               </div>
             ) : editingId ? (
               <p className={styles.qrPanelHint}>
-                No QR yet — run <code>place_checkin_visits.sql</code> in Supabase, then reload this page.
+                No QR yet — enable check-in codes for destinations, then reload this page.
               </p>
             ) : null}
             <div className={styles.form}>

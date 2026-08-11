@@ -1,8 +1,6 @@
 import { CONTENT_PIPELINE } from 'cavitour-shared';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-/** Admin CRUD against normalized {@link CONTENT_PIPELINE.adminPlacesTable}. */
-
 export type Destination = {
   id: string;
   name: string;
@@ -91,12 +89,31 @@ export async function fetchAdminDestinations(client: SupabaseClient): Promise<Ad
   const { data, error } = await client
     .from(CONTENT_PIPELINE.establishmentsView)
     .select(
-      'establishment_public_id, ta_name, address, type, hours, latitude, longitude, picture, description, ntdp_category, type_code, city_mun, gallery_urls, is_published, created_at'
+      'id, name, address, type, hours, latitude, longitude, image_url, description, ntdp_category, type_code, city_mun, gallery_urls, is_published, created_at'
     )
     .order('created_at', { ascending: false });
 
   if (error) throw new Error(error.message);
-  return (data ?? []) as AdminPlaceRow[];
+  return (data ?? []).map((row) => {
+    const r = row as Record<string, unknown>;
+    return {
+      establishment_public_id: String(r.id ?? ''),
+      ta_name: String(r.name ?? ''),
+      address: String(r.address ?? ''),
+      type: (r.type as string | null) ?? null,
+      hours: (r.hours as string | null) ?? null,
+      latitude: (r.latitude as string | number | null) ?? null,
+      longitude: (r.longitude as string | number | null) ?? null,
+      picture: (r.image_url as string | null) ?? null,
+      description: (r.description as string | null) ?? null,
+      ntdp_category: (r.ntdp_category as string | null) ?? null,
+      type_code: (r.type_code as string | null) ?? null,
+      city_mun: (r.city_mun as string | null) ?? null,
+      gallery_urls: (r.gallery_urls as string[] | null) ?? null,
+      is_published: (r.is_published as boolean | null) ?? null,
+      created_at: (r.created_at as string | null) ?? null,
+    } satisfies AdminPlaceRow;
+  });
 }
 
 async function resolveLookupIds(

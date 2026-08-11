@@ -2,23 +2,37 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   extractCheckinCodeFromText,
+  foldEstablishmentName,
   normalizeCheckinCode,
   recordCheckinByCode,
 } from 'cavitour-shared/placeCheckin';
 import { LogoWordmark } from '../components/LogoWordmark';
 import { supabase } from '../lib/supabase';
+import { recordDestinationReached } from '../lib/destinationReachedActivity';
 
 const teal = 'var(--ct-teal)';
 const ink = 'var(--ct-ink)';
 
-/**
- * Thank-you confirmation after scanning an establishment QR (phone camera → web).
- * Only counts the visit — not a browse / relocate experience.
- */
+async function syncProfileVisitFromCheckin(userId, placeName, placeIdHint) {
+  try {
+    let placeId = String(placeIdHint || '').trim();
+    if (!placeId && placeName) {
+      const fold = foldEstablishmentName(placeName);
+      const { data: places } = await supabase.from('places').select('id, name').limit(800);
+      const hit = (places || []).find((p) => foldEstablishmentName(p.name) === fold);
+      if (hit?.id) placeId = String(hit.id);
+    }
+    if (!placeId) placeId = String(placeIdHint || '').trim();
+    if (!userId || !placeId) return;
+    recordDestinationReached(userId, placeId, { name: placeName || 'Place' });
+  } catch {
+  }
+}
+
 export function CheckinPage() {
   const { code: codeParam } = useParams();
   const navigate = useNavigate();
-  const [status, setStatus] = useState('idle'); // idle | working | ok | error
+  const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('');
   const [placeName, setPlaceName] = useState('');
   const [title, setTitle] = useState('Checking you in…');
@@ -45,6 +59,7 @@ export function CheckinPage() {
         }
         const result = await recordCheckinByCode(supabase, fromParam, 'qr');
         if (!active) return;
+        await syncProfileVisitFromCheckin(session.user.id, result.placeName, result.placeId);
         setPlaceName(result.placeName);
         setStatus('ok');
         setTitle(result.alreadyCheckedIn ? 'Already checked in' : 'Thank you for visiting!');
@@ -90,6 +105,7 @@ export function CheckinPage() {
         return;
       }
       const result = await recordCheckinByCode(supabase, normalized, 'code');
+      await syncProfileVisitFromCheckin(session.user.id, result.placeName, result.placeId);
       setPlaceName(result.placeName);
       setStatus('ok');
       setTitle(result.alreadyCheckedIn ? 'Already checked in' : 'Thank you for visiting!');

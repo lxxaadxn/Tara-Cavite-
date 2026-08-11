@@ -24,7 +24,7 @@ import {
   getThisMonthDestinationReachedEntries,
   type DestinationReachedEntry,
 } from '../lib/destinationReachedActivity';
-import { fetchSavedItemCountsByListId } from '../lib/savedListItems';
+import { fetchSavedItemCountsByListId, fetchPlaceCountByListId } from '../lib/savedListItems';
 import {
   hasCustomAvatarFromSources,
   resolveAvatarFromSources,
@@ -304,10 +304,15 @@ const ProfileScreen: React.FC = () => {
 
       const listIds = listRows.map((l) => l.id);
       let counts: Record<string, number> = {};
+      let placeOnlyCounts: Record<string, number> = {};
       try {
-        counts = await fetchSavedItemCountsByListId(supabase, listIds);
+        [counts, placeOnlyCounts] = await Promise.all([
+          fetchSavedItemCountsByListId(supabase, listIds),
+          fetchPlaceCountByListId(supabase, listIds),
+        ]);
       } catch {
         counts = {};
+        placeOnlyCounts = {};
       }
 
       setLists(
@@ -315,7 +320,7 @@ const ProfileScreen: React.FC = () => {
           id: l.id,
           name: l.name,
           type: l.type as 'private' | 'shared',
-          place_count: counts[l.id] ?? 0,
+          place_count: placeOnlyCounts[l.id] ?? counts[l.id] ?? 0,
           updated_at: l.updated_at ?? l.created_at,
         }))
       );
@@ -375,8 +380,9 @@ const ProfileScreen: React.FC = () => {
   };
 
   const openPlace = (placeId: string) => {
+    if (!placeId) return;
     (navigation as { navigate: (name: string, params: object) => void }).navigate('AboutEstablishment', {
-      placeId,
+      placeId: String(placeId),
     });
   };
 
@@ -423,9 +429,26 @@ const ProfileScreen: React.FC = () => {
           />
         }
       >
-        <Text style={styles.screenTitle}>Profile</Text>
+        <View style={styles.titleRow}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => {
+              const parent = navigation.getParent();
+              if (parent) {
+                parent.navigate('Dashboard' as never);
+              } else {
+                (navigation as { navigate: (n: string) => void }).navigate('Dashboard');
+              }
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Back to Home"
+            hitSlop={10}
+          >
+            <JamIcon ionicon="chevron-left" size={22} color={TITLE} />
+          </TouchableOpacity>
+          <Text style={styles.screenTitle}>Profile</Text>
+        </View>
 
-        {/* Header card — matches web mobile profile */}
         <View style={styles.card}>
           <View style={styles.headerRow}>
             <View style={styles.avatarBlock}>
@@ -501,7 +524,6 @@ const ProfileScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* My Summary */}
         <View style={styles.card}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>My Summary</Text>
@@ -533,7 +555,6 @@ const ProfileScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* Recent visits */}
         <View style={styles.card}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent visits ({monthVisits.length})</Text>
@@ -553,8 +574,8 @@ const ProfileScreen: React.FC = () => {
             </ScrollView>
           ) : (
             <Text style={styles.emptyHint}>
-              You haven&apos;t reached a destination yet. After a trip, open Directions and tap
-              &quot;Destination Reached&quot;.
+              You haven&apos;t reached a destination yet. After a CaviTrip, tap &quot;Destination
+              Reached&quot; and scan the establishment QR to record the visit.
             </Text>
           )}
         </View>
@@ -635,7 +656,20 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_700Bold',
     fontSize: 22,
     color: TITLE,
+    flex: 1,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     marginBottom: 14,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: -6,
   },
   card: {
     backgroundColor: CARD_WHITE,

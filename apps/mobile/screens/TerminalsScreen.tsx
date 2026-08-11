@@ -107,9 +107,8 @@ const TerminalsScreen: React.FC = () => {
         if (!cancelled) {
           setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         }
-      } catch {
-        /* ignore */
-      }
+        } catch {
+        }
     })();
     return () => {
       cancelled = true;

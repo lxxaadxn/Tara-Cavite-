@@ -84,5 +84,5 @@ export function commuterStepHint(index, total, stepDistanceM) {
   if (index === total - 1) {
     return 'PUVs may stop before narrow streets — ask to alight at a main corner if needed.';
   }
-  return 'If your ride leaves this road, transfer at a crossing or terminal.';
+  return 'If your ride leaves this road, transfer at a crossing or stop.';
 }

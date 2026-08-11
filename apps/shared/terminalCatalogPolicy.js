@@ -1,15 +1,5 @@
-/**
- * Mall-only terminal catalog + CommuteTour-aligned route allowlist.
- * @see https://ph.commutetour.com/commute-routes/ (MOA / Alabang / PITX → Cavite guides)
- */
-
-/** Sheet seed `cavitour_terminals`: ids 1–25 are mall / lifestyle-center terminals. */
 export const MALL_TERMINAL_ID_MAX = 25;
 
-/**
- * `cavitour_routes.route_id` values for corridors featured on CommuteTour Cavite commute guides
- * (e.g. MOA/Alabang to Bacoor, Imus, Dasmariñas, Kawit, Tanza, Tagaytay, Trece, Rosario, etc.).
- */
 export const COMMUTETOUR_ROUTE_IDS = new Set([
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 16, 17, 18, 22, 23, 24, 27, 28, 29, 30, 38, 39, 40, 42,
   43, 44, 45, 46,
@@ -38,7 +28,6 @@ export function isMallTerminalName(name) {
   );
 }
 
-/** @param {{ terminal_id?: number; terminal_name?: string }} row */
 export function isMallTerminalRow(row) {
   if (isMallTerminalId(row?.terminal_id)) return true;
   return isMallTerminalName(row?.terminal_name);
@@ -49,7 +38,6 @@ export function isCommuteTourRouteId(routeId) {
   return Number.isFinite(n) && COMMUTETOUR_ROUTE_IDS.has(n);
 }
 
-/** @param {{ terminal_id?: number; route_id?: number }} link */
 export function isShowcasedTerminalRouteLink(link) {
   return isMallTerminalId(link?.terminal_id) && isCommuteTourRouteId(link?.route_id);
 }

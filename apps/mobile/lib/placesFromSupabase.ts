@@ -1,12 +1,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { CONTENT_PIPELINE } from 'cavitour-shared';
 import { getDemoEstablishmentById } from 'cavitour-shared/demoPlaces';
+import { foldEstablishmentName } from 'cavitour-shared/placeCheckin';
 import type { Place } from '../data/mockData';
+import { enrichPlaceWithLocalEstablishmentMedia } from './establishmentLocalImages';
 import { normalizeNtdpCopy } from './ntdpDisplayLabels';
 
 const CATALOG_TABLE = CONTENT_PIPELINE.establishmentsView;
 
-/** Log PostgREST errors (missing table, RLS, column mismatch). */
 export function logPlacesFetchError(context: string, error: unknown): void {
   const message = error instanceof Error ? error.message : String(error ?? 'unknown');
   if (__DEV__) {
@@ -58,7 +59,7 @@ type TouristAttractedRow = {
 };
 
 const CATALOG_SELECT =
-  'establishment_public_id, ta_name, address, type, hours, latitude, longitude, picture, gallery_urls, description, ntdp_category, type_code, city_mun, is_published, created_at';
+  'id, name, address, type, hours, latitude, longitude, image_url, gallery_urls, description, ntdp_category, type_code, city_mun, is_published, created_at';
 
 const KM_PER_DEG_LAT = 111;
 
@@ -108,10 +109,53 @@ function galleryToImageSources(urls: string[]): Array<{ uri: string }> {
 }
 
 function applyCatalogMedia(place: Place): Place {
-  // Prefer remote Supabase/CDN images only.
-  // Do NOT pull in `establishmentLocalImages` (700+ PNGs / ~120MB) — that makes Expo Go
-  // hang or fail right after "iOS Bundled" while downloading assets over LAN.
-  return place;
+  const hasRemoteImage =
+    (typeof place.image === 'string' && place.image.trim().length > 0) ||
+    (typeof place.image === 'object' && place.image != null && 'uri' in place.image);
+  if (hasRemoteImage) return place;
+  return enrichPlaceWithLocalEstablishmentMedia(place);
+}
+
+type StaMedia = { picture: string | null; gallery_urls: string[] | null };
+let staMediaByNamePromise: Promise<Map<string, StaMedia>> | null = null;
+
+async function getStaMediaByName(client: SupabaseClient): Promise<Map<string, StaMedia>> {
+  if (!staMediaByNamePromise) {
+    staMediaByNamePromise = (async () => {
+      const out = new Map<string, StaMedia>();
+      try {
+        const { data, error } = await client
+          .from('v_sta_v3_cavite_2025_catalog')
+          .select('ta_name, picture, gallery_urls')
+          .not('picture', 'is', null);
+        if (error || !data) return out;
+        for (const row of data as Array<StaMedia & { ta_name?: string }>) {
+          const key = foldEstablishmentName(row.ta_name);
+          if (!key) continue;
+          if (!out.has(key)) {
+            out.set(key, { picture: row.picture ?? null, gallery_urls: row.gallery_urls ?? null });
+          }
+        }
+      } catch {
+      }
+      return out;
+    })();
+  }
+  return staMediaByNamePromise;
+}
+
+function applyStaMediaToRow(
+  row: PlacesCatalogRow,
+  staMedia: Map<string, StaMedia>
+): PlacesCatalogRow {
+  if (row.image_url?.trim() || (row.gallery_urls && row.gallery_urls.length > 0)) return row;
+  const hit = staMedia.get(foldEstablishmentName(row.name));
+  if (!hit?.picture) return row;
+  return {
+    ...row,
+    image_url: hit.picture,
+    gallery_urls: hit.gallery_urls?.length ? hit.gallery_urls : [hit.picture],
+  };
 }
 
 function normalizeCatalogRow(row: TouristAttractedRow | PlacesCatalogRow): PlacesCatalogRow | null {
@@ -158,19 +202,20 @@ async function queryPublishedPlaces(
   for (const run of attempts) {
     const { data, error } = await run();
     if (!error) {
+      const staMedia = await getStaMediaByName(client);
       return (data ?? [])
         .map((row) => normalizeCatalogRow(row))
-        .filter((row): row is PlacesCatalogRow => row != null);
+        .filter((row): row is PlacesCatalogRow => row != null)
+        .map((row) => applyStaMediaToRow(row, staMedia));
     }
     lastError = error;
     const msg = String(error.message ?? '');
     if (/column.*does not exist/i.test(msg) && msg.includes('is_published')) continue;
     break;
   }
-  throw new Error(lastError?.message ?? 'tourist_attractions catalog query failed');
+  throw new Error(lastError?.message ?? 'places catalog query failed');
 }
 
-/** Map catalog row → Place (mockData shape). */
 export function rowToPlace(row: PlacesCatalogRow | TouristAttractedRow): Place | null {
   const normalized = normalizeCatalogRow(row);
   if (!normalized) return null;
@@ -356,7 +401,7 @@ export async function fetchAllPlacesFromSupabase(
   while (true) {
     const to = from + size - 1;
     const data = await queryPublishedPlaces(client, (q) =>
-      q.order('ta_name', { ascending: true }).range(from, to)
+      q.order('name', { ascending: true }).range(from, to)
     );
     for (const row of data) {
       const p = rowToPlace(row);
@@ -377,11 +422,10 @@ export async function fetchPlaceById(client: SupabaseClient, id: string): Promis
   if (isUuid) {
     try {
       const data = await queryPublishedPlaces(client, (q) =>
-        q.eq('establishment_public_id', key).limit(1)
+        q.eq('id', key).limit(1)
       );
       if (data[0]) return rowToPlace(data[0]);
     } catch {
-      /* demo fallback below */
     }
   }
 

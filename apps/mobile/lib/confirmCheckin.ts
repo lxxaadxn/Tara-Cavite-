@@ -1,9 +1,12 @@
 import { Alert } from 'react-native';
 import {
   extractCheckinCodeFromText,
+  fetchPlaceCheckinDisplay,
+  foldEstablishmentName,
   normalizeCheckinCode,
   recordCheckinByCode,
 } from 'cavitour-shared/placeCheckin';
+import { recordDestinationReached } from './destinationReachedActivity';
 import { savePendingCheckinCode } from './checkinDeepLink';
 import { supabase } from './supabase';
 
@@ -15,12 +18,18 @@ export function thankYouVisitMessage(placeName: string, alreadyCheckedIn: boolea
   return `Thank you for visiting ${name}! Your visit was counted.`;
 }
 
-/**
- * Record a QR visit and show an in-app alert — does not navigate away.
- */
+export type ConfirmCheckinOptions = {
+  expectedPlaceId?: string;
+  expectedPlaceName?: string;
+  placeImage?: string;
+  requireExpectedPlace?: boolean;
+  recordAsDestinationReached?: boolean;
+};
+
 export async function confirmCheckinFromCode(
   rawCode: string,
-  source: 'qr' | 'code' = 'qr'
+  source: 'qr' | 'code' = 'qr',
+  options: ConfirmCheckinOptions = {}
 ): Promise<boolean> {
   const code = extractCheckinCodeFromText(rawCode) || normalizeCheckinCode(rawCode);
   if (!code) {
@@ -38,7 +47,39 @@ export async function confirmCheckinFromCode(
   }
 
   try {
+    if (options.requireExpectedPlace && options.expectedPlaceId) {
+      const expected = await fetchPlaceCheckinDisplay(supabase, options.expectedPlaceId);
+      if (expected?.code && normalizeCheckinCode(expected.code) !== code) {
+        Alert.alert(
+          'Wrong establishment',
+          `This QR is not for ${options.expectedPlaceName || 'this destination'}. Scan the printed poster QR at the place you reached.`
+        );
+        return false;
+      }
+    }
+
     const result = await recordCheckinByCode(supabase, code, source);
+
+    if (options.requireExpectedPlace && options.expectedPlaceName) {
+      const expected = foldEstablishmentName(options.expectedPlaceName);
+      const actual = foldEstablishmentName(result.placeName);
+      if (expected && actual && expected !== actual) {
+        Alert.alert(
+          'Wrong establishment',
+          `This QR is for ${result.placeName}. Scan the QR for ${options.expectedPlaceName} to confirm you arrived.`
+        );
+        return false;
+      }
+    }
+
+    const profilePlaceId = String(options.expectedPlaceId || result.placeId || '').trim();
+    if (options.recordAsDestinationReached !== false && profilePlaceId) {
+      await recordDestinationReached(user.id, profilePlaceId, {
+        name: options.expectedPlaceName || result.placeName,
+        image: options.placeImage,
+      });
+    }
+
     Alert.alert(
       result.alreadyCheckedIn ? 'Already checked in' : 'Thank you for visiting!',
       thankYouVisitMessage(result.placeName, result.alreadyCheckedIn)

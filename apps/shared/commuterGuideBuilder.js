@@ -1,12 +1,3 @@
-/**
- * Builds numbered commuter-guide steps per tourist attraction:
- * 1) Main road corridor toward the place (OSRM)
- * 2) Terminals nearest the user (boarding hubs)
- * 3) Board / signboards / transfers
- * 4) Alight near destination terminal
- * 5) Arrive at the attraction
- */
-
 function fold(v) {
   return String(v ?? '')
     .normalize('NFD')
@@ -36,10 +27,6 @@ function useRoadHint(roadName) {
   return n;
 }
 
-/**
- * Major roads along the mapped corridor, longest segments first (unique names).
- * @param {{ roadName?: string | null; distanceM: number }[]} osrmSteps
- */
 export function extractMainRoadCorridorHints(osrmSteps, max = 5) {
   if (!osrmSteps?.length) return [];
   const ranked = [];
@@ -56,9 +43,6 @@ export function extractMainRoadCorridorHints(osrmSteps, max = 5) {
   return ranked.slice(0, max).map((r) => r.name);
 }
 
-/**
- * @param {{ routeName: string; origin?: string; destination?: string; transportName?: string }[]} routes
- */
 export function filterRoutesTowardDestination(routes, destMunicipality, destinationLabel) {
   if (!routes?.length) return [];
   const destFold = fold(destMunicipality);
@@ -86,23 +70,6 @@ export function filterRoutesTowardDestination(routes, destMunicipality, destinat
   return picked.slice(0, 5).map((x) => x.r);
 }
 
-/**
- * @param {{
- *   userPt: { lat: number; lng: number } | null;
- *   destPt: { lat: number; lng: number } | null;
- *   destinationName: string;
- *   destMunicipality?: string | null;
- *   terminalPlan: {
- *     originTerminal: { id: string; name: string; municipality: string; latitude: number; longitude: number };
- *     destinationTerminal: { id: string; name: string; municipality: string; latitude: number; longitude: number };
- *     legs: { fromTerminalName: string; toTerminalName: string; toMunicipality: string; routeName: string; transportName: string }[];
- *     nearbyUserTerminals?: { id: string; name: string; municipality: string; distanceKm: number }[];
- *   } | null;
- *   boardingRoutes?: { routeName: string; origin?: string; destination?: string; transportName?: string }[];
- *   osrmSteps?: { roadName?: string | null; distanceM: number }[];
- * }} input
- * @returns {{ title: string; body: string; signboards?: string[]; hint?: string }[]}
- */
 export function buildCommuterGuideSteps(input) {
   const {
     userPt,
@@ -123,18 +90,13 @@ export function buildCommuterGuideSteps(input) {
     return [
       {
         title: 'Enable location',
-        body: `Turn on location for a commute guide tailored to ${destinationName} — main roads from your area, then the nearest terminals to you.`,
+        body: `Turn on location for a commute guide tailored to ${destinationName} — main roads from your area, then local jeep or bus lines.`,
       },
     ];
   }
 
   if (!terminalPlan) {
-    return [
-      {
-        title: 'Loading your guide',
-        body: `Mapping main roads toward ${destinationName} and the terminals closest to you…`,
-      },
-    ];
+    return [];
   }
 
   const { originTerminal, destinationTerminal, legs } = terminalPlan;

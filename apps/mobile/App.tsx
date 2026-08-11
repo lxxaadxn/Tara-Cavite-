@@ -17,7 +17,7 @@ import {
 import * as SplashScreen from 'expo-splash-screen';
 import * as Linking from 'expo-linking';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Image, Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createNavigationContainerRef } from '@react-navigation/native';
 
@@ -38,10 +38,8 @@ import {
 } from './lib/checkinDeepLink';
 import { confirmCheckinFromCode } from './lib/confirmCheckin';
 
-// Keep native splash (Tara, Cavite! logo) visible until app is ready
 SplashScreen.preventAutoHideAsync();
 
-// Screens
 import DirectionsScreen from './screens/DirectionsScreen';
 import HistoryScreen from './screens/HistoryScreen';
 import HomeScreen from './screens/HomeScreen';
@@ -62,8 +60,6 @@ import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import ResetPasswordScreen from './screens/ResetPasswordScreen';
 import SignInScreen from './screens/SignInScreen';
 import SignUpScreen from './screens/SignUpScreen';
-import TerminalDetailScreen from './screens/TerminalDetailScreen';
-import TerminalsScreen from './screens/TerminalsScreen';
 import UserDetailsScreen from './screens/UserDetailsScreen';
 import NewListScreen from './screens/NewListScreen';
 import CreateItineraryScreen from './screens/CreateItineraryScreen';
@@ -79,7 +75,6 @@ const REQUIRE_SIGN_IN_ON_EACH_LAUNCH = false;
 
 const navigationRef = createNavigationContainerRef();
 
-// Auth Stack
 const AuthStack = () => (
   <Stack.Navigator
     screenOptions={{
@@ -111,12 +106,9 @@ function UnauthedFlow({ stackKey }: { stackKey: number }) {
   );
 }
 
-// Home Stack
 const DashboardStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="HomeMain" component={HomeScreen} />
-    <Stack.Screen name="Terminals" component={TerminalsScreen} />
-    <Stack.Screen name="TerminalDetail" component={TerminalDetailScreen} />
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
     <Stack.Screen name="AboutEstablishment" component={AboutEstablishmentScreen} />
     <Stack.Screen name="Checkin" component={CheckinScreen} />
@@ -128,7 +120,6 @@ const DashboardStack = () => (
   </Stack.Navigator>
 );
 
-// Itineraries Stack
 const ItinerariesStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="ItinerariesMain" component={ItinerariesScreen} />
@@ -146,7 +137,6 @@ const ItinerariesStack = () => (
   </Stack.Navigator>
 );
 
-// Profile Stack
 const ProfileStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="ProfileMain" component={ProfileScreen} />
@@ -166,17 +156,6 @@ const ProfileStack = () => (
   </Stack.Navigator>
 );
 
-// Terminals Stack
-const TerminalsStack = () => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="TerminalsMain" component={TerminalsScreen} />
-    <Stack.Screen name="TerminalDetail" component={TerminalDetailScreen} />
-    <Stack.Screen name="Directions" component={DirectionsScreen} />
-    <Stack.Screen name="FullRouteMap" component={FullRouteMapScreen} />
-  </Stack.Navigator>
-);
-
-// Map Stack
 const MapStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="MapMain" component={MapScreen} />
@@ -184,7 +163,6 @@ const MapStack = () => (
     <Stack.Screen name="AboutEstablishment" component={AboutEstablishmentScreen} />
     <Stack.Screen name="Checkin" component={CheckinScreen} />
     <Stack.Screen name="EstablishmentsBrowse" component={EstablishmentsBrowseScreen} />
-    <Stack.Screen name="TerminalDetail" component={TerminalDetailScreen} />
     <Stack.Screen name="Directions" component={DirectionsScreen} />
     <Stack.Screen name="MapCommuteDetail" component={MapCommuteDetailScreen} />
     <Stack.Screen name="FullRouteMap" component={FullRouteMapScreen} />
@@ -192,7 +170,6 @@ const MapStack = () => (
   </Stack.Navigator>
 );
 
-// Main Tabs Navigator (Figma: white pill bar, green active / teal inactive icons)
 function MainTabs() {
   const insets = useSafeAreaInsets();
   const bottomPad = Math.max(insets.bottom, 10);
@@ -224,9 +201,7 @@ function MainTabs() {
                 ? 'document-text-outline'
                 : route.name === 'Map'
                   ? 'map-outline'
-                  : route.name === 'Terminals'
-                    ? 'car-outline'
-                    : 'person-outline';
+                  : 'person-outline';
           return <JamIcon ionicon={ionicon} size={size} color={color} />;
         },
         tabBarActiveTintColor: Colors.accent,
@@ -251,7 +226,6 @@ function MainTabs() {
           const focused = getFocusedRouteNameFromRoute(route) ?? 'HomeMain';
           const hideTab =
             focused === 'Notifications' ||
-            focused === 'TerminalDetail' ||
             focused === 'Directions' ||
             focused === 'FullRouteMap' ||
             focused === 'AboutEstablishment' ||
@@ -291,8 +265,7 @@ function MainTabs() {
             focused === 'PlaceDetail' ||
             focused === 'AboutEstablishment' ||
             focused === 'Directions' ||
-            focused === 'FullRouteMap' ||
-            focused === 'TerminalDetail';
+            focused === 'FullRouteMap';
           return {
             tabBarLabel: 'Map',
             tabBarStyle: hideTab ? { display: 'none' } : mainTabBarStyle,
@@ -300,31 +273,21 @@ function MainTabs() {
         }}
       />
       <Tab.Screen
-        name="Terminals"
-        component={TerminalsStack}
-        options={({ route }) => {
-          const focused = getFocusedRouteNameFromRoute(route) ?? 'TerminalsMain';
-          const hideTab =
-            focused === 'TerminalDetail' || focused === 'Directions' || focused === 'FullRouteMap';
-          return {
-            tabBarLabel: 'Terminals',
-            tabBarStyle: hideTab ? { display: 'none' } : mainTabBarStyle,
-          };
-        }}
-      />
-      <Tab.Screen
         name="Profile"
         component={ProfileStack}
-        options={{
-          tabBarLabel: 'Profile',
-          tabBarStyle: { display: 'none' },
+        options={({ route }) => {
+          const focused = getFocusedRouteNameFromRoute(route) ?? 'ProfileMain';
+          const hideTab = focused !== 'ProfileMain';
+          return {
+            tabBarLabel: 'Profile',
+            tabBarStyle: hideTab ? { display: 'none' } : mainTabBarStyle,
+          };
         }}
       />
     </Tab.Navigator>
   );
 }
 
-// Pre-navigation load: match landing (white + logo) until fonts and storage are ready
 const bundlingPageStyle = StyleSheet.create({
   container: {
     flex: 1,
@@ -332,9 +295,20 @@ const bundlingPageStyle = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  logo: {
-    width: 220,
-    height: 60,
+  wordmarkRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  wordmark: {
+    fontFamily: 'Pacifico_400Regular',
+    fontSize: 42,
+    lineHeight: 50,
+  },
+  wordmarkAccent: {
+    color: Colors.accent,
+  },
+  wordmarkPrimary: {
+    color: Colors.primary,
   },
 });
 
@@ -422,7 +396,6 @@ export default function App() {
           }
         }
       } catch {
-        // Ignore invalid recovery URLs on cold start.
       }
 
       if (cancelled) return;
@@ -431,7 +404,6 @@ export default function App() {
         try {
           await supabase.auth.signOut();
         } catch {
-          // Ignore startup cleanup errors; app will still route to auth flow.
         }
         await AsyncStorage.setItem('isAuthenticated', 'false');
         setIsAuthenticated(false);
@@ -443,7 +415,6 @@ export default function App() {
           new Promise<void>((resolve) => setTimeout(resolve, 4000)),
         ]);
       } catch {
-        /* ignore */
       }
       if (!cancelled) setAuthHydrated(true);
     };
@@ -459,7 +430,6 @@ export default function App() {
     const openCheckinIfNeeded = (url: string) => {
       const code = extractCheckinCodeFromText(url);
       if (!code || !isCheckinUrl(url)) return false;
-      // Stay on the current screen — only confirm + count the visit.
       void confirmCheckinFromCode(code, 'qr');
       return true;
     };
@@ -471,14 +441,12 @@ export default function App() {
           const ok = await applyOAuthCallbackFromUrl(supabase, url);
           if (ok) {
             await AsyncStorage.setItem('isAuthenticated', 'true');
-            // Force Main tabs on both iOS and Android as soon as the session exists.
             setIsAuthenticated(true);
             await markMobileLocationPromptPending();
             try {
               const { data } = await supabase.auth.getSession();
               setSessionUserId(data.session?.user?.id ?? null);
             } catch {
-              /* ignore */
             }
           }
         })();
@@ -539,7 +507,6 @@ export default function App() {
           try {
             await supabase.auth.signOut({ scope: 'local' });
           } catch {
-            // Best-effort; SDK may have already cleared storage.
           }
         }
         await AsyncStorage.setItem('isAuthenticated', 'false');
@@ -551,7 +518,6 @@ export default function App() {
           try {
             await supabase.auth.signOut({ scope: 'local' });
           } catch {
-            // Ignore; we only want to clear local auth state best-effort.
           }
         }
         setIsAuthenticated(false);
@@ -604,7 +570,6 @@ export default function App() {
           try {
             await supabase.auth.signOut({ scope: 'local' });
           } catch {
-            // Best-effort cleanup only.
           }
         }
         await AsyncStorage.setItem('isAuthenticated', 'false');
@@ -613,7 +578,6 @@ export default function App() {
         return;
       }
       if (error) {
-        // Transient refresh failure: keep optimistic flag until auth state settles.
         const value = await AsyncStorage.getItem('isAuthenticated');
         setIsAuthenticated(value === 'true');
         return;
@@ -626,14 +590,12 @@ export default function App() {
         try {
           await supabase.auth.signOut({ scope: 'local' });
         } catch {
-          // Best-effort cleanup only.
         }
       }
       setIsAuthenticated(false);
     }
   };
 
-  // Hide native splash once fonts are ready (don't wait forever on auth)
   useEffect(() => {
     if (fontsLoaded) {
       void SplashScreen.hideAsync().catch(() => undefined);
@@ -644,16 +606,22 @@ export default function App() {
     return null;
   }
 
-  // Brief logo while session is read — capped by init safety timeout
+  // Brief Tara, Cavite! wordmark while session is read — capped by init safety timeout
   if (!authHydrated) {
     return (
       <SafeAreaProvider>
         <View style={bundlingPageStyle.container}>
-          <Image
-            source={require('./assets/images/cavitour-logo.png')}
-            style={bundlingPageStyle.logo}
-            resizeMode="contain"
-          />
+          <View
+            style={bundlingPageStyle.wordmarkRow}
+            accessible
+            accessibilityRole="header"
+            accessibilityLabel="Tara, Cavite!"
+          >
+            <Text style={bundlingPageStyle.wordmark}>
+              <Text style={bundlingPageStyle.wordmarkAccent}>Tara</Text>
+              <Text style={bundlingPageStyle.wordmarkPrimary}>, Cavite!</Text>
+            </Text>
+          </View>
         </View>
       </SafeAreaProvider>
     );

@@ -109,9 +109,8 @@ const TerminalDetailScreen: React.FC = () => {
         message: `${terminal.name}\n${addressLine}`,
         title: terminal.name,
       });
-    } catch {
-      /* ignore */
-    }
+      } catch {
+      }
   };
 
   useEffect(() => {
@@ -156,7 +155,7 @@ const TerminalDetailScreen: React.FC = () => {
           setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         }
       } catch {
-        // Ignore location failures; personalization stays hidden.
+        /* empty */
       }
     })();
     return () => {

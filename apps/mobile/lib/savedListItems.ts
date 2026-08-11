@@ -12,12 +12,12 @@ async function resolveCanonicalPlaceId(
   placeRefId: string
 ): Promise<string | null> {
   const { data: byId, error: byIdError } = await client
-    .from('tourist_attractions')
-    .select('establishment_public_id')
-    .eq('establishment_public_id', placeRefId)
+    .from('places')
+    .select('id')
+    .eq('id', placeRefId)
     .maybeSingle();
   if (byIdError) throw byIdError;
-  if (byId?.establishment_public_id) return byId.establishment_public_id as string;
+  if (byId?.id) return byId.id as string;
   return null;
 }
 

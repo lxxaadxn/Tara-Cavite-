@@ -4,6 +4,7 @@ import { fetchDrivingRoute } from '../lib/fetchOsrmRoute';
 import { buildCommuterGuideSteps } from 'cavitour-shared/commuterGuideBuilder';
 import { planCommuterGuideForPlace } from '../lib/terminalTransitPlanner';
 import { fetchRouteRowsForTerminal } from '../lib/terminalsFromSupabase';
+import { googleMapsDirectionsUrl } from '../lib/osmUrls';
 import { supabase } from '../lib/supabase';
 import { CommuterGuideSteps } from './CommuterGuideSteps';
 
@@ -72,6 +73,7 @@ export function DirectionsPanel({
   locationStatus = null,
   fallbackDistanceKm,
   seedId = 'route',
+  onDestinationReached = null,
 }) {
   const [routeSubTab, setRouteSubTab] = useState('routeMain');
   const [osrmDriving, setOsrmDriving] = useState(null);
@@ -218,6 +220,14 @@ export function DirectionsPanel({
       ? { lat: destinationLat, lng: destinationLng }
       : null;
 
+  const openGoogleMaps = () => {
+    if (destinationLat == null || destinationLng == null) return;
+    const url = googleMapsDirectionsUrl(destinationLat, destinationLng, 'driving', userCoords);
+    if (url && url !== '#') {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  };
+
   return (
     <div className="overflow-hidden rounded-2xl border border-neutral-200/90 bg-white shadow-[0_4px_28px_rgba(0,0,0,0.05)]">
       <div className="border-t border-neutral-100 bg-neutral-50 px-4 py-5 sm:px-6 sm:py-6">
@@ -268,7 +278,8 @@ export function DirectionsPanel({
               {routeSubTab === 'stepGuide' && (
                 <div className="space-y-4">
                   <p className="text-xs leading-relaxed text-neutral-600">
-                    Main road toward this place first, then terminals nearest you, then signboards. {COMMUTER_DISCLAIMER}
+                    Main road toward this place first, then jeep or bus signboards along the corridor.{' '}
+                    {COMMUTER_DISCLAIMER}
                   </p>
                   <p className="text-xs text-neutral-500">{COMMUTER_FOOTNOTE}</p>
                   <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3.5">
@@ -277,8 +288,8 @@ export function DirectionsPanel({
                       loading={terminalPlanLoading && Boolean(userCoords)}
                       emptyMessage={
                         !userCoords
-                          ? 'Allow location access to see which terminal and signboards to use.'
-                          : 'No terminal data for this area yet.'
+                          ? 'Allow location access to build a corridor guide from where you are.'
+                          : 'No commute guide is available for this area yet.'
                       }
                     />
                   </div>
@@ -382,6 +393,30 @@ export function DirectionsPanel({
                             routeId={displayRoute?.id ?? 'main-road'}
                             lineColor={displayRoute?.color ?? '#7EA00E'}
                           />
+                        </div>
+                      ) : null}
+                      {destEnd ? (
+                        <button
+                          type="button"
+                          onClick={openGoogleMaps}
+                          className="mt-3 w-full rounded-lg bg-[#7EA00E] px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-[#6d8c0c]"
+                        >
+                          Open in Google Maps
+                        </button>
+                      ) : null}
+                      {typeof onDestinationReached === 'function' ? (
+                        <div className="mt-4 rounded-lg border border-neutral-200 bg-white px-3 py-3">
+                          <p className="text-xs leading-relaxed text-neutral-600">
+                            Arrived? Confirm with the establishment QR so this visit counts on admin Destinations and
+                            your Profile.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={onDestinationReached}
+                            className="mt-2 w-full rounded-lg bg-[#241D13] px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-neutral-800"
+                          >
+                            Destination Reached
+                          </button>
                         </div>
                       ) : null}
                     </div>

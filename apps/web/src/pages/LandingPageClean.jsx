@@ -9,7 +9,7 @@ import {
   buildMarketingStats,
   fetchPlacesWithMedia,
   formatStatCount,
-  pickFeaturedDestinations,
+  placesToDestinationCards,
   pickHeroPlace,
 } from '../lib/marketingPlaces';
 import { supabase } from '../lib/supabase';
@@ -42,8 +42,8 @@ const TRUST_CARDS = [
   },
   {
     icon: 'support',
-    title: 'Maps & terminal guides',
-    body: 'Find establishments on the map and check jeepney and bus terminal details.',
+    title: 'Maps & commute guides',
+    body: 'Find establishments on the map and follow jeepney and bus corridor tips.',
   },
 ];
 
@@ -182,7 +182,7 @@ export function LandingPageClean() {
         const places = await fetchPlacesWithMedia(supabase);
         if (cancelled) return;
 
-        setDestinations(pickFeaturedDestinations(places, { limit: 8 }));
+        setDestinations(placesToDestinationCards(places));
         setDestinationFilters(buildDestinationFilters(places));
         setHeroPlace(pickHeroPlace(places));
         setStats(buildMarketingStats(places));
@@ -380,8 +380,8 @@ export function LandingPageClean() {
                       CAVITE TOUR
                     </h1>
                     <p className="ct-fade-rise ct-delay-2 mt-4 max-w-xl text-sm text-white/90 md:text-base">
-                      Search the NTDP catalog, browse maps, save lists, follow curated routes, and check terminal
-                      guides — your Cavite travel companion in one place.
+                      Search the NTDP catalog, browse maps, save lists, and follow curated routes — your Cavite travel
+                      companion in one place.
                     </p>
 
                     <form
@@ -523,7 +523,7 @@ export function LandingPageClean() {
               })}
             </div>
           ) : null}
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
             {loading
               ? Array.from({ length: 4 }, (_, i) => <DestinationCardSkeleton key={i} />)
               : displayDestinations.map((d) => (

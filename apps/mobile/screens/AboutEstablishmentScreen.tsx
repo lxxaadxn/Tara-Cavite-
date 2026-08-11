@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,8 @@ import { SaveToListSheet, type SaveToListRow } from '../components/SaveToListShe
 import { Place, getItineraryEstablishments } from '../data/mockData';
 import { parsePlaceCoords } from '../lib/placeCoords';
 import { placeImageSource } from '../lib/placeImageSource';
+import { googleMapsDirectionsUrl } from '../lib/googleMapsDirections';
+import * as Location from 'expo-location';
 import { formatNtdpCategoryTagLabel, getEstablishmentAboutBody } from '../lib/ntdpDisplayLabels';
 import { fetchPlaceById } from '../lib/placesFromSupabase';
 import { supabase } from '../lib/supabase';
@@ -41,16 +43,64 @@ import {
   SAVE_TO_LIST_CREATE_BUSY_ID,
   suggestedSaveListName,
 } from '../lib/saveToListModalHelpers';
-import { fetchPlaceCheckinDisplay, recordCheckinByCode } from 'cavitour-shared/placeCheckin';
+import { fetchPlaceCheckinDisplay } from 'cavitour-shared/placeCheckin';
 import { buildMobileCheckinDeepLink, getMobileCheckinWebOrigin } from '../lib/checkinDeepLink';
-import { thankYouVisitMessage } from '../lib/confirmCheckin';
+import { confirmCheckinFromCode } from '../lib/confirmCheckin';
 import { CheckinScannerModal, ScanCheckinButton } from '../components/CheckinScannerModal';
 import { CheckinQrMark } from '../components/CheckinQrMark';
+import { PlaceReviewForm } from '../components/PlaceReviewForm';
+import { ReviewCardsList } from '../components/ReviewCardsList';
+import { fetchPlaceReviews, type PlaceReview } from '../lib/placeReviews';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { User } from '@supabase/supabase-js';
+
 const GREEN = '#7EA00E';
 const TEAL = '#1F4F59';
 const TITLE = '#241D13';
 const MUTED = '#868686';
 const WHITE = '#FFFFFF';
+const OLIVE = '#7EA00E';
+const STAR_FULL = '#FFC012';
+const STAR_EMPTY = '#E5E5E5';
+
+function sessionReviewsKey(placeId: string) {
+  return `cavitour-place-reviews:${placeId}`;
+}
+
+async function loadSessionReviews(placeId: string): Promise<PlaceReview[]> {
+  try {
+    const raw = await AsyncStorage.getItem(sessionReviewsKey(placeId));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as PlaceReview[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+async function saveSessionReviews(placeId: string, reviews: PlaceReview[]) {
+  try {
+    await AsyncStorage.setItem(sessionReviewsKey(placeId), JSON.stringify(reviews.slice(0, 40)));
+  } catch {
+    /* empty */
+  }
+}
+
+function buildReviewStats(ratings: number[]) {
+  const list = ratings.map((r) => Math.min(5, Math.max(1, Math.round(Number(r)))));
+  const total = list.length;
+  const counts = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+  for (const s of list) counts[s as 1 | 2 | 3 | 4 | 5] += 1;
+  const avg = total ? list.reduce((a, s) => a + s, 0) / total : 0;
+  return {
+    total,
+    avgRating: Math.round(avg * 10) / 10,
+    breakdown: [5, 4, 3, 2, 1].map((stars) => ({
+      stars,
+      pct: total > 0 ? Math.round((counts[stars as 1 | 2 | 3 | 4 | 5] / total) * 100) : 0,
+    })),
+  };
+}
 const PAGE_BG = '#FFFFFF';
 const LIST_PAGE_BG = '#F5F5F6';
 const CARD_BORDER = 'rgba(229, 229, 229, 0.9)';
@@ -61,6 +111,7 @@ const NEUTRAL_MUTED = '#737373';
 export type AboutEstablishmentParams = {
   place?: Place;
   placeId?: string;
+  confirmArrival?: boolean;
 };
 
 function imageSourceKey(src: ImageSourcePropType): string {
@@ -216,6 +267,12 @@ export default function AboutEstablishmentScreen() {
   } | null>(null);
   const [checkinBusy, setCheckinBusy] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [tapQrReveal, setTapQrReveal] = useState(false);
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [reviewNickname, setReviewNickname] = useState('');
+  const [publishedReviews, setPublishedReviews] = useState<PlaceReview[]>([]);
+  const [sessionReviews, setSessionReviews] = useState<PlaceReview[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
 
   useEffect(() => {
     if (routePlace) {
@@ -276,7 +333,6 @@ export default function AboutEstablishmentScreen() {
           if (!cancelled) setCheckinInfo(null);
           return;
         }
-        // Poster QR encodes deep link / web URL. Same-phone check-in uses Check in here (no camera).
         const deep = buildMobileCheckinDeepLink(info.code);
         setCheckinInfo({
           code: info.code,
@@ -292,31 +348,82 @@ export default function AboutEstablishmentScreen() {
     };
   }, [place?.id, isItinerary]);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (cancelled) return;
+      setAuthUser(user);
+      if (!user) {
+        setReviewNickname('');
+        return;
+      }
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('username')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (cancelled) return;
+      setReviewNickname(
+        profile?.username?.trim() || user.email?.split('@')[0] || 'Traveler'
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [place?.id]);
+
+  useEffect(() => {
+    const id = place?.id;
+    if (!id || isItinerary || !isSupabasePlaceId(id)) {
+      setPublishedReviews([]);
+      setSessionReviews([]);
+      return;
+    }
+    let cancelled = false;
+    setReviewsLoading(true);
+    void (async () => {
+      try {
+        const [rows, local] = await Promise.all([
+          fetchPlaceReviews(supabase, id),
+          loadSessionReviews(id),
+        ]);
+        if (cancelled) return;
+        setPublishedReviews(rows);
+        setSessionReviews(local);
+      } catch {
+        if (!cancelled) {
+          setPublishedReviews([]);
+          setSessionReviews(await loadSessionReviews(id));
+        }
+      } finally {
+        if (!cancelled) setReviewsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [place?.id, isItinerary]);
+
   const onCheckinHere = useCallback(async () => {
     if (!checkinInfo?.code) {
-      Alert.alert('Check-in', 'No QR for this establishment yet. Run the check-in SQL in Supabase.');
+      Alert.alert('Check-in', 'No QR for this establishment yet.');
       return;
     }
     setCheckinBusy(true);
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        Alert.alert('Sign in', 'Sign in to check in at this establishment.');
-        return;
-      }
-      const result = await recordCheckinByCode(supabase, checkinInfo.code, 'qr');
-      Alert.alert(
-        result.alreadyCheckedIn ? 'Already checked in' : 'Thank you for visiting!',
-        thankYouVisitMessage(result.placeName, result.alreadyCheckedIn)
-      );
-    } catch (e) {
-      Alert.alert('Check-in', e instanceof Error ? e.message : 'Could not check in.');
+      await confirmCheckinFromCode(checkinInfo.code, 'qr', {
+        expectedPlaceId: place?.id,
+        expectedPlaceName: place?.name,
+        requireExpectedPlace: Boolean(routeParams.confirmArrival),
+        recordAsDestinationReached: true,
+      });
     } finally {
       setCheckinBusy(false);
     }
-  }, [checkinInfo?.code]);
+  }, [checkinInfo?.code, place?.id, place?.name, routeParams.confirmArrival]);
 
   const categoryLabel = useMemo(() => (place ? getCategoryLabel(place) : ''), [place]);
   const photoSlides = useMemo(() => (place ? collectPhotoSlides(place) : []), [place]);
@@ -335,6 +442,125 @@ export default function AboutEstablishmentScreen() {
       place?.social_instagram ||
       place?.social_twitter
   );
+
+  const visitorReviews = useMemo(() => {
+    const publishedIds = new Set(publishedReviews.map((r) => r.id));
+    const sessionOnly = sessionReviews.filter((r) => !publishedIds.has(r.id));
+    return [...publishedReviews, ...sessionOnly].sort((a, b) => b.at - a.at);
+  }, [publishedReviews, sessionReviews]);
+
+  const reviewStats = useMemo(
+    () => buildReviewStats(visitorReviews.map((r) => r.rating)),
+    [visitorReviews]
+  );
+
+  const handleReviewSubmitted = useCallback(
+    (review: PlaceReview) => {
+      if (!place?.id) return;
+      if (review.userId) {
+        setPublishedReviews((prev) => {
+          const without = prev.filter((r) => r.userId !== review.userId && r.id !== review.id);
+          return [review, ...without];
+        });
+        setSessionReviews((prev) => prev.filter((r) => r.userId !== review.userId));
+      } else {
+        setSessionReviews((prev) => {
+          const next = [review, ...prev.filter((r) => r.id !== review.id)];
+          void saveSessionReviews(place.id, next);
+          return next;
+        });
+      }
+    },
+    [place?.id]
+  );
+
+  const refreshSavedState = useCallback(async () => {
+    if (!place || isItinerary) {
+      setSaved(false);
+      setCheckingSaved(false);
+      return;
+    }
+    setCheckingSaved(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setSaved(false);
+        return;
+      }
+      if (!isSupabasePlaceId(place.id)) {
+        setSaved(false);
+        return;
+      }
+      const yes = await isPlaceSavedByUser(supabase, user.id, place.id);
+      setSaved(yes);
+    } catch {
+      setSaved(false);
+    } finally {
+      setCheckingSaved(false);
+    }
+  }, [place?.id, isItinerary, place]);
+
+  useEffect(() => {
+    void refreshSavedState();
+  }, [refreshSavedState]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshSavedState();
+    }, [refreshSavedState])
+  );
+
+  const scrollRef = useRef<ScrollView>(null);
+  const confirmArrivalShownRef = useRef(false);
+
+  const openArrivalCheckinOptions = useCallback(() => {
+    if (!place) return;
+    Alert.alert(
+      'Destination Reached',
+      `Confirm your visit at ${place.name}. Choose Tap QR to show the code on this page, Scan QR for a printed poster, or Enter Code.`,
+      [
+        {
+          text: 'Tap QR',
+          onPress: () => {
+            setTapQrReveal(true);
+            setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+          },
+        },
+        {
+          text: 'Scan QR',
+          onPress: () => setScannerOpen(true),
+        },
+        {
+          text: 'Enter Code',
+          onPress: () => {
+            (navigation as { navigate: (name: string, params: object) => void }).navigate('Checkin', {
+              fromDestinationReached: true,
+              expectedPlaceId: place.id,
+              expectedPlaceName: place.name,
+            });
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  }, [navigation, place]);
+
+  useEffect(() => {
+    confirmArrivalShownRef.current = false;
+    setTapQrReveal(false);
+  }, [place?.id]);
+
+  useEffect(() => {
+    if (!routeParams.confirmArrival || !place?.id || confirmArrivalShownRef.current) return;
+    confirmArrivalShownRef.current = true;
+    const t = setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+      openArrivalCheckinOptions();
+    }, 450);
+    return () => clearTimeout(t);
+  }, [routeParams.confirmArrival, place?.id, openArrivalCheckinOptions]);
 
   if (!place && profileLoading) {
     return (
@@ -375,47 +601,57 @@ export default function AboutEstablishmentScreen() {
       return;
     }
     const placeForNav: Place = { ...place, latitude: c.lat, longitude: c.lng };
-    (navigation as { navigate: (name: string, params: object) => void }).navigate('Directions', {
-      place: placeForNav,
-      caviTrip: true,
-    });
+
+    const goInApp = () => {
+      (navigation as { navigate: (name: string, params: object) => void }).navigate('Directions', {
+        place: placeForNav,
+        caviTrip: true,
+      });
+    };
+
+    const openGoogleMaps = async () => {
+      let originLat: number | null = null;
+      let originLng: number | null = null;
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const pos = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+          originLat = pos.coords.latitude;
+          originLng = pos.coords.longitude;
+        }
+      } catch {
+      }
+
+      const url = googleMapsDirectionsUrl(c.lat, c.lng, {
+        mode: 'driving',
+        originLat,
+        originLng,
+      });
+      if (!url) {
+        Alert.alert('Could not open Maps', 'Missing destination coordinates.');
+        goInApp();
+        return;
+      }
+      try {
+        await Linking.openURL(url);
+      } catch {
+        Alert.alert('Could not open Google Maps', 'Open the in-app trip instead, or install Google Maps.');
+      }
+      goInApp();
+    };
+
+    Alert.alert(
+      'Start CaviTrip',
+      `Open Google Maps with directions from your location to ${place.name}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Stay in app', onPress: goInApp },
+        { text: 'Open Google Maps', onPress: () => void openGoogleMaps() },
+      ]
+    );
   };
-
-  const refreshSavedState = useCallback(async () => {
-    if (isItinerary) {
-      setSaved(false);
-      setCheckingSaved(false);
-      return;
-    }
-    setCheckingSaved(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setSaved(false);
-        return;
-      }
-      if (!isSupabasePlaceId(place.id)) {
-        setSaved(false);
-        return;
-      }
-      const yes = await isPlaceSavedByUser(supabase, user.id, place.id);
-      setSaved(yes);
-    } catch {
-      setSaved(false);
-    } finally {
-      setCheckingSaved(false);
-    }
-  }, [place.id, isItinerary]);
-
-  useEffect(() => {
-    refreshSavedState();
-  }, [refreshSavedState]);
-
-  useFocusEffect(
-    useCallback(() => {
-      refreshSavedState();
-    }, [refreshSavedState])
-  );
 
   const saveItemToList = async (listId: string, listName: string) => {
     if (isItinerary) {
@@ -592,6 +828,7 @@ export default function AboutEstablishmentScreen() {
   return (
     <View style={[styles.root, { backgroundColor: PAGE_BG }]}>
       <ScrollView
+        ref={scrollRef}
         style={styles.scroll}
         contentContainerStyle={[
           styles.scrollContent,
@@ -715,52 +952,154 @@ export default function AboutEstablishmentScreen() {
           </View>
         </View>
 
+        {!isItinerary ? (
+          <View style={styles.reviewsSection}>
+            <Text style={styles.reviewsTitle}>Reviews</Text>
+            <Text style={styles.reviewsSubtitle}>
+              Read what visitors shared — or add your own. Sample reviews show when no one has posted yet.
+            </Text>
+
+            {isSupabasePlaceId(place.id) ? (
+              <PlaceReviewForm
+                placeId={place.id}
+                placeName={place.name}
+                signedIn={Boolean(authUser)}
+                defaultNickname={reviewNickname}
+                onSubmitted={handleReviewSubmitted}
+              />
+            ) : null}
+
+            {reviewStats.total > 0 ? (
+              <View style={styles.reviewStatsCard}>
+                <View style={styles.reviewOverall}>
+                  <Text style={styles.reviewOverallValue}>{reviewStats.avgRating.toFixed(1)}</Text>
+                  <View style={styles.reviewOverallStars}>
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <Text
+                        key={i}
+                        style={{
+                          color: i <= Math.round(reviewStats.avgRating) ? STAR_FULL : STAR_EMPTY,
+                          fontSize: 16,
+                        }}
+                      >
+                        ★
+                      </Text>
+                    ))}
+                  </View>
+                  <Text style={styles.reviewOverallCount}>
+                    {reviewStats.total} review{reviewStats.total === 1 ? '' : 's'}
+                  </Text>
+                </View>
+                <View style={styles.reviewBreakdown}>
+                  {reviewStats.breakdown.map((row) => (
+                    <View key={row.stars} style={styles.reviewBreakdownRow}>
+                      <Text style={styles.reviewBreakdownLabel}>{row.stars}</Text>
+                      <View style={styles.reviewBreakdownTrack}>
+                        <View
+                          style={[styles.reviewBreakdownFill, { width: `${row.pct}%` }]}
+                        />
+                      </View>
+                      <Text style={styles.reviewBreakdownPct}>{row.pct}%</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ) : null}
+
+            {reviewsLoading ? (
+              <ActivityIndicator style={{ marginTop: 16 }} color={OLIVE} />
+            ) : (
+              <View style={{ marginTop: 16 }}>
+                <ReviewCardsList
+                  placeName={place.name}
+                  ntdpCategory={place.ntdp_category}
+                  reviews={visitorReviews}
+                  emptyAsSamples
+                />
+              </View>
+            )}
+          </View>
+        ) : null}
+
         <View style={styles.actionsBlock}>
           {checkinInfo ? (
             <View style={styles.qrCard}>
-              <Text style={styles.qrTitle}>Check in at this place</Text>
+              <Text style={styles.qrTitle}>
+                {routeParams.confirmArrival || tapQrReveal
+                  ? 'Confirm arrival — check in'
+                  : 'Check in at this place'}
+              </Text>
               <Text style={styles.qrHint}>
-                You are already on this establishment. Tap Check in here to count your visit — the camera
-                cannot scan a QR on this same phone screen.
+                {tapQrReveal
+                  ? 'Tap the QR code below to count your visit. You can also scan a printed poster or enter the code.'
+                  : routeParams.confirmArrival
+                    ? 'Use the Destination Reached options, or scan a printed poster / enter the code below.'
+                    : 'Tap the QR code to count your visit on this phone. Use Scan QR only for a printed poster.'}
               </Text>
               <TouchableOpacity
                 onPress={() => void onCheckinHere()}
                 disabled={checkinBusy}
                 activeOpacity={0.9}
                 accessibilityRole="button"
-                accessibilityLabel="Tap to check in at this establishment"
+                accessibilityLabel="Tap the QR code to check in"
                 style={{ alignSelf: 'center' }}
               >
-                <CheckinQrMark value={checkinInfo.qrValue} size={200} />
-              </TouchableOpacity>
-              <Text style={styles.qrCodeText}>{checkinInfo.code}</Text>
-              <TouchableOpacity
-                onPress={() => void onCheckinHere()}
-                style={styles.checkinButton}
-                activeOpacity={0.92}
-                disabled={checkinBusy}
-                accessibilityRole="button"
-                accessibilityLabel="Check in at this establishment"
-              >
                 {checkinBusy ? (
-                  <ActivityIndicator color={TEAL} />
+                  <ActivityIndicator style={{ marginVertical: 80 }} color={TEAL} />
                 ) : (
-                  <Text style={styles.checkinButtonLabel}>CHECK IN HERE</Text>
+                  <CheckinQrMark value={checkinInfo.qrValue} size={200} />
                 )}
               </TouchableOpacity>
-              <Text style={styles.qrPosterHint}>
-                Have a printed poster for a different place? Use Scan poster QR below.
-              </Text>
-              <ScanCheckinButton onPress={() => setScannerOpen(true)} label="Scan poster QR" />
+              <Text style={styles.qrCodeText}>{checkinInfo.code}</Text>
+              <ScanCheckinButton onPress={() => setScannerOpen(true)} label="Scan QR" />
+              <TouchableOpacity
+                onPress={() => {
+                  (navigation as { navigate: (name: string, params: object) => void }).navigate('Checkin', {
+                    fromDestinationReached: Boolean(routeParams.confirmArrival || tapQrReveal),
+                    expectedPlaceId: place.id,
+                    expectedPlaceName: place.name,
+                  });
+                }}
+                style={[styles.checkinButton, { marginTop: 10 }]}
+                activeOpacity={0.92}
+                accessibilityRole="button"
+                accessibilityLabel="Enter Code"
+              >
+                <Text style={styles.checkinButtonLabel}>ENTER CODE</Text>
+              </TouchableOpacity>
+              {routeParams.confirmArrival ? (
+                <TouchableOpacity
+                  onPress={() => navigation.goBack()}
+                  style={{ marginTop: 12, alignSelf: 'center', padding: 10 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel"
+                >
+                  <Text style={{ fontFamily: 'Poppins_500Medium', color: MUTED }}>Cancel</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           ) : (
             <View style={styles.qrCard}>
               <Text style={styles.qrTitle}>Check in with QR</Text>
               <Text style={styles.qrHint}>
-                Point your camera at a printed establishment poster QR. Scanning the QR on this phone
-                screen will not work — open that place and tap Check in here instead.
+                Point your camera at a printed establishment poster QR, or enter the code.
               </Text>
-              <ScanCheckinButton onPress={() => setScannerOpen(true)} label="Scan poster QR" />
+              <ScanCheckinButton onPress={() => setScannerOpen(true)} label="Scan QR" />
+              <TouchableOpacity
+                onPress={() => {
+                  (navigation as { navigate: (name: string, params: object) => void }).navigate('Checkin', {
+                    fromDestinationReached: Boolean(routeParams.confirmArrival),
+                    expectedPlaceId: place.id,
+                    expectedPlaceName: place.name,
+                  });
+                }}
+                style={[styles.checkinButton, { marginTop: 12 }]}
+                activeOpacity={0.92}
+                accessibilityRole="button"
+                accessibilityLabel="Enter Code"
+              >
+                <Text style={styles.checkinButtonLabel}>ENTER CODE</Text>
+              </TouchableOpacity>
             </View>
           )}
           <TouchableOpacity
@@ -787,7 +1126,17 @@ export default function AboutEstablishmentScreen() {
         busyListId={saveListBusyId}
         countLabel={isItinerary ? 'items' : 'places'}
       />
-      <CheckinScannerModal visible={scannerOpen} onClose={() => setScannerOpen(false)} />
+      <CheckinScannerModal
+        visible={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        title={routeParams.confirmArrival ? 'Confirm arrival — scan QR' : 'Scan poster QR'}
+        checkinOptions={{
+          expectedPlaceId: place.id,
+          expectedPlaceName: place.name,
+          requireExpectedPlace: Boolean(routeParams.confirmArrival),
+          recordAsDestinationReached: true,
+        }}
+      />
     </View>
   );
 }
@@ -1019,6 +1368,82 @@ const styles = StyleSheet.create({
   actionsBlock: {
     marginTop: 20,
     gap: 12,
+  },
+  reviewsSection: {
+    marginTop: 22,
+    gap: 12,
+  },
+  reviewsTitle: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 18,
+    color: TITLE,
+  },
+  reviewsSubtitle: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    color: MUTED,
+    marginBottom: 4,
+  },
+  reviewStatsCard: {
+    marginTop: 4,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(122, 120, 120, 0.18)',
+    backgroundColor: WHITE,
+    padding: 16,
+    gap: 16,
+  },
+  reviewOverall: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  reviewOverallValue: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 36,
+    color: OLIVE,
+  },
+  reviewOverallStars: {
+    flexDirection: 'row',
+    gap: 2,
+  },
+  reviewOverallCount: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: MUTED,
+  },
+  reviewBreakdown: {
+    gap: 8,
+  },
+  reviewBreakdownRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  reviewBreakdownLabel: {
+    width: 14,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: MUTED,
+  },
+  reviewBreakdownTrack: {
+    flex: 1,
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: '#F0F0F0',
+    overflow: 'hidden',
+  },
+  reviewBreakdownFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: OLIVE,
+  },
+  reviewBreakdownPct: {
+    width: 36,
+    textAlign: 'right',
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    color: MUTED,
   },
   qrCard: {
     alignSelf: 'stretch',

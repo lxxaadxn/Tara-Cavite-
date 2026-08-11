@@ -188,7 +188,6 @@ const SignInScreen: React.FC = () => {
       setFormError(SUPABASE_ENV_MISSING_MESSAGE);
       return;
     }
-    // Same as web: show consent first; OAuth starts only on Continue.
     setShowGoogleConsent(true);
   };
 

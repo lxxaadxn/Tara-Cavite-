@@ -1,5 +1,3 @@
-/** Curated filter options aligned with mobile dashboard keys + Figma labels. */
-
 export const WEB_CATEGORY_OPTIONS = [
   { key: 'cat-nature', label: 'Nature Tourism', shortLabel: 'Nature', icon: 'nature' },
   { key: 'cat-mice', label: 'MICE & Events', shortLabel: 'MICE', icon: 'mice' },
@@ -36,7 +34,6 @@ export const WEB_MUNICIPALITY_OPTIONS = [
 
 export const WEB_LOCATION_OPTIONS = [...WEB_CITY_OPTIONS, ...WEB_MUNICIPALITY_OPTIONS];
 
-/** Key → label for location keyword matching (includes city-gma under municipalities). */
 export const FILTER_OPTION_LABEL_BY_KEY = (() => {
   const m = {};
   for (const o of [...WEB_CITY_OPTIONS, ...WEB_MUNICIPALITY_OPTIONS, ...WEB_CATEGORY_OPTIONS]) {

@@ -19,8 +19,6 @@ import { PlaceDetailPage } from './pages/PlaceDetailPage';
 import { SavedPage } from './pages/SavedPage';
 import { ItineraryPage } from './pages/ItineraryPage';
 import { ItineraryDetailPage } from './pages/ItineraryDetailPage';
-import { TerminalsPage } from './pages/TerminalsPage';
-import { TerminalDetailPage } from './pages/TerminalDetailPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { Layout as AdminLayout } from '../../admin/src/components/Layout';
 import {
@@ -85,7 +83,6 @@ export default function App() {
         <Route path="/auth/google" element={<AuthGoogleLegacyRedirect />} />
         <Route path="/auth/mobile-callback" element={<MobileExpoOAuthBridgePage />} />
 
-        {/* Admin (apps/admin) — same dev server as marketing web */}
         <Route path="/admin" element={<AdminEmbedRoot />}>
           <Route index element={<Navigate to="web/dashboard" replace />} />
           <Route path="login" element={<Navigate to="/" replace />} />
@@ -127,22 +124,8 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/terminals"
-          element={
-            <ProtectedRoute>
-              <TerminalsPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/terminals/:id"
-          element={
-            <ProtectedRoute>
-              <TerminalDetailPage />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/terminals" element={<Navigate to="/search" replace />} />
+        <Route path="/terminals/:id" element={<Navigate to="/search" replace />} />
         <Route
           path="/profile"
           element={

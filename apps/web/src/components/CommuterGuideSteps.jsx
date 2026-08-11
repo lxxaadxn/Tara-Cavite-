@@ -1,9 +1,9 @@
 /**
- * Numbered commuter guide (terminals, signboards, last mile) — not OSRM driving turns.
+ * Numbered commuter guide (corridor, signboards, last mile) — not OSRM driving turns.
  */
 export function CommuterGuideSteps({ steps, loading, emptyMessage }) {
   if (loading) {
-    return <p className="text-sm text-neutral-600">Building commuter guide from terminals and routes…</p>;
+    return <p className="text-sm text-neutral-600">Building commuter guide…</p>;
   }
 
   if (!steps?.length) {

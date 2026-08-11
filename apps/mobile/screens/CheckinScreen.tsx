@@ -13,21 +13,27 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import {
   extractCheckinCodeFromText,
   normalizeCheckinCode,
-  recordCheckinByCode,
 } from 'cavitour-shared/placeCheckin';
 import { Header } from '../components/Header';
-import { savePendingCheckinCode } from '../lib/checkinDeepLink';
-import { supabase } from '../lib/supabase';
+import { confirmCheckinFromCode } from '../lib/confirmCheckin';
 
 const TEAL = '#1f4f59';
 const MUTED = '#737373';
 const BORDER = '#e5e5e5';
 
+type CheckinRouteParams = {
+  code?: string;
+  fromDestinationReached?: boolean;
+  expectedPlaceId?: string;
+  expectedPlaceName?: string;
+  placeImage?: string;
+};
+
 const CheckinScreen: React.FC = () => {
   const navigation = useNavigation();
   const route = useRoute();
-  const initial =
-    normalizeCheckinCode((route.params as { code?: string } | undefined)?.code || '') || '';
+  const params = (route.params as CheckinRouteParams | undefined) || {};
+  const initial = normalizeCheckinCode(params.code || '') || '';
   const [code, setCode] = useState(initial);
   const [busy, setBusy] = useState(false);
   const autoRan = useRef(false);
@@ -41,33 +47,27 @@ const CheckinScreen: React.FC = () => {
       }
       setBusy(true);
       try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
-          await savePendingCheckinCode(normalized);
-          Alert.alert('Sign in required', 'Sign in to count this visit, then we will finish check-in.', [
-            { text: 'OK' },
-          ]);
-          return;
-        }
-        const result = await recordCheckinByCode(supabase, normalized, source);
-        Alert.alert(
-          result.alreadyCheckedIn ? 'Already checked in' : 'Visit recorded',
-          result.alreadyCheckedIn
-            ? `You already checked in today at ${result.placeName}.`
-            : `Your visit at ${result.placeName} was counted for admin analytics.`
-        );
-        if (navigation.canGoBack()) {
+        const ok = await confirmCheckinFromCode(normalized, source, {
+          expectedPlaceId: params.expectedPlaceId,
+          expectedPlaceName: params.expectedPlaceName,
+          placeImage: params.placeImage,
+          requireExpectedPlace: Boolean(params.fromDestinationReached && params.expectedPlaceName),
+          recordAsDestinationReached: true,
+        });
+        if (ok && navigation.canGoBack()) {
           navigation.goBack();
         }
-      } catch (e) {
-        Alert.alert('Check-in', e instanceof Error ? e.message : 'Could not check in.');
       } finally {
         setBusy(false);
       }
     },
-    [navigation]
+    [
+      navigation,
+      params.expectedPlaceId,
+      params.expectedPlaceName,
+      params.fromDestinationReached,
+      params.placeImage,
+    ]
   );
 
   useEffect(() => {
@@ -79,11 +79,17 @@ const CheckinScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
-      <Header title="Check in" showBack showNotification={false} darkBackground />
+      <Header
+        title={params.fromDestinationReached ? 'Confirm arrival' : 'Check in'}
+        showBack
+        showNotification={false}
+        darkBackground
+      />
       <View style={styles.body}>
         <Text style={styles.hint}>
-          Scan the establishment QR with your camera (opens this screen) or type its unique code. Each QR
-          is unique per business.
+          {params.fromDestinationReached && params.expectedPlaceName
+            ? `Scan or type the QR code for ${params.expectedPlaceName} to record Destination Reached on admin Destinations and your Profile.`
+            : 'Scan the establishment QR with your camera (opens this screen) or type its unique code. Each QR is unique per business.'}
         </Text>
         <Text style={styles.label}>Check-in code</Text>
         <TextInput

@@ -27,7 +27,6 @@ function stub(title: string, description: string, bullets: string[]) {
   return <AdminPlaceholder title={title} description={description} bullets={bullets} />;
 }
 
-/** Child routes for Layout — relative paths like web/dashboard. */
 export function adminLayoutChildRoutes() {
   return [
     <Route key="idx" index element={<Navigate to="web/dashboard" replace />} />,
@@ -235,7 +234,6 @@ type AdminAuthGateProps = {
   loginPath?: string;
 };
 
-/** Renders Outlet when an allowed admin session exists; otherwise redirects. */
 export function AdminAuthGate({ loginPath = '/admin/login' }: AdminAuthGateProps) {
   const { session, loading } = useAuth();
 
@@ -254,7 +252,6 @@ export function AdminAuthGate({ loginPath = '/admin/login' }: AdminAuthGateProps
   return <Outlet />;
 }
 
-/** Providers + shell for admin mounted under /admin on the marketing web app. */
 export function AdminEmbedRoot() {
   return (
     <div className="admin-embed-mount">

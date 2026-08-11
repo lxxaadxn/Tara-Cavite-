@@ -1,4 +1,3 @@
-/** Primary admin sections (legacy top tabs — kept for AdminMainTabs). */
 export const MAIN_ADMIN_NAV = [
   { to: '/web/dashboard', label: 'Dashboard', icon: 'dashboard' as const },
   { to: '/web/users', label: 'Users', icon: 'users' as const },
@@ -8,7 +7,6 @@ export const MAIN_ADMIN_NAV = [
 
 export const MORE_ADMIN_NAV = [{ to: '/web/terminals', label: 'Terminals', icon: 'bus' as const }] as const;
 
-/** Recursive sidebar node: leaf has `to`, group has `children`. */
 export type AdminNavNode = {
   key: string;
   label: string;
@@ -17,10 +15,6 @@ export type AdminNavNode = {
   children?: AdminNavNode[];
 };
 
-/**
- * Dashboard sidebar:
- * Analytics → Tourism → Business → Transportation → Itinerary → Map → Rewards
- */
 export const ADMIN_NAV: AdminNavNode[] = [
   { key: 'analytics', label: 'Analytics', icon: 'analytics', to: '/web/dashboard' },
   {
@@ -105,7 +99,6 @@ export const ADMIN_NAV: AdminNavNode[] = [
   },
 ];
 
-/** Collect every leaf path under a node (for active-parent expand). */
 export function collectNavPaths(node: AdminNavNode): string[] {
   if (node.to) return [node.to];
   return (node.children ?? []).flatMap(collectNavPaths);

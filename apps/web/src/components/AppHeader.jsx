@@ -7,8 +7,6 @@ const olive = '#7ea00e';
 function navMatch(pathname, to) {
     if (to === '/search')
         return pathname === '/search' || pathname.startsWith('/place/');
-    if (to === '/terminals')
-        return pathname === '/terminals' || pathname.startsWith('/terminals/');
     return pathname === to || pathname.startsWith(`${to}/`);
 }
 export function AppHeader() {
@@ -70,7 +68,6 @@ export function AppHeader() {
         { to: '/search', label: 'Search' },
         { to: '/saved', label: 'Saved' },
         { to: '/itinerary', label: 'Itinerary' },
-        { to: '/terminals', label: 'Terminals' },
     ];
     return (<header className="sticky top-0 z-40 bg-white border-b border-neutral-200/80">
       <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 h-[72px] flex items-center justify-between gap-4">

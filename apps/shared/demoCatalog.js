@@ -1,7 +1,3 @@
-/**
- * Matched offline/demo establishments for web + mobile when Supabase is unavailable.
- * Shape matches `v_cavite_establishments` rows (see migration 20260510120004).
- */
 export const DEMO_ESTABLISHMENT_ROWS = [
   {
     id: 'demo-cafe-agapita',

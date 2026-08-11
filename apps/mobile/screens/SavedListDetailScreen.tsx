@@ -14,9 +14,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { JamIcon } from '../components/JamIcon';
-import { Place, mockTerminals, mockItineraries, type Terminal, type ItineraryCard } from '../data/mockData';
+import { Place, mockItineraries, type ItineraryCard } from '../data/mockData';
 import { supabase } from '../lib/supabase';
-import { fetchTerminalsFromSupabase } from '../lib/terminalsFromSupabase';
 
 const GREEN = '#7EA00E';
 const TEAL = '#1F4F59';
@@ -28,7 +27,7 @@ const PLACEHOLDER_INPUT = '#B3AAAA';
 const H_PAD = 16;
 
 const SAVED_PLACES_SELECT =
-  'establishment_public_id, ta_name, address, type, hours, latitude, longitude, picture, description, ntdp_category, city_mun';
+  'id, name, address, type, hours, latitude, longitude, image_url, description, ntdp_category, city_mun';
 
 export type SavedListDetailParams = {
   listId: string;
@@ -41,14 +40,13 @@ export type SavedListDetailParams = {
   };
 };
 
-type SavedKind = 'establishment' | 'terminal' | 'itinerary';
+type SavedKind = 'establishment' | 'itinerary';
 
 type SavedRow = {
   kind: SavedKind;
   key: string;
   title: string;
   place?: Place;
-  terminal?: Terminal;
   itinerary?: ItineraryCard;
 };
 
@@ -59,8 +57,6 @@ function rowIconForKind(kind: SavedKind) {
   switch (kind) {
     case 'establishment':
       return <JamIcon ionicon="business" size={24} color={color} />;
-    case 'terminal':
-      return <JamIcon ionicon="bus" size={24} color={color} />;
     default:
       return <JamIcon ionicon="map-outline" size={24} color={color} />;
   }
@@ -69,7 +65,6 @@ function rowIconForKind(kind: SavedKind) {
 const FILTER_OPTIONS: { key: TypeFilter; label: string }[] = [
   { key: 'all', label: 'All saves' },
   { key: 'establishment', label: 'Establishments' },
-  { key: 'terminal', label: 'Terminals' },
   { key: 'itinerary', label: 'Itineraries' },
 ];
 
@@ -94,10 +89,6 @@ export default function SavedListDetailScreen() {
         .eq('list_id', listId);
       if (placeLinkErr) throw placeLinkErr;
 
-      const { data: termLinks, error: termErr } = await supabase
-        .from('saved_list_terminal_items')
-        .select('terminal_ref')
-        .eq('list_id', listId);
       const { data: itinLinks, error: itinErr } = await supabase
         .from('saved_list_itinerary_items')
         .select('itinerary_ref')
@@ -108,35 +99,35 @@ export default function SavedListDetailScreen() {
       const placeIds = (placeLinks ?? []).map((r) => (r as { place_id: string }).place_id);
       if (placeIds.length > 0) {
         const { data: pRows, error } = await supabase
-          .from('v_tourist_attractions_catalog')
+          .from('places')
           .select(SAVED_PLACES_SELECT)
-          .in('establishment_public_id', placeIds);
+          .in('id', placeIds);
         if (error) throw error;
         for (const row of pRows ?? []) {
           const placeRow = row as {
-            establishment_public_id: string;
-            ta_name: string;
+            id: string;
+            name: string;
             address: string;
             type: string | null;
             hours: string | null;
             latitude: number | null;
             longitude: number | null;
-            picture: string | null;
+            image_url: string | null;
             description: string | null;
             ntdp_category: string | null;
             city_mun: string | null;
           };
           if (placeRow.latitude == null || placeRow.longitude == null) continue;
           const p: Place = {
-            id: placeRow.establishment_public_id,
-            name: placeRow.ta_name,
+            id: placeRow.id,
+            name: placeRow.name,
             address: placeRow.address,
             type: placeRow.type || 'Place',
             hours: placeRow.hours ?? '',
             latitude: placeRow.latitude,
             longitude: placeRow.longitude,
           };
-          if (placeRow.picture) p.image = placeRow.picture;
+          if (placeRow.image_url) p.image = placeRow.image_url;
           if (placeRow.description) p.description = placeRow.description;
           if (placeRow.ntdp_category) p.ntdp_category = placeRow.ntdp_category;
           if (placeRow.city_mun) p.city_mun = placeRow.city_mun;
@@ -146,22 +137,6 @@ export default function SavedListDetailScreen() {
             title: p.name,
             place: p,
           });
-        }
-      }
-
-      if (!termErr) {
-        const tRefs = new Set((termLinks ?? []).map((r) => (r as { terminal_ref: string }).terminal_ref));
-        let terminalsCatalog: Terminal[] = mockTerminals;
-        try {
-          const liveTerminals = await fetchTerminalsFromSupabase(supabase);
-          if (liveTerminals.length) terminalsCatalog = liveTerminals;
-        } catch {
-          terminalsCatalog = mockTerminals;
-        }
-        for (const t of terminalsCatalog) {
-          if (tRefs.has(t.id)) {
-            rows.push({ kind: 'terminal', key: `t-${t.id}`, title: t.name, terminal: t });
-          }
         }
       }
 
@@ -205,13 +180,6 @@ export default function SavedListDetailScreen() {
       (navigation as { navigate: (name: string, params: object) => void }).navigate('Dashboard', {
         screen: 'AboutEstablishment',
         params: { place: item.place },
-      });
-      return;
-    }
-    if (item.kind === 'terminal' && item.terminal) {
-      (navigation as { navigate: (name: string, params: object) => void }).navigate('Terminals', {
-        screen: 'TerminalDetail',
-        params: { terminal: item.terminal },
       });
       return;
     }

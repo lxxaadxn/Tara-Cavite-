@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import {
@@ -17,8 +17,10 @@ import { readSavedLists, savePlaceToList, savePlaceToListId } from '../lib/saved
 import { useSaveSuccessToast } from '../lib/useSaveSuccessToast';
 import { formatNtdpCategoryTagLabel, getEstablishmentAboutBody } from '../lib/ntdpDisplayLabels';
 import { readCachedUserLocation } from '../lib/promptLocationOnLogin';
+import { googleMapsDirectionsUrl } from '../lib/osmUrls';
 import { fetchPlaceCheckinDisplay, recordCheckinByCode } from 'cavitour-shared/placeCheckin';
 import { CheckinScannerModal } from '../components/CheckinScannerModal';
+import { recordDestinationReached } from '../lib/destinationReachedActivity';
 
 function thankYouVisitMessage(placeName, alreadyCheckedIn) {
   const name = String(placeName || '').trim() || 'this establishment';
@@ -84,7 +86,6 @@ function spotCategoryTypeFromDb(spot) {
   return '—';
 }
 
-/** Municipality + province line (Cavite inventory); prefers `city_mun` from DB. */
 function formatMunicipalityProvince(cityMun, address) {
   const m = cityMun && String(cityMun).trim();
   if (m) {
@@ -131,7 +132,6 @@ function formatReviewCount(n) {
   return String(v);
 }
 
-/** Build stats so total, average, and bar widths all match the same rating list. */
 function buildReviewStatsFromRatings(ratings) {
   const list = (ratings ?? []).map((r) => Math.min(5, Math.max(1, Math.round(Number(r)))));
   const total = list.length;
@@ -157,7 +157,6 @@ function buildReviewStatsFromRatings(ratings) {
   };
 }
 
-/** Sample reviews — included in totals so averages and bars stay consistent. */
 function buildDummyReviews(placeName) {
   const name = placeName?.trim() || 'This place';
   const base = Date.now() - 86_400_000 * 14;
@@ -228,7 +227,6 @@ function saveSessionReviews(placeId, reviews) {
   try {
     window.sessionStorage.setItem(storageKeyForPlaceReviews(placeId), JSON.stringify(reviews));
   } catch {
-    /* ignore */
   }
 }
 
@@ -270,10 +268,55 @@ export function PlaceDetailPage() {
   const [checkinBusy, setCheckinBusy] = useState(false);
   const [checkinMsg, setCheckinMsg] = useState('');
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [arrivalOptionsOpen, setArrivalOptionsOpen] = useState(false);
+  const [tapQrReveal, setTapQrReveal] = useState(false);
+  const checkinSectionRef = useRef(null);
 
-  const openRoutePanel = useCallback(() => {
+  const openStartCaviTrip = useCallback(() => {
+    if (spot?.lat == null || spot?.lng == null) {
+      window.alert('This place does not have map coordinates yet.');
+      return;
+    }
+
+    const placeName = spot.name || 'this place';
+    const openMaps = window.confirm(
+      `Start CaviTrip — open Google Maps with directions from your location to ${placeName}?`
+    );
+    if (openMaps) {
+      const url = googleMapsDirectionsUrl(
+        spot.lat,
+        spot.lng,
+        'driving',
+        userCoords
+      );
+      if (url && url !== '#') {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    }
     setRoutePanelOpen(true);
+  }, [spot?.lat, spot?.lng, spot?.name, userCoords]);
+
+  const openArrivalCheckinOptions = useCallback(() => {
+    setRoutePanelOpen(false);
+    setArrivalOptionsOpen(true);
+    setTapQrReveal(false);
+    requestAnimationFrame(() => {
+      checkinSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get('confirmArrival') !== '1') return;
+    setArrivalOptionsOpen(true);
+    setTapQrReveal(false);
+    const t = window.setTimeout(() => {
+      checkinSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 400);
+    const p = new URLSearchParams(searchParams);
+    p.delete('confirmArrival');
+    setSearchParams(p, { replace: true });
+    return () => window.clearTimeout(t);
+  }, [searchParams, setSearchParams]);
 
   const closeRoutePanel = useCallback(() => {
     setRoutePanelOpen(false);
@@ -507,6 +550,13 @@ export function PlaceDetailPage() {
     setCheckinMsg('');
     try {
       const result = await recordCheckinByCode(supabase, checkinInfo.code, 'qr');
+      try {
+        await recordDestinationReached(authUser.id, spot.id, {
+          name: spot.name || result.placeName,
+          image: spot.image_url || spot.image,
+        });
+      } catch {
+      }
       const msg = thankYouVisitMessage(result.placeName, result.alreadyCheckedIn);
       setCheckinMsg(msg);
       window.alert(
@@ -527,6 +577,13 @@ export function PlaceDetailPage() {
       return;
     }
     const result = await recordCheckinByCode(supabase, code, 'qr');
+    try {
+      await recordDestinationReached(authUser.id, spot.id, {
+        name: spot.name || result.placeName,
+        image: spot.image_url || spot.image,
+      });
+    } catch {
+    }
     const msg = thankYouVisitMessage(result.placeName, result.alreadyCheckedIn);
     setCheckinMsg(msg);
     window.alert(
@@ -816,14 +873,72 @@ export function PlaceDetailPage() {
               </div>
             </div>
 
+            <div ref={checkinSectionRef}>
+            {arrivalOptionsOpen ? (
+              <div className="mb-4 overflow-hidden rounded-2xl border border-[#241D13]/15 bg-[#fafaf8] p-4 shadow-sm sm:p-5">
+                <p className="text-sm font-semibold text-neutral-900">Destination Reached</p>
+                <p className="mt-1 text-sm text-neutral-600">
+                  Confirm your visit at {spot.name}. Tap QR shows the code to tap on this page; Scan QR is for a
+                  printed poster; or Enter Code.
+                </p>
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                  <button
+                    type="button"
+                    disabled={!checkinInfo?.code}
+                    onClick={() => {
+                      setArrivalOptionsOpen(false);
+                      setTapQrReveal(true);
+                      requestAnimationFrame(() => {
+                        checkinSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      });
+                    }}
+                    className="inline-flex h-11 items-center justify-center rounded-full px-5 text-sm font-semibold text-white disabled:opacity-60"
+                    style={{ backgroundColor: '#1f4f59' }}
+                  >
+                    Tap QR
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!authUser) {
+                        window.location.assign(`/login?next=${encodeURIComponent(`/place/${spot.id}?confirmArrival=1`)}`);
+                        return;
+                      }
+                      setArrivalOptionsOpen(false);
+                      setScannerOpen(true);
+                    }}
+                    className="inline-flex h-11 items-center justify-center rounded-full border-2 border-[#1f4f59] bg-white px-5 text-sm font-semibold text-[#1f4f59]"
+                  >
+                    Scan QR
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.location.assign(`/checkin?place=${encodeURIComponent(spot.id)}&name=${encodeURIComponent(spot.name || '')}`);
+                    }}
+                    className="inline-flex h-11 items-center justify-center rounded-full border border-neutral-300 bg-white px-5 text-sm font-semibold text-neutral-800"
+                  >
+                    Enter Code
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setArrivalOptionsOpen(false)}
+                    className="inline-flex h-11 items-center justify-center rounded-full px-5 text-sm font-medium text-neutral-500"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : null}
             {checkinInfo ? (
               <div className="mb-4 overflow-hidden rounded-2xl border border-[#1f4f59]/20 bg-white p-4 shadow-[0_4px_20px_rgba(0,0,0,0.04)] sm:p-5">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
-                  Check in at this place
+                  {tapQrReveal ? 'Confirm arrival — check in' : 'Check in at this place'}
                 </p>
                 <p className="mt-1 text-sm text-neutral-600">
-                  You are already on this establishment page — tap Check in here to count your visit. The camera
-                  cannot scan a QR on this same screen; use Scan poster QR only for printed posters.
+                  {tapQrReveal
+                    ? 'Tap the QR code below to count your visit. You can also scan a printed poster or enter the code.'
+                    : 'Tap the QR code to count your visit. Use Scan QR only for a printed poster, or Enter Code.'}
                 </p>
                 <div className="mt-4 flex flex-col items-center gap-4 sm:flex-row sm:items-start">
                   <button
@@ -831,7 +946,7 @@ export function PlaceDetailPage() {
                     onClick={() => void handleEstablishmentCheckin()}
                     disabled={checkinBusy}
                     className="rounded-xl border border-neutral-200 bg-white p-1 disabled:opacity-60"
-                    title="Tap to check in"
+                    title="Tap the QR code to check in"
                   >
                     <img
                       src={checkinInfo.qrUrl}
@@ -845,15 +960,9 @@ export function PlaceDetailPage() {
                     <p className="font-mono text-base font-semibold tracking-wide text-neutral-900">
                       {checkinInfo.code}
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => void handleEstablishmentCheckin()}
-                      disabled={checkinBusy}
-                      className="mt-3 inline-flex h-11 items-center justify-center rounded-full px-5 text-sm font-semibold text-white disabled:opacity-60"
-                      style={{ backgroundColor: '#1f4f59' }}
-                    >
-                      {checkinBusy ? 'Counting visit…' : 'Check in here'}
-                    </button>
+                    {checkinBusy ? (
+                      <p className="mt-3 text-sm text-neutral-500">Counting visit…</p>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => {
@@ -863,9 +972,18 @@ export function PlaceDetailPage() {
                         }
                         setScannerOpen(true);
                       }}
-                      className="mt-2 inline-flex h-11 w-full items-center justify-center rounded-full border-2 border-[#1f4f59] bg-white px-5 text-sm font-semibold text-[#1f4f59] sm:w-auto"
+                      className="mt-3 inline-flex h-11 w-full items-center justify-center rounded-full border-2 border-[#1f4f59] bg-white px-5 text-sm font-semibold text-[#1f4f59] sm:w-auto"
                     >
-                      Scan poster QR
+                      Scan QR
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        window.location.assign(`/checkin?place=${encodeURIComponent(spot.id)}&name=${encodeURIComponent(spot.name || '')}`);
+                      }}
+                      className="mt-2 inline-flex h-11 w-full items-center justify-center rounded-full border border-neutral-300 bg-white px-5 text-sm font-semibold text-neutral-800 sm:w-auto"
+                    >
+                      Enter Code
                     </button>
                     {checkinMsg ? <p className="mt-2 text-sm text-neutral-600">{checkinMsg}</p> : null}
                   </div>
@@ -885,10 +1003,20 @@ export function PlaceDetailPage() {
                   }}
                   className="mt-3 inline-flex h-11 items-center justify-center rounded-full border-2 border-[#1f4f59] bg-white px-5 text-sm font-semibold text-[#1f4f59]"
                 >
-                  Scan QR to check in
+                  Scan QR
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.assign(`/checkin?place=${encodeURIComponent(spot.id)}&name=${encodeURIComponent(spot.name || '')}`);
+                  }}
+                  className="mt-2 inline-flex h-11 items-center justify-center rounded-full border border-neutral-300 bg-white px-5 text-sm font-semibold text-neutral-800"
+                >
+                  Enter Code
                 </button>
               </div>
             )}
+            </div>
 
             <CheckinScannerModal
               open={scannerOpen}
@@ -975,6 +1103,7 @@ export function PlaceDetailPage() {
                     locationStatus={locationStatus}
                     fallbackDistanceKm={distanceToPlaceKm ?? undefined}
                     seedId={spot.id}
+                    onDestinationReached={openArrivalCheckinOptions}
                   />
                 </div>
               )}
@@ -1103,11 +1232,11 @@ export function PlaceDetailPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={openRoutePanel}
-                  className="w-full rounded-lg px-3 py-2 text-center text-xs font-semibold text-white shadow-sm transition hover:opacity-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7ea00e] focus-visible:ring-offset-2"
+                  onClick={openStartCaviTrip}
+                  className="w-full rounded-lg px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-white shadow-sm transition hover:opacity-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7ea00e] focus-visible:ring-offset-2"
                   style={{ backgroundColor: olive }}
                 >
-                  Go here?
+                  Start CaviTrip
                 </button>
               </div>
 

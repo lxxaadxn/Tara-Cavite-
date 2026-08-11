@@ -22,12 +22,12 @@ export async function resolveCanonicalPlaceId(placeRefId) {
   if (!ref) return null;
 
   const { data: byId, error: byIdError } = await supabase
-    .from('tourist_attractions')
-    .select('establishment_public_id')
-    .eq('establishment_public_id', ref)
+    .from('places')
+    .select('id')
+    .eq('id', ref)
     .maybeSingle();
   if (byIdError) throw byIdError;
-  if (byId?.establishment_public_id) return byId.establishment_public_id;
+  if (byId?.id) return byId.id;
   return null;
 }
 
@@ -128,18 +128,16 @@ export async function fetchSavedListsForUser(userId) {
     const placeIds = (placeLinksRes.data ?? []).map((r) => r.place_id);
     if (placeIds.length > 0) {
       const { data: placeRows, error: placesErr } = await supabase
-        .from('v_tourist_attractions_catalog')
-        .select(
-          'establishment_public_id, ta_name, address, type, picture, ntdp_category, created_at'
-        )
-        .in('establishment_public_id', placeIds);
+        .from('places')
+        .select('id, name, address, type, image_url, ntdp_category, created_at')
+        .in('id', placeIds);
       if (placesErr) throw placesErr;
       const savedAtByPlaceId = new Map(
         (placeLinksRes.data ?? []).map((r) => [r.place_id, r.created_at]),
       );
       for (const row of placeRows ?? []) {
         items.push(
-          mapPlaceRowToItem(row, savedAtByPlaceId.get(row.establishment_public_id))
+          mapPlaceRowToItem(row, savedAtByPlaceId.get(row.id))
         );
       }
     }

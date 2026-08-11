@@ -55,9 +55,8 @@ export function LeafletMapView({
             } else if (msg.type === 'markerPress' && msg.id) {
               onMarkerPress?.(msg.id, msg.name ?? '');
             }
-          } catch {
-            /* ignore */
-          }
+            } catch {
+            }
         }}
         javaScriptEnabled
         domStorageEnabled

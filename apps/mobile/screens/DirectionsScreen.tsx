@@ -15,7 +15,7 @@ import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/nativ
 import * as Location from 'expo-location';
 import { JamIcon } from '../components/JamIcon';
 import { SaveToListSheet, type SaveToListRow } from '../components/SaveToListSheet';
-import { Place, type Terminal } from '../data/mockData';
+import { Place } from '../data/mockData';
 import { parsePlaceCoords } from '../lib/placeCoords';
 import { placeImageSource } from '../lib/placeImageSource';
 import { formatNtdpCategoryTagLabel } from '../lib/ntdpDisplayLabels';
@@ -53,37 +53,13 @@ import {
 } from '../lib/saveToListModalHelpers';
 import {
   planCommuterGuideForPlace,
-  fetchNearestTerminalForUser,
   type TerminalTransitPlan,
 } from '../lib/terminalTransitPlanner';
-import { recordDestinationReached } from '../lib/destinationReachedActivity';
-import { recordPlaceVisit } from 'cavitour-shared/placeCheckin';
-import { fetchPlaceById, haversineDistanceKm } from '../lib/placesFromSupabase';
 import { DirectionsMapView } from '../components/DirectionsMapView';
+import { fetchPlaceById, haversineDistanceKm } from '../lib/placesFromSupabase';
+import { getThisMonthDestinationReachedEntries } from '../lib/destinationReachedActivity';
 
 const GREEN = '#7EA00E';
-
-// #region agent log
-function debugLog(
-  location: string,
-  message: string,
-  data: Record<string, unknown>,
-  hypothesisId: string
-) {
-  fetch('http://127.0.0.1:7604/ingest/c241c18c-94ef-45ef-99cf-e15fd3724139', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'c650a7' },
-    body: JSON.stringify({
-      sessionId: 'c650a7',
-      location,
-      message,
-      data,
-      hypothesisId,
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-}
-// #endregion
 const TEAL = '#1F4F59';
 const OLIVE = '#213502';
 const TITLE = '#241D13';
@@ -91,7 +67,6 @@ const MUTED = '#868686';
 const WHITE = '#FFFFFF';
 const PAGE_BG = '#FAFAF8';
 const CARD_BORDER = 'rgba(122, 120, 120, 0.18)';
-/** Shown above route content — commuters are the primary audience. */
 const COMMUTER_DISCLAIMER =
   'Steps follow the mapped road (OSRM / OpenStreetMap), not live transit schedules. Confirm signs, fares, and stops with operators.';
 
@@ -106,7 +81,6 @@ type PillVariant = keyof typeof PILL_STYLES;
 
 export type DirectionsScreenParams = {
   place: Place;
-  /** Live GPS updates on the map while this screen is open (foreground). */
   caviTrip?: boolean;
 };
 
@@ -144,40 +118,6 @@ function commuterStepHint(index: number, total: number, stepDistanceM: number): 
   return 'If your ride leaves this road, transfer at a crossing or terminal.';
 }
 
-/** Minimal `Terminal` for navigation — detail screen loads routes by id. */
-function placeImageUriForActivity(place: Place): string | undefined {
-  const img = place.image as unknown;
-  if (img == null) return undefined;
-  if (typeof img === 'number') return undefined;
-  if (typeof img === 'object' && img !== null && 'uri' in img) {
-    return String((img as { uri: string }).uri);
-  }
-  return undefined;
-}
-
-function terminalPlanNodeToStub(node: TerminalTransitPlan['originTerminal']): Terminal {
-  return {
-    id: node.id,
-    name: node.name,
-    municipality: node.municipality,
-    addressLine: `${node.municipality}, Cavite`,
-    category: 'other',
-    transportTypes: ['Jeepney'],
-    status: 'OPEN',
-    operatingHours: 'See terminal',
-    averageFare: '—',
-    paymentType: 'Cash',
-    primaryRoutes: [],
-    reminders: [],
-    latitude: node.latitude,
-    longitude: node.longitude,
-  };
-}
-
-/**
- * Route & map flow: same green chrome as establishment details (no legacy purple header).
- * Opened from “Get directions” with `{ place }`.
- */
 const DirectionsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
@@ -188,8 +128,6 @@ const DirectionsScreen: React.FC = () => {
 
   const isTerminal = place?.type === 'Terminal';
   const isItinerary = place?.type === 'Itinerary';
-  /** Show boarding + near-destination terminal hints (no T2T graph). */
-  const showPlaceOrItineraryTerminalHints = Boolean(place) && !isTerminal;
   const [catalogCoords, setCatalogCoords] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
@@ -216,11 +154,8 @@ const DirectionsScreen: React.FC = () => {
     return place ? parsePlaceCoords(place) : null;
   }, [place, catalogCoords]);
 
-  const [tab, setTab] = useState<'routeSteps' | 'stepGuide' | 'viaTerminals'>(
-    caviTrip ? 'stepGuide' : 'routeSteps'
-  );
+  const [tab, setTab] = useState<'routeSteps' | 'stepGuide'>(caviTrip ? 'stepGuide' : 'routeSteps');
   const [userPt, setUserPt] = useState<{ lat: number; lng: number } | null>(null);
-  /** Updated while CaviTrip is on — map dot follows you; route stays from the first fix. */
   const [liveUserPt, setLiveUserPt] = useState<{ lat: number; lng: number } | null>(null);
   const [locStatus, setLocStatus] = useState<'pending' | 'granted' | 'denied'>('pending');
   const [routeDriving, setRouteDriving] = useState<OsrmRouteResult | null>(null);
@@ -232,10 +167,6 @@ const DirectionsScreen: React.FC = () => {
   const [boardingRoutes, setBoardingRoutes] = useState<
     { routeName: string; origin: string; destination: string; transportName: string }[]
   >([]);
-  /** When the destination is a terminal: nearest hub from the user's GPS (e.g. first mile / going home). */
-  const [nearestTerminalFromUser, setNearestTerminalFromUser] = useState<
-    TerminalTransitPlan['originTerminal'] | null
-  >(null);
 
   const [saved, setSaved] = useState(false);
   const [saveModalVisible, setSaveModalVisible] = useState(false);
@@ -244,6 +175,8 @@ const DirectionsScreen: React.FC = () => {
   const [saveListBusyId, setSaveListBusyId] = useState<string | null>(null);
   const [checkingSaved, setCheckingSaved] = useState(false);
   const [destinationReachedBusy, setDestinationReachedBusy] = useState(false);
+  const [destinationReachedDone, setDestinationReachedDone] = useState(false);
+  const destinationRecordedRef = useRef(false);
 
   const tags = useMemo(
     () => (place ? buildTags(place, { includeTaCategory: !caviTrip }) : []),
@@ -259,14 +192,6 @@ const DirectionsScreen: React.FC = () => {
       if (cancelled) return;
       if (status !== 'granted') {
         setLocStatus('denied');
-        // #region agent log
-        debugLog(
-          'DirectionsScreen.tsx:location',
-          'permission denied',
-          { status, caviTrip },
-          'A'
-        );
-        // #endregion
         return;
       }
       setLocStatus('granted');
@@ -278,26 +203,10 @@ const DirectionsScreen: React.FC = () => {
           const pt = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           setUserPt(pt);
           if (caviTrip) setLiveUserPt(pt);
-          // #region agent log
-          debugLog(
-            'DirectionsScreen.tsx:location',
-            'user position acquired',
-            { lat: pt.lat, lng: pt.lng, caviTrip },
-            'A'
-          );
-          // #endregion
         }
-      } catch (locErr) {
+      } catch {
         if (!cancelled) {
           setLocStatus('denied');
-          // #region agent log
-          debugLog(
-            'DirectionsScreen.tsx:location',
-            'getCurrentPosition failed',
-            { err: locErr instanceof Error ? locErr.message : 'unknown', caviTrip },
-            'A'
-          );
-          // #endregion
         }
       }
     })();
@@ -307,7 +216,6 @@ const DirectionsScreen: React.FC = () => {
   }, [place, caviTrip]);
 
   const locationWatchRef = useRef<Location.LocationSubscription | null>(null);
-  const destinationRecordedRef = useRef(false);
 
   useEffect(() => {
     if (caviTrip && tab === 'routeSteps') {
@@ -342,9 +250,7 @@ const DirectionsScreen: React.FC = () => {
         locationWatchRef.current?.remove();
         locationWatchRef.current = sub;
       })
-      .catch(() => {
-        /* keep last live position */
-      });
+      .catch(() => {});
     return () => {
       cancelled = true;
       locationWatchRef.current?.remove();
@@ -371,18 +277,6 @@ const DirectionsScreen: React.FC = () => {
         if (cancelled) return;
         setRouteDriving(d);
         setRouteFoot(f);
-        // #region agent log
-        debugLog(
-          'DirectionsScreen.tsx:osrm',
-          'route fetch result',
-          {
-            drivingPoints: d?.geometry?.coordinates?.length ?? 0,
-            footPoints: f?.geometry?.coordinates?.length ?? 0,
-            caviTrip,
-          },
-          'C'
-        );
-        // #endregion
         if (!d) {
           setRouteError(
             'No road corridor found between you and this place. Open the full map to plan transfers or walk links manually.'
@@ -404,15 +298,8 @@ const DirectionsScreen: React.FC = () => {
   }, [place, destCoords, userPt]);
 
   useEffect(() => {
-    if (!userPt) {
+    if (!userPt || !place || !destCoords || isTerminal) {
       setTerminalPlan(null);
-      setNearestTerminalFromUser(null);
-      setTerminalPlanLoading(false);
-      return;
-    }
-    if (!place) {
-      setTerminalPlan(null);
-      setNearestTerminalFromUser(null);
       setTerminalPlanLoading(false);
       return;
     }
@@ -421,35 +308,12 @@ const DirectionsScreen: React.FC = () => {
     setTerminalPlanLoading(true);
     (async () => {
       try {
-        if (isTerminal) {
-          const nt = await fetchNearestTerminalForUser(supabase, userPt);
-          if (!cancelled) {
-            setTerminalPlan(null);
-            setNearestTerminalFromUser(nt);
-          }
-          return;
-        }
-        if (!destCoords) {
-          if (!cancelled) {
-            setTerminalPlan(null);
-            setNearestTerminalFromUser(null);
-          }
-          return;
-        }
         const plan = await planCommuterGuideForPlace(supabase, userPt, destCoords);
-        if (!cancelled) {
-          setTerminalPlan(plan);
-          setNearestTerminalFromUser(null);
-        }
+        if (!cancelled) setTerminalPlan(plan);
       } catch {
-        if (!cancelled) {
-          setTerminalPlan(null);
-          setNearestTerminalFromUser(null);
-        }
+        if (!cancelled) setTerminalPlan(null);
       } finally {
-        if (!cancelled) {
-          setTerminalPlanLoading(false);
-        }
+        if (!cancelled) setTerminalPlanLoading(false);
       }
     })();
     return () => {
@@ -755,21 +619,6 @@ const DirectionsScreen: React.FC = () => {
       routeGeoJson,
       routeSegmentsGeoJson: routeSegmentsGeoJson ?? (routeGeoJson ? [routeGeoJson] : null),
     };
-    // #region agent log
-    debugLog(
-      'DirectionsScreen.tsx:openFullMap',
-      'navigate FullRouteMap',
-      {
-        userLat: outgoing.userLat,
-        userLng: outgoing.userLng,
-        routePoints: outgoing.routeGeoJson?.coordinates?.length ?? 0,
-        segmentCount: outgoing.routeSegmentsGeoJson?.length ?? 0,
-        locStatus,
-        caviTrip,
-      },
-      'B'
-    );
-    // #endregion
     (navigation as { navigate: (name: string, params: object) => void }).navigate('FullRouteMap', {
       mapPayload: outgoing,
       destinationName: place.name,
@@ -778,58 +627,52 @@ const DirectionsScreen: React.FC = () => {
 
   useEffect(() => {
     destinationRecordedRef.current = false;
+    setDestinationReachedDone(false);
   }, [place?.id]);
 
-  const tryRecordDestinationReached = useCallback(async () => {
-    if (!place?.id || destinationRecordedRef.current) return false;
-    if (!isSupabasePlaceId(place.id)) {
-      destinationRecordedRef.current = true;
-      return false;
-    }
-    setDestinationReachedBusy(true);
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        destinationRecordedRef.current = true;
-        return false;
-      }
-      await recordDestinationReached(user.id, place.id, {
-        name: place.name,
-        image: placeImageUriForActivity(place),
-      });
-      try {
-        await recordPlaceVisit(supabase, place.id, 'destination_reached');
-      } catch {
-        // Local visit still saved; cloud visit may fail if SQL not applied yet.
-      }
-      destinationRecordedRef.current = true;
-      Alert.alert('', 'Thank You and Enjoy your trip');
-      return true;
-    } catch {
-      return false;
-    } finally {
-      setDestinationReachedBusy(false);
-    }
-  }, [place]);
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        if (!place?.id) return;
+        try {
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
+          if (!user || cancelled) return;
+          const entries = await getThisMonthDestinationReachedEntries(user.id);
+          if (cancelled) return;
+          if (entries.some((e) => e.id === place.id)) {
+            destinationRecordedRef.current = true;
+            setDestinationReachedDone(true);
+          }
+        } catch {
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [place?.id])
+  );
 
   const onDestinationReached = useCallback(() => {
-    void tryRecordDestinationReached();
-  }, [tryRecordDestinationReached]);
-
-  /** CaviTrip: record visit automatically when within ~200 m of the destination. */
-  useEffect(() => {
-    if (!caviTrip || !liveUserPt || !destCoords || destinationRecordedRef.current) return;
-    const km = haversineDistanceKm(
-      liveUserPt.lat,
-      liveUserPt.lng,
-      destCoords.lat,
-      destCoords.lng
-    );
-    if (km > 0.2) return;
-    void tryRecordDestinationReached();
-  }, [caviTrip, liveUserPt, destCoords, tryRecordDestinationReached]);
+    if (!place?.id) return;
+    if (destinationRecordedRef.current || destinationReachedDone) {
+      Alert.alert('Already recorded', 'This destination was already checked in for this trip.');
+      return;
+    }
+    if (!isSupabasePlaceId(place.id)) {
+      Alert.alert('Check-in', 'This place cannot be checked in yet.');
+      return;
+    }
+    setDestinationReachedBusy(true);
+    (navigation as { navigate: (name: string, params: object) => void }).navigate('AboutEstablishment', {
+      place,
+      placeId: place.id,
+      confirmArrival: true,
+    });
+    setDestinationReachedBusy(false);
+  }, [destinationReachedDone, navigation, place]);
 
   if (!place) {
     return (
@@ -964,23 +807,6 @@ const DirectionsScreen: React.FC = () => {
               Commuter guide
             </Text>
           </Pressable>
-          <Pressable
-            onPress={() => setTab('viaTerminals')}
-            style={[styles.segmentSlot, tab === 'viaTerminals' && styles.segmentSlotActive]}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: tab === 'viaTerminals' }}
-          >
-            <Text
-              style={[
-                styles.segmentLabel,
-                styles.segmentLabelCompact,
-                tab === 'viaTerminals' ? styles.segmentLabelOn : styles.segmentLabelOff,
-              ]}
-              numberOfLines={2}
-            >
-              Via Terminals
-            </Text>
-          </Pressable>
         </View>
 
         {tab === 'routeSteps' && !caviTrip ? (
@@ -1072,13 +898,13 @@ const DirectionsScreen: React.FC = () => {
               <Text style={styles.routeHint}>No segments returned for this corridor — try the map or another nearby road.</Text>
             ) : null}
           </View>
-        ) : tab === 'stepGuide' ? (
+        ) : (
           <View style={styles.routeCard}>
             <View style={styles.commuterBadge}>
               <Text style={styles.commuterBadgeLabel}>Commuter-first</Text>
             </View>
             <Text style={styles.routeOsrmDisclaimer}>
-              Main road toward this place first, then the terminals nearest you, then jeep or bus signboards.{' '}
+              Main road toward this place first, then jeep or bus signboards along the corridor.{' '}
               {COMMUTER_DISCLAIMER}
             </Text>
             <Text style={styles.routeFootnote}>{COMMUTER_FOOTNOTE}</Text>
@@ -1101,251 +927,35 @@ const DirectionsScreen: React.FC = () => {
               </View>
             ))}
           </View>
-        ) : (
-          <View style={styles.routeCard}>
-            <Text style={styles.viaScreenTitle}>Via Terminals</Text>
-            <Text style={styles.viaScreenLead}>
-              Nearest public terminals and how to use them with this trip. Always confirm routes, signboards, and fares
-              at the terminal or with the driver.
-            </Text>
-
-            {showPlaceOrItineraryTerminalHints && userPt && terminalPlan ? (
-              <View style={styles.viaStepsBlock}>
-                {terminalPlan.originTerminal.id === terminalPlan.destinationTerminal.id ? (
-                  <>
-                    <View style={styles.viaStepRow}>
-                      <Text style={styles.viaStepNum}>1</Text>
-                      <Text style={styles.viaStepText}>
-                        <Text style={styles.viaStepBold}>{terminalPlan.originTerminal.name}</Text> is the closest major
-                        terminal to both your area and {place.name}. Open it below for routes, gates, and reminders.
-                      </Text>
-                    </View>
-                    <View style={styles.viaStepRow}>
-                      <Text style={styles.viaStepNum}>2</Text>
-                      <Text style={styles.viaStepText}>
-                        Ride toward {place.name} (or its municipality), then use <Text style={styles.viaStepBold}>Commute steps</Text>{' '}
-                        or a tricycle for the last leg.
-                      </Text>
-                    </View>
-                  </>
-                ) : (
-                  <>
-                    <View style={styles.viaStepRow}>
-                      <Text style={styles.viaStepNum}>1</Text>
-                      <Text style={styles.viaStepText}>
-                        Go to <Text style={styles.viaStepBold}>{terminalPlan.originTerminal.name}</Text>
-                        {userPt
-                          ? ` (~${haversineDistanceKm(userPt.lat, userPt.lng, terminalPlan.originTerminal.latitude, terminalPlan.originTerminal.longitude).toFixed(1)} km from your start)`
-                          : ''}{' '}
-                        to board jeepneys, buses, or vans toward the general direction of {place.name}.
-                      </Text>
-                    </View>
-                    <View style={styles.viaStepRow}>
-                      <Text style={styles.viaStepNum}>2</Text>
-                      <Text style={styles.viaStepText}>
-                        Stay on lines that serve <Text style={styles.viaStepBold}>{terminalPlan.destinationTerminal.municipality}</Text> or
-                        corridors leading to {place.name}. Ask the driver or konduktor before boarding.
-                      </Text>
-                    </View>
-                    <View style={styles.viaStepRow}>
-                      <Text style={styles.viaStepNum}>3</Text>
-                      <Text style={styles.viaStepText}>
-                        Alight near <Text style={styles.viaStepBold}>{terminalPlan.destinationTerminal.name}</Text>
-                        {destCoords
-                          ? ` (~${haversineDistanceKm(destCoords.lat, destCoords.lng, terminalPlan.destinationTerminal.latitude, terminalPlan.destinationTerminal.longitude).toFixed(1)} km from ${place.name})`
-                          : ''}
-                        , then follow <Text style={styles.viaStepBold}>Commute steps</Text> or local rides to the exact
-                        spot.
-                      </Text>
-                    </View>
-                  </>
-                )}
-              </View>
-            ) : isTerminal && userPt && nearestTerminalFromUser ? (
-              <View style={styles.viaStepsBlock}>
-                <View style={styles.viaStepRow}>
-                  <Text style={styles.viaStepNum}>1</Text>
-                  <Text style={styles.viaStepText}>
-                    From your GPS, the nearest hub is <Text style={styles.viaStepBold}>{nearestTerminalFromUser.name}</Text>
-                    {userPt
-                      ? ` (~${haversineDistanceKm(userPt.lat, userPt.lng, nearestTerminalFromUser.latitude, nearestTerminalFromUser.longitude).toFixed(1)} km)`
-                      : ''}. Use it for connections toward {place.name}.
-                  </Text>
-                </View>
-                <View style={styles.viaStepRow}>
-                  <Text style={styles.viaStepNum}>2</Text>
-                  <Text style={styles.viaStepText}>
-                    Open the terminal below for route boards, typical vehicles, and safety reminders before you travel.
-                  </Text>
-                </View>
-              </View>
-            ) : (
-              <Text style={styles.tripTerminalsHint}>
-                {!userPt
-                  ? 'Turn on location to load terminal suggestions for this trip.'
-                  : terminalPlanLoading
-                    ? 'Loading terminals…'
-                    : 'No terminal match is available yet for this area. Try the Terminals tab in the app or ask locally for the nearest jeepney or bus stop.'}
-              </Text>
-            )}
-
-            {isTerminal ? (
-              <View style={styles.tripTerminalsSection}>
-                <Text style={styles.tripTerminalsTitle}>Suggested terminal</Text>
-                {!userPt ? (
-                  <Text style={styles.tripTerminalsHint}>Turn on location to see the terminal closest to you.</Text>
-                ) : terminalPlanLoading ? (
-                  <View style={styles.tripTerminalsLoadingRow}>
-                    <ActivityIndicator size="small" color={TEAL} />
-                    <Text style={styles.tripTerminalsHint}>Finding nearest terminal…</Text>
-                  </View>
-                ) : nearestTerminalFromUser ? (
-                  <View style={styles.tripTerminalCards}>
-                    <TouchableOpacity
-                      style={styles.tripTerminalCard}
-                      activeOpacity={0.88}
-                      onPress={() =>
-                        (navigation as { navigate: (name: string, params: object) => void }).navigate('TerminalDetail', {
-                          terminal: terminalPlanNodeToStub(nearestTerminalFromUser),
-                        })
-                      }
-                      accessibilityRole="button"
-                      accessibilityLabel={`Open ${nearestTerminalFromUser.name}`}
-                    >
-                      <Text style={styles.tripTerminalCardKicker}>Nearest terminal to you</Text>
-                      <Text style={styles.tripTerminalCardName} numberOfLines={2}>
-                        {nearestTerminalFromUser.name}
-                      </Text>
-                      <Text style={styles.tripTerminalCardMeta}>
-                        {nearestTerminalFromUser.municipality}
-                        {userPt
-                          ? ` · ~${haversineDistanceKm(userPt.lat, userPt.lng, nearestTerminalFromUser.latitude, nearestTerminalFromUser.longitude).toFixed(1)} km away`
-                          : ''}
-                      </Text>
-                      <Text style={styles.tripTerminalCardCta}>Terminal details</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <Text style={styles.tripTerminalsHint}>No terminal data for this area right now.</Text>
-                )}
-              </View>
-            ) : showPlaceOrItineraryTerminalHints ? (
-              <View style={styles.tripTerminalsSection}>
-                <Text style={styles.tripTerminalsTitle}>Terminals on this trip</Text>
-                {!userPt ? (
-                  <Text style={styles.tripTerminalsHint}>Turn on location to load terminals.</Text>
-                ) : terminalPlanLoading ? (
-                  <View style={styles.tripTerminalsLoadingRow}>
-                    <ActivityIndicator size="small" color={TEAL} />
-                    <Text style={styles.tripTerminalsHint}>Finding nearest terminals…</Text>
-                  </View>
-                ) : terminalPlan ? (
-                  <View style={styles.tripTerminalCards}>
-                    {terminalPlan.originTerminal.id === terminalPlan.destinationTerminal.id ? (
-                      <TouchableOpacity
-                        style={[styles.tripTerminalCard, { flex: 1 }]}
-                        activeOpacity={0.88}
-                        onPress={() =>
-                          (navigation as { navigate: (name: string, params: object) => void }).navigate('TerminalDetail', {
-                            terminal: terminalPlanNodeToStub(terminalPlan.originTerminal),
-                          })
-                        }
-                        accessibilityRole="button"
-                        accessibilityLabel={`Open ${terminalPlan.originTerminal.name}`}
-                      >
-                        <Text style={styles.tripTerminalCardKicker}>Nearest terminal (you & destination)</Text>
-                        <Text style={styles.tripTerminalCardName} numberOfLines={2}>
-                          {terminalPlan.originTerminal.name}
-                        </Text>
-                        <Text style={styles.tripTerminalCardMeta}>
-                          {terminalPlan.originTerminal.municipality}
-                          {userPt && destCoords
-                            ? ` · ~${haversineDistanceKm(userPt.lat, userPt.lng, terminalPlan.originTerminal.latitude, terminalPlan.originTerminal.longitude).toFixed(1)} km from you · ~${haversineDistanceKm(destCoords.lat, destCoords.lng, terminalPlan.originTerminal.latitude, terminalPlan.originTerminal.longitude).toFixed(1)} km from ${place.name}`
-                            : ''}
-                        </Text>
-                        <Text style={styles.tripTerminalCardCta}>Terminal details</Text>
-                      </TouchableOpacity>
-                    ) : (
-                      <>
-                        <TouchableOpacity
-                          style={styles.tripTerminalCard}
-                          activeOpacity={0.88}
-                          onPress={() =>
-                            (navigation as { navigate: (name: string, params: object) => void }).navigate('TerminalDetail', {
-                              terminal: terminalPlanNodeToStub(terminalPlan.originTerminal),
-                            })
-                          }
-                          accessibilityRole="button"
-                          accessibilityLabel={`Open ${terminalPlan.originTerminal.name}`}
-                        >
-                          <Text style={styles.tripTerminalCardKicker}>Board near you</Text>
-                          <Text style={styles.tripTerminalCardName} numberOfLines={2}>
-                            {terminalPlan.originTerminal.name}
-                          </Text>
-                          <Text style={styles.tripTerminalCardMeta}>
-                            {terminalPlan.originTerminal.municipality}
-                            {userPt
-                              ? ` · ~${haversineDistanceKm(userPt.lat, userPt.lng, terminalPlan.originTerminal.latitude, terminalPlan.originTerminal.longitude).toFixed(1)} km away`
-                              : ''}
-                          </Text>
-                          <Text style={styles.tripTerminalCardCta}>Terminal details</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.tripTerminalCard}
-                          activeOpacity={0.88}
-                          onPress={() =>
-                            (navigation as { navigate: (name: string, params: object) => void }).navigate('TerminalDetail', {
-                              terminal: terminalPlanNodeToStub(terminalPlan.destinationTerminal),
-                            })
-                          }
-                          accessibilityRole="button"
-                          accessibilityLabel={`Open ${terminalPlan.destinationTerminal.name}`}
-                        >
-                          <Text style={styles.tripTerminalCardKicker}>Near {place.name}</Text>
-                          <Text style={styles.tripTerminalCardName} numberOfLines={2}>
-                            {terminalPlan.destinationTerminal.name}
-                          </Text>
-                          <Text style={styles.tripTerminalCardMeta}>
-                            {terminalPlan.destinationTerminal.municipality}
-                            {destCoords
-                              ? ` · ~${haversineDistanceKm(destCoords.lat, destCoords.lng, terminalPlan.destinationTerminal.latitude, terminalPlan.destinationTerminal.longitude).toFixed(1)} km from destination`
-                              : ''}
-                          </Text>
-                          <Text style={styles.tripTerminalCardCta}>Terminal details</Text>
-                        </TouchableOpacity>
-                      </>
-                    )}
-                  </View>
-                ) : (
-                  <Text style={styles.tripTerminalsHint}>No terminal data for this area right now.</Text>
-                )}
-              </View>
-            ) : null}
-          </View>
         )}
 
-        {!caviTrip ? (
-          <View style={styles.destinationReachedWrap}>
-            <Text style={styles.destinationReachedHint}>
-              After you arrive, tap Destination Reached below to record this visit. Opening See full map does not count
-              toward Activity this month.
-            </Text>
-            <TouchableOpacity
-              onPress={onDestinationReached}
-              style={[styles.destinationReachedButton, destinationReachedBusy && styles.destinationReachedButtonDisabled]}
-              activeOpacity={0.92}
-              accessibilityRole="button"
-              accessibilityLabel="Destination Reached"
-              disabled={destinationReachedBusy}
-            >
-              {destinationReachedBusy ? (
-                <ActivityIndicator size="small" color={WHITE} />
-              ) : (
-                <Text style={styles.destinationReachedButtonLabel}>Destination Reached</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        ) : null}
+        <View style={styles.destinationReachedWrap}>
+          <Text style={styles.destinationReachedHint}>
+            {caviTrip
+              ? 'Back from Google Maps? Tap Destination Reached to open this place’s QR check-in (Tap QR, Scan QR, or Enter Code).'
+              : 'After you arrive, tap Destination Reached to open the establishment QR page and confirm your visit.'}
+          </Text>
+          <TouchableOpacity
+            onPress={onDestinationReached}
+            style={[
+              styles.destinationReachedButton,
+              (destinationReachedBusy || destinationReachedDone) &&
+                styles.destinationReachedButtonDisabled,
+            ]}
+            activeOpacity={0.92}
+            accessibilityRole="button"
+            accessibilityLabel="Destination Reached"
+            disabled={destinationReachedBusy || destinationReachedDone}
+          >
+            {destinationReachedBusy ? (
+              <ActivityIndicator size="small" color={WHITE} />
+            ) : (
+              <Text style={styles.destinationReachedButtonLabel}>
+                {destinationReachedDone ? 'Visit recorded' : 'Destination Reached'}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity
           onPress={openFullMap}

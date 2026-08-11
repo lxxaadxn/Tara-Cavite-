@@ -16,7 +16,7 @@ import { JamIcon } from '../components/JamIcon';
 import type { JamIconName } from '../lib/jamSvgMap';
 import { legacyIoniconToJam } from '../lib/legacyIoniconToJam';
 import { supabase } from '../lib/supabase';
-import { fetchSavedItemCountsByListId } from '../lib/savedListItems';
+import { fetchPlaceCountByListId } from '../lib/savedListItems';
 
 interface SavedList {
   id: string;
@@ -107,7 +107,7 @@ const SavedListScreen: React.FC = () => {
       const listIds = rows.map((l) => l.id);
       let counts: Record<string, number> = {};
       try {
-        counts = await fetchSavedItemCountsByListId(supabase, listIds);
+        counts = await fetchPlaceCountByListId(supabase, listIds);
       } catch (e) {
         console.error('Error loading list place counts:', e);
       }
@@ -316,7 +316,7 @@ const SavedListScreen: React.FC = () => {
             </View>
             <Text style={styles.emptyTitle}>Nothing saved yet</Text>
             <Text style={styles.emptySubtitle}>
-              Create a list for weekend cafés, commute terminals, or a full day trip — then add spots from anywhere in
+              Create a list for weekend cafés, day trips, or a full itinerary — then add spots from anywhere in
               the app.
             </Text>
             <TouchableOpacity

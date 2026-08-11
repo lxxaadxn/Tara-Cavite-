@@ -7,7 +7,6 @@ import { LoginPage } from './pages/LoginPage';
 import { AdminAuthGate, adminLayoutChildRoutes } from './embed';
 import './index.css';
 
-/** Standalone admin app (`npm run admin` → :3001). Marketing web mounts the same routes under `/admin`. */
 export default function App() {
   return (
     <ToastProvider>

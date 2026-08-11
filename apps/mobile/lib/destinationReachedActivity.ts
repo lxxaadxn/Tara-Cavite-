@@ -52,9 +52,6 @@ function normalizeEntry(x: BucketRow): DestinationReachedEntry {
   return { id: '', name: 'Place', savedAt: new Date().toISOString() };
 }
 
-/**
- * User confirmed they arrived (e.g. tapped "Destination Reached" after a trip). Deduped per place id per user per month (UTC).
- */
 export async function recordDestinationReached(
   userId: string | null | undefined,
   placeId: string | null | undefined,
@@ -95,7 +92,6 @@ export async function getThisMonthDestinationReachedCount(userId: string | null 
   return entries.length;
 }
 
-/** Unique destinations reached across all months for a user. */
 export async function getAllDestinationReachedEntries(
   userId: string | null | undefined
 ): Promise<DestinationReachedEntry[]> {

@@ -1,14 +1,10 @@
-/**
- * Cavite establishments via normalized public.tourist_attractions
- * (read through v_tourist_attractions_catalog).
- */
 import { getDemoEstablishmentById } from 'cavitour-shared/demoPlaces';
 import { CONTENT_PIPELINE } from 'cavitour-shared';
+import { foldEstablishmentName } from 'cavitour-shared/placeCheckin';
 import { enrichPlaceWithLocalEstablishmentMedia } from './establishmentLocalImages';
 
 const CATALOG_TABLE = CONTENT_PIPELINE.establishmentsView;
 
-/** Log PostgREST errors in dev (missing table, RLS, column mismatch). */
 export function logPlacesFetchError(context, error) {
   const message = error instanceof Error ? error.message : String(error ?? 'unknown');
   if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) {
@@ -16,7 +12,6 @@ export function logPlacesFetchError(context, error) {
   }
 }
 
-/** Great-circle distance in kilometers (WGS84 approximate). */
 export function haversineDistanceKm(lat1, lon1, lat2, lon2) {
   const R = 6371;
   const toRad = (d) => (d * Math.PI) / 180;
@@ -30,7 +25,7 @@ export function haversineDistanceKm(lat1, lon1, lat2, lon2) {
 }
 
 const CATALOG_SELECT =
-  'establishment_public_id, ta_name, address, type, hours, latitude, longitude, picture, gallery_urls, description, ntdp_category, type_code, city_mun, is_published, created_at';
+  'id, name, address, type, hours, latitude, longitude, image_url, gallery_urls, description, ntdp_category, type_code, city_mun, is_published, created_at';
 
 function parseCoord(v) {
   if (v == null) return null;
@@ -50,7 +45,44 @@ function applyCatalogMedia(place) {
   return enrichPlaceWithLocalEstablishmentMedia(place);
 }
 
-/** Normalize catalog view (or demo) row → internal catalog row. */
+let staMediaByNamePromise = null;
+
+async function getStaMediaByName(client) {
+  if (!staMediaByNamePromise) {
+    staMediaByNamePromise = (async () => {
+      const out = new Map();
+      try {
+        const { data, error } = await client
+          .from('v_sta_v3_cavite_2025_catalog')
+          .select('ta_name, picture, gallery_urls')
+          .not('picture', 'is', null);
+        if (error || !data) return out;
+        for (const row of data) {
+          const key = foldEstablishmentName(row.ta_name);
+          if (!key) continue;
+          if (!out.has(key)) {
+            out.set(key, { picture: row.picture ?? null, gallery_urls: row.gallery_urls ?? null });
+          }
+        }
+      } catch {
+      }
+      return out;
+    })();
+  }
+  return staMediaByNamePromise;
+}
+
+function applyStaMediaToRow(row, staMedia) {
+  if (row.image_url?.trim() || (row.gallery_urls && row.gallery_urls.length > 0)) return row;
+  const hit = staMedia.get(foldEstablishmentName(row.name));
+  if (!hit?.picture) return row;
+  return {
+    ...row,
+    image_url: hit.picture,
+    gallery_urls: hit.gallery_urls?.length ? hit.gallery_urls : [hit.picture],
+  };
+}
+
 function normalizeCatalogRow(row) {
   if (!row || typeof row !== 'object') return null;
   return {
@@ -72,7 +104,6 @@ function normalizeCatalogRow(row) {
   };
 }
 
-/** Published catalog rows with coordinates. */
 function publishedCatalogQuery(client) {
   return client
     .from(CATALOG_TABLE)
@@ -90,16 +121,21 @@ async function queryPublishedPlaces(client, builder) {
   ];
   for (const run of attempts) {
     const { data, error } = await run();
-    if (!error) return (data ?? []).map(normalizeCatalogRow).filter(Boolean);
+    if (!error) {
+      const staMedia = await getStaMediaByName(client);
+      return (data ?? [])
+        .map(normalizeCatalogRow)
+        .filter(Boolean)
+        .map((row) => applyStaMediaToRow(row, staMedia));
+    }
     lastError = error;
     const msg = String(error.message ?? '');
     if (/column.*does not exist/i.test(msg) && msg.includes('is_published')) continue;
     break;
   }
-  throw new Error(lastError?.message ?? 'tourist_attractions catalog query failed');
+  throw new Error(lastError?.message ?? 'places catalog query failed');
 }
 
-/** Normalize catalog row → UI place */
 export function rowToPlace(row) {
   const normalized = normalizeCatalogRow(row) ?? row;
   const lat = parseCoord(normalized.latitude);
@@ -146,7 +182,7 @@ export async function searchPlacesByText(client, rawQuery, limit = 40) {
   const fetchCap = Math.min(Math.max(limit * 4, 80), 500);
 
   const orFilter = [
-    `ta_name.ilike.${pattern}`,
+    `name.ilike.${pattern}`,
     `type.ilike.${pattern}`,
     `address.ilike.${pattern}`,
     `city_mun.ilike.${pattern}`,
@@ -213,11 +249,10 @@ export async function fetchPlaceById(client, id) {
   if (isUuid) {
     try {
       const rows = await queryPublishedPlaces(client, (q) =>
-        q.eq('establishment_public_id', key).limit(1)
+        q.eq('id', key).limit(1)
       );
       if (rows[0]) return rowToPlace(rows[0]);
     } catch {
-      /* fall through to bundled demo */
     }
   }
 

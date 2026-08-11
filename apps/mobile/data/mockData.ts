@@ -12,16 +12,11 @@ export interface Place {
   latitude: number;
   longitude: number;
   image?: any; // For require() statements or URI strings
-  /** Extra bundled photos (see `establishmentLocalImages.ts`) */
   gallery?: any[];
-  /** Shown on home cards (Figma) */
   rating?: string;
-  /** From Supabase / LGU STA inventory */
   description?: string;
   ntdp_category?: string;
-  /** LGU label when loaded from Cavite view */
   city_mun?: string;
-  /** ISO timestamp when loaded from Supabase (for dashboard sort) */
   created_at?: string;
   /** Supabase combined search field (filtering) */
   searchable_text?: string;
@@ -316,7 +311,6 @@ export function getItineraryEstablishments(itineraryRefId: string, catalog: Plac
 
 // Categories for home screen
 export const categories = [
-  { id: '1', name: 'Terminals', icon: 'business' },
   { id: '2', name: 'Jeepney Stops', icon: 'car' },
   { id: '3', name: 'Tricycle Stops', icon: 'bicycle' },
   { id: '4', name: 'Bus Stops', icon: 'bus' },

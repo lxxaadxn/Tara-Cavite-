@@ -1,7 +1,3 @@
-/**
- * Neutral blank profile photo used when a user has not uploaded an avatar.
- * Inline SVG so web and native can use the same asset without extra files.
- */
 export const DEFAULT_AVATAR_URL =
   "data:image/svg+xml;utf8," +
   encodeURIComponent(
@@ -12,13 +8,8 @@ export const DEFAULT_AVATAR_URL =
 </svg>`
   );
 
-/** Legacy branded placeholder (pre-blank default); treat as no custom photo. */
 const LEGACY_BRANDED_AVATAR_MARKERS = ['%237ea00e', 'fill=\'%237ea00e\'', '>CT<'];
 
-/**
- * @param {string | null | undefined} url
- * @returns {string}
- */
 export function resolveAvatarUrl(url) {
   const trimmed = String(url ?? '').trim();
   if (!trimmed) return DEFAULT_AVATAR_URL;
@@ -26,10 +17,6 @@ export function resolveAvatarUrl(url) {
   return trimmed;
 }
 
-/**
- * @param {string | null | undefined} url
- * @returns {boolean}
- */
 export function hasCustomAvatar(url) {
   const trimmed = String(url ?? '').trim();
   if (!trimmed) return false;
@@ -38,16 +25,10 @@ export function hasCustomAvatar(url) {
   return true;
 }
 
-/** User chose default avatar — ignore OAuth provider photos in metadata. */
 export function usesDefaultAvatarPreference(meta) {
   return meta?.cavitour_use_default_avatar === true;
 }
 
-/**
- * Raw avatar URL before resolveAvatarUrl.
- * @param {{ avatar_url?: string | null } | null | undefined} profileRow
- * @param {Record<string, unknown> | null | undefined} meta
- */
 export function pickRawAvatarUrl(profileRow, meta) {
   const uploaded = profileRow?.avatar_url || null;
   if (usesDefaultAvatarPreference(meta)) {
@@ -56,18 +37,10 @@ export function pickRawAvatarUrl(profileRow, meta) {
   return uploaded || meta?.avatar_url || meta?.picture || null;
 }
 
-/**
- * @param {{ avatar_url?: string | null } | null | undefined} profileRow
- * @param {Record<string, unknown> | null | undefined} meta
- */
 export function resolveAvatarFromSources(profileRow, meta) {
   return resolveAvatarUrl(pickRawAvatarUrl(profileRow, meta));
 }
 
-/**
- * @param {{ avatar_url?: string | null } | null | undefined} profileRow
- * @param {Record<string, unknown> | null | undefined} meta
- */
 export function hasCustomAvatarFromSources(profileRow, meta) {
   return hasCustomAvatar(pickRawAvatarUrl(profileRow, meta));
 }

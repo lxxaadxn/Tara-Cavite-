@@ -1,11 +1,5 @@
-/** Shared validation + Supabase password change (re-auth with current password). */
-
 export const CHANGE_PASSWORD_MIN_LENGTH = 8;
 
-/**
- * @param {{ currentPassword?: string, newPassword?: string, confirmPassword?: string }} input
- * @returns {string | null} Error message, or null if valid
- */
 export function validateChangePasswordInput({ currentPassword, newPassword, confirmPassword }) {
   const current = String(currentPassword ?? '');
   const next = String(newPassword ?? '');
@@ -21,11 +15,6 @@ export function validateChangePasswordInput({ currentPassword, newPassword, conf
   return null;
 }
 
-/**
- * Verify current password, then set a new password via Supabase Auth.
- * @param {import('@supabase/supabase-js').SupabaseClient} supabase
- * @param {{ email: string, currentPassword: string, newPassword: string, confirmPassword: string }} params
- */
 export async function changePasswordWithSupabase(
   supabase,
   { email, currentPassword, newPassword, confirmPassword }
