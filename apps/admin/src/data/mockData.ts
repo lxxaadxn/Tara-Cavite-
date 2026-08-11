@@ -232,7 +232,7 @@ export const panelNotifications: PanelNotification[] = [
   { id: 'n1', text: 'Remove an Establishment', time: 'Just now', kind: 'remove' },
   { id: 'n2', text: 'New Business Signup', time: '59 minutes ago', kind: 'signup' },
   { id: 'n3', text: 'Remove reports', time: '12 hours ago', kind: 'remove' },
-  { id: 'n4', text: 'Andi Lane edited Terminals', time: 'Today, 11:59 AM', kind: 'edit' },
+  { id: 'n4', text: 'Andi Lane edited Featured Destinations', time: 'Today, 11:59 AM', kind: 'edit' },
 ];
 
 export type PanelActivity = { id: string; text: string; time: string; initials: string };
@@ -241,7 +241,7 @@ export const panelActivities: PanelActivity[] = [
   { id: 'a1', text: 'Changed the UI.', time: 'Just now', initials: 'CU' },
   { id: 'a2', text: 'Released a new version.', time: '59 minutes ago', initials: 'RV' },
   { id: 'a3', text: 'Submitted Requirements.', time: '12 hours ago', initials: 'SR' },
-  { id: 'a4', text: 'Modified A data in Terminals.', time: 'Today, 11:59 AM', initials: 'MT' },
+  { id: 'a4', text: 'Modified A data in Attractions.', time: 'Today, 11:59 AM', initials: 'MT' },
   { id: 'a5', text: 'Deleted a entry in Itineraries.', time: 'Feb 2, 2026', initials: 'DI' },
 ];
 
@@ -254,73 +254,6 @@ export const panelContacts: PanelContact[] = [
   { id: 'c4', name: 'Koray Okumus', initials: 'KO' },
   { id: 'c5', name: 'Kate Morrison', initials: 'KM' },
   { id: 'c6', name: 'Melody Macy', initials: 'MM' },
-];
-
-export type TerminalRow = {
-  id: string;
-  name: string;
-  city: string;
-  route: string;
-  photos: number;
-  status: 'published' | 'draft' | 'hidden';
-  updated: string;
-};
-
-export const terminals: TerminalRow[] = [
-  {
-    id: 't1',
-    name: 'Bacoor Public Market Terminal',
-    city: 'Bacoor',
-    route: 'Bacoor — Zapote — Las Piñas',
-    photos: 4,
-    status: 'published',
-    updated: '2 days ago',
-  },
-  {
-    id: 't2',
-    name: 'Imus Poblacion Terminal',
-    city: 'Imus',
-    route: 'Imus — Kawit — Noveleta',
-    photos: 3,
-    status: 'published',
-    updated: '5 days ago',
-  },
-  {
-    id: 't3',
-    name: 'Dasmariñas Transport Terminal',
-    city: 'Dasmariñas',
-    route: 'Dasmariñas — Silang — Tagaytay',
-    photos: 2,
-    status: 'draft',
-    updated: '1 week ago',
-  },
-  {
-    id: 't4',
-    name: 'Tagaytay Olivarez Terminal',
-    city: 'Tagaytay',
-    route: 'Tagaytay — Santa Rosa',
-    photos: 5,
-    status: 'published',
-    updated: '3 days ago',
-  },
-  {
-    id: 't5',
-    name: 'General Trias Terminal Hub',
-    city: 'General Trias',
-    route: 'Gen. Trias — Tanza',
-    photos: 1,
-    status: 'hidden',
-    updated: '2 weeks ago',
-  },
-  {
-    id: 't6',
-    name: 'Kawit Aguinaldo Shrine Stop',
-    city: 'Kawit',
-    route: 'Kawit heritage loop',
-    photos: 3,
-    status: 'published',
-    updated: 'Yesterday',
-  },
 ];
 
 export type ItineraryRow = {
@@ -482,20 +415,13 @@ export const mapLayers: MapLayerRow[] = [
   },
   {
     id: 'm2',
-    layer: 'Jeepney terminals',
-    description: 'Terminal markers on the commute map',
-    enabled: true,
-    source: 'routeTerminals',
-  },
-  {
-    id: 'm3',
-    layer: 'Transit corridors',
-    description: 'OSRM route lines between major stops',
+    layer: 'Driving corridors',
+    description: 'OSRM route lines from GPS to destinations',
     enabled: true,
     source: 'OSRM API',
   },
   {
-    id: 'm4',
+    id: 'm3',
     layer: 'NTDP labels',
     description: 'Named transit departure points',
     enabled: false,
@@ -658,7 +584,7 @@ export const rewardEarnRules = [
   { id: 'r1', title: 'Visit an establishment', points: 50, detail: 'Check in via map or place detail.' },
   { id: 'r2', title: 'Leave a review', points: 80, detail: 'Published reviews earn points once moderated.' },
   { id: 'r3', title: 'Complete an itinerary', points: 150, detail: 'Finish all stops on a curated day route.' },
-  { id: 'r4', title: 'Check a terminal guide', points: 30, detail: 'Open terminal details before commuting.' },
+  { id: 'r4', title: 'Open place directions', points: 30, detail: 'View the map route to a destination.' },
 ];
 
 export const rewardRedeemables = [

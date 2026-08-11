@@ -1,7 +1,7 @@
 import { CONTENT_PIPELINE } from 'cavitour-shared';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-/** Admin CRUD against normalized {@link CONTENT_PIPELINE.adminPlacesTable}. */
+/** Admin helpers against {@link CONTENT_PIPELINE.adminPlacesTable} (sta_v3_cavite_2025). */
 
 export type Destination = {
   id: string;
@@ -40,6 +40,9 @@ export type AdminPlaceRow = {
   city_mun: string | null;
   gallery_urls: string[] | null;
   is_published: boolean | null;
+  phone?: string | null;
+  email?: string | null;
+  website?: string | null;
   created_at?: string | null;
 };
 
@@ -77,9 +80,9 @@ export function adminPlaceRowToDestination(row: AdminPlaceRow): Destination {
     lat,
     lng,
     operatingHours: row.hours || '',
-    phone: '',
-    email: '',
-    website: '',
+    phone: row.phone || '',
+    email: row.email || '',
+    website: row.website || '',
     socialFacebook: '',
     socialInstagram: '',
     socialTwitter: '',
@@ -91,7 +94,7 @@ export async function fetchAdminDestinations(client: SupabaseClient): Promise<Ad
   const { data, error } = await client
     .from(CONTENT_PIPELINE.establishmentsView)
     .select(
-      'establishment_public_id, ta_name, address, type, hours, latitude, longitude, picture, description, ntdp_category, type_code, city_mun, gallery_urls, is_published, created_at'
+      'establishment_public_id, ta_name, address, type, hours, latitude, longitude, picture, description, ntdp_category, type_code, city_mun, gallery_urls, is_published, phone, email, website, created_at'
     )
     .order('created_at', { ascending: false });
 
@@ -99,70 +102,28 @@ export async function fetchAdminDestinations(client: SupabaseClient): Promise<Ad
   return (data ?? []) as AdminPlaceRow[];
 }
 
-async function resolveLookupIds(
-  client: SupabaseClient,
-  form: { city: string; category: string }
-): Promise<{
-  city_id: number | null;
-  type_code_id: number | null;
-  ta_categories_id: number;
-  ntdp_category_id: number | null;
-}> {
-  const cityName = form.city.trim();
-  const category = form.category.trim();
-
-  const [{ data: cities }, { data: types }, { data: cats }, { data: ntdps }] = await Promise.all([
-    client.from('cities').select('city_id, city_name'),
-    client.from('type_codes').select('type_code_id, type_code'),
-    client.from('ta_categories').select('category_id, category_name').order('category_id', { ascending: true }),
-    client.from('ntdp_categories').select('ntdp_category_id, ntdp_category_name'),
-  ]);
-
-  const fold = (s: string) => s.trim().toLowerCase();
-  const city_id =
-    (cities ?? []).find((c) => fold(String(c.city_name ?? '')) === fold(cityName))?.city_id ??
-    (cities ?? []).find((c) => fold(String(c.city_name ?? '')).startsWith(fold(cityName)))?.city_id ??
-    null;
-
-  const type_code_id = (types ?? [])[0]?.type_code_id ?? null;
-  const ta_categories_id =
-    (cats ?? []).find((c) => fold(String(c.category_name ?? '')) === fold(category))?.category_id ??
-    (cats ?? [])[0]?.category_id;
-  if (ta_categories_id == null) {
-    throw new Error('ta_categories is empty — cannot insert tourist_attractions row');
-  }
-
-  const ntdp_category_id =
-    (ntdps ?? []).find((n) => fold(String(n.ntdp_category_name ?? '')) === fold(category))
-      ?.ntdp_category_id ??
-    (ntdps ?? []).find((n) => fold(String(n.ntdp_category_name ?? '')) === 'others')
-      ?.ntdp_category_id ??
-    (ntdps ?? [])[0]?.ntdp_category_id ??
-    null;
-
-  return {
-    city_id: city_id == null ? null : Number(city_id),
-    type_code_id: type_code_id == null ? null : Number(type_code_id),
-    ta_categories_id: Number(ta_categories_id),
-    ntdp_category_id: ntdp_category_id == null ? null : Number(ntdp_category_id),
-  };
-}
-
-async function formToAttractionPayload(
-  client: SupabaseClient,
-  form: Omit<Destination, 'id' | 'legacyEmoji' | 'sourceSlug'>
-) {
+function formToStaPayload(form: Omit<Destination, 'id' | 'legacyEmoji' | 'sourceSlug'>) {
   const lat = parseFloat(form.lat);
   const lng = parseFloat(form.lng);
-  const lookups = await resolveLookupIds(client, form);
+  const city_mun = form.city.trim() || null;
+  const address = form.address.trim() || null;
+  const highlight = form.status === 'active' ? 'none' : 'red';
+  const is_listed = Boolean(address && form.status === 'active');
   return {
+    sheet_name: city_mun || 'Unknown',
     ta_name: form.name.trim(),
-    address: form.address.trim() || '—',
-    latitude: Number.isFinite(lat) ? lat : 0,
-    longitude: Number.isFinite(lng) ? lng : 0,
+    address,
+    city_mun,
+    latitude: Number.isFinite(lat) ? lat : null,
+    longitude: Number.isFinite(lng) ? lng : null,
     description: form.description.trim() || null,
-    is_published: form.status === 'active',
-    ...lookups,
+    ntdp_category: form.category.trim() || null,
+    ta_category: form.category.trim() || null,
+    phone: form.phone.trim() || null,
+    email: form.email.trim() || null,
+    website: form.website.trim() || null,
+    highlight,
+    is_listed,
   };
 }
 
@@ -170,15 +131,15 @@ export async function insertAdminPlace(
   client: SupabaseClient,
   form: Omit<Destination, 'id' | 'legacyEmoji' | 'sourceSlug'>
 ) {
-  const payload = await formToAttractionPayload(client, form);
+  const payload = formToStaPayload(form);
   const { data, error } = await client
     .from(CONTENT_PIPELINE.adminPlacesTable)
     .insert(payload)
-    .select('establishment_public_id')
+    .select('id')
     .single();
   if (error) throw new Error(error.message);
   return {
-    id: data.establishment_public_id as string,
+    id: data.id as string,
     source_slug: '',
   };
 }
@@ -189,11 +150,11 @@ export async function updateAdminPlace(
   form: Omit<Destination, 'id' | 'legacyEmoji' | 'sourceSlug'>,
   _existingSourceSlug: string
 ) {
-  const payload = await formToAttractionPayload(client, form);
+  const payload = formToStaPayload(form);
   const { error } = await client
     .from(CONTENT_PIPELINE.adminPlacesTable)
     .update(payload)
-    .eq('establishment_public_id', id);
+    .eq('id', id);
   if (error) throw new Error(error.message);
 }
 
@@ -201,7 +162,7 @@ export async function deleteAdminPlace(client: SupabaseClient, id: string) {
   const { error } = await client
     .from(CONTENT_PIPELINE.adminPlacesTable)
     .delete()
-    .eq('establishment_public_id', id);
+    .eq('id', id);
   if (error) throw new Error(error.message);
 }
 
@@ -239,7 +200,7 @@ export async function persistGalleryUrls(
       gallery_urls: out,
       picture: out[0] ?? null,
     })
-    .eq('establishment_public_id', placeId);
+    .eq('id', placeId);
   if (error) throw new Error(error.message);
   return out;
 }

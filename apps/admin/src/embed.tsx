@@ -7,15 +7,11 @@ import { MobileSavedLists } from './pages/MobileSavedLists';
 import { MobileNotifications } from './pages/MobileNotifications';
 import { MobileAppReleases } from './pages/MobileAppReleases';
 import { MobileOnboarding } from './pages/MobileOnboarding';
-import { BusinessApplication } from './pages/BusinessApplication';
-import { ApplicationReview } from './pages/ApplicationReview';
 import { ContentOverview } from './pages/content/ContentOverview';
 import { ContentFilters } from './pages/content/ContentFilters';
 import { ContentEstablishments } from './pages/content/ContentEstablishments';
 import { ContentItineraries } from './pages/content/ContentItineraries';
 import { ContentMaps } from './pages/content/ContentMaps';
-import { ContentTerminals } from './pages/content/ContentTerminals';
-import { RewardsConcept } from './pages/RewardsConcept';
 import { AdminPlaceholder } from './components/AdminPlaceholder';
 import { ToastProvider } from './components/Toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -48,95 +44,6 @@ export function adminLayoutChildRoutes() {
     />,
     <Route key="tour-featured" path="web/tourism/featured" element={<ContentOverview />} />,
 
-    <Route
-      key="biz-dash"
-      path="web/business/dashboard"
-      element={stub('Business Dashboard', 'Overview of applications, establishments, and inspections.', [
-        'Pending applications count',
-        'Establishments awaiting publication',
-        'Upcoming inspections',
-      ])}
-    />,
-    <Route key="biz-inbox" path="web/business/inbox" element={<BusinessApplication />} />,
-    <Route key="biz-logs" path="web/business/logs" element={<BusinessApplication initialSection="logs" />} />,
-    <Route key="biz-review" path="web/business/review" element={<ApplicationReview />} />,
-    <Route key="biz-review-id" path="web/business/review/:id" element={<ApplicationReview />} />,
-    <Route
-      key="biz-archive"
-      path="web/business/archive"
-      element={stub('Applications Archive', 'Closed and archived business applications.', [
-        'Filter by date and outcome',
-        'Restore an archived application',
-        'Export archive for records',
-      ])}
-    />,
-    <Route key="biz-est-approved" path="web/business/establishments/approved" element={<ContentEstablishments />} />,
-    <Route
-      key="biz-est-pending"
-      path="web/business/establishments/pending"
-      element={stub('Pending Publication', 'Approved businesses waiting to go live in the catalog.', [
-        'Review publication checklist',
-        'Publish to tourist attractions',
-        'Notify the business owner',
-      ])}
-    />,
-    <Route
-      key="biz-est-suspended"
-      path="web/business/establishments/suspended"
-      element={stub('Suspended Establishments', 'Businesses temporarily removed from public browse.', [
-        'See suspension reason',
-        'Reinstate or archive',
-        'Notify owner of status change',
-      ])}
-    />,
-    <Route
-      key="biz-est-archive"
-      path="web/business/establishments/archive"
-      element={stub('Establishments Archive', 'Retired or permanently closed tourism establishments.', [
-        'Search archived businesses',
-        'Restore to draft if needed',
-        'Keep audit trail of removals',
-      ])}
-    />,
-    <Route
-      key="biz-req"
-      path="web/business/requirements"
-      element={stub('Requirements', 'Document and compliance checklist for business applications.', [
-        'Define required documents by business type',
-        'Mark which uploads are mandatory',
-        'Version requirement sets over time',
-      ])}
-    />,
-    <Route
-      key="biz-insp"
-      path="web/business/inspections"
-      element={stub('Inspections', 'Schedule and record establishment inspections.', [
-        'Upcoming and completed inspections',
-        'Assign inspectors',
-        'Attach notes and photos',
-      ])}
-    />,
-
-    <Route key="tr-term" path="web/transport/terminals" element={<ContentTerminals />} />,
-    <Route
-      key="tr-routes"
-      path="web/transport/routes"
-      element={stub('Routes', 'Transit corridors linking terminals and destinations.', [
-        'Create named routes',
-        'Link origin and destination terminals',
-        'Set transport type and notes',
-      ])}
-    />,
-    <Route
-      key="tr-types"
-      path="web/transport/types"
-      element={stub('Transport Types', 'Modes used on routes (jeepney, bus, UV, etc.).', [
-        'Add transport type labels',
-        'Icons and display order',
-        'Enable or disable types in filters',
-      ])}
-    />,
-
     <Route key="itin-created" path="web/itineraries/created" element={<ContentItineraries />} />,
     <Route
       key="itin-templates"
@@ -152,7 +59,7 @@ export function adminLayoutChildRoutes() {
     <Route
       key="map-geo"
       path="web/maps/geotagged"
-      element={stub('Geotagged Locations', 'Verified lat/lng points for establishments and terminals.', [
+      element={stub('Geotagged Locations', 'Verified lat/lng points for establishments.', [
         'Review zero or suspect coordinates',
         'Edit pin position on a map',
         'Bulk import geocodes',
@@ -168,26 +75,9 @@ export function adminLayoutChildRoutes() {
       ])}
     />,
 
-    <Route key="rew-items" path="web/rewards/items" element={<RewardsConcept />} />,
-    <Route
-      key="rew-redeem"
-      path="web/rewards/redemptions"
-      element={stub('Redemption Requests', 'Traveler requests to redeem points for rewards.', [
-        'Approve or deny redemptions',
-        'Track fulfillment status',
-        'Notify the user of the outcome',
-      ])}
-    />,
-    <Route
-      key="rew-hist"
-      path="web/rewards/history"
-      element={stub('Reward History', 'Ledger of points earned and spent.', [
-        'Filter by user or date',
-        'Export history',
-        'Audit unusual point spikes',
-      ])}
-    />,
-    <Route key="rewards" path="web/rewards" element={<Navigate to="web/rewards/items" replace />} />,
+    <Route key="biz-any" path="web/business/*" element={<Navigate to="web/dashboard" replace />} />,
+    <Route key="rewards-any" path="web/rewards/*" element={<Navigate to="web/dashboard" replace />} />,
+    <Route key="rewards" path="web/rewards" element={<Navigate to="web/dashboard" replace />} />,
 
     <Route key="web-content" path="web/content" element={<Navigate to="web/tourism/attractions" replace />} />,
     <Route key="web-content-overview" path="web/content/overview" element={<Navigate to="web/tourism/featured" replace />} />,
@@ -195,16 +85,19 @@ export function adminLayoutChildRoutes() {
     <Route key="web-content-est" path="web/content/establishments" element={<Navigate to="web/tourism/attractions" replace />} />,
     <Route key="web-content-itin" path="web/content/itineraries" element={<Navigate to="web/itineraries/created" replace />} />,
     <Route key="web-content-maps" path="web/content/maps" element={<Navigate to="web/maps/pins" replace />} />,
-    <Route key="web-content-term" path="web/content/terminals" element={<Navigate to="web/transport/terminals" replace />} />,
+    <Route key="web-content-term" path="web/content/terminals" element={<Navigate to="web/dashboard" replace />} />,
     <Route key="web-dest" path="web/destinations" element={<Navigate to="web/tourism/attractions" replace />} />,
-    <Route key="web-term" path="web/terminals" element={<Navigate to="web/transport/terminals" replace />} />,
+    <Route key="web-term" path="web/terminals" element={<Navigate to="web/dashboard" replace />} />,
+    <Route key="web-transport-term" path="web/transport/terminals" element={<Navigate to="web/dashboard" replace />} />,
+    <Route key="web-transport-routes" path="web/transport/routes" element={<Navigate to="web/dashboard" replace />} />,
+    <Route key="web-transport-types" path="web/transport/types" element={<Navigate to="web/dashboard" replace />} />,
     <Route key="web-users" path="web/users" element={<Users />} />,
     <Route key="web-settings" path="web/settings" element={<Settings />} />,
 
     <Route key="web-ts" path="web/tourist-spots" element={<Navigate to="web/tourism/attractions" replace />} />,
     <Route key="web-mod" path="web/moderation" element={<Navigate to="web/dashboard" replace />} />,
     <Route key="web-profile" path="web/profile" element={<Navigate to="web/settings" replace />} />,
-    <Route key="web-routes" path="web/routes" element={<Navigate to="web/transport/routes" replace />} />,
+    <Route key="web-routes" path="web/routes" element={<Navigate to="web/maps/connections" replace />} />,
 
     <Route key="m-dash" path="mobile/dashboard" element={<Navigate to="web/dashboard" replace />} />,
     <Route key="m-ts" path="mobile/tourist-spots" element={<Navigate to="web/tourism/attractions" replace />} />,

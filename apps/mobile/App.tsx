@@ -52,8 +52,6 @@ import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import ResetPasswordScreen from './screens/ResetPasswordScreen';
 import SignInScreen from './screens/SignInScreen';
 import SignUpScreen from './screens/SignUpScreen';
-import TerminalDetailScreen from './screens/TerminalDetailScreen';
-import TerminalsScreen from './screens/TerminalsScreen';
 import UserDetailsScreen from './screens/UserDetailsScreen';
 import NewListScreen from './screens/NewListScreen';
 import CreateItineraryScreen from './screens/CreateItineraryScreen';
@@ -105,8 +103,6 @@ function UnauthedFlow({ stackKey }: { stackKey: number }) {
 const DashboardStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="HomeMain" component={HomeScreen} />
-    <Stack.Screen name="Terminals" component={TerminalsScreen} />
-    <Stack.Screen name="TerminalDetail" component={TerminalDetailScreen} />
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
     <Stack.Screen name="AboutEstablishment" component={AboutEstablishmentScreen} />
     <Stack.Screen name="EstablishmentsBrowse" component={EstablishmentsBrowseScreen} />
@@ -153,16 +149,6 @@ const ProfileStack = () => (
   </Stack.Navigator>
 );
 
-// Terminals Stack
-const TerminalsStack = () => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="TerminalsMain" component={TerminalsScreen} />
-    <Stack.Screen name="TerminalDetail" component={TerminalDetailScreen} />
-    <Stack.Screen name="Directions" component={DirectionsScreen} />
-    <Stack.Screen name="FullRouteMap" component={FullRouteMapScreen} />
-  </Stack.Navigator>
-);
-
 // Map Stack
 const MapStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -170,7 +156,6 @@ const MapStack = () => (
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
     <Stack.Screen name="AboutEstablishment" component={AboutEstablishmentScreen} />
     <Stack.Screen name="EstablishmentsBrowse" component={EstablishmentsBrowseScreen} />
-    <Stack.Screen name="TerminalDetail" component={TerminalDetailScreen} />
     <Stack.Screen name="Directions" component={DirectionsScreen} />
     <Stack.Screen name="MapCommuteDetail" component={MapCommuteDetailScreen} />
     <Stack.Screen name="FullRouteMap" component={FullRouteMapScreen} />
@@ -210,9 +195,7 @@ function MainTabs() {
                 ? 'document-text-outline'
                 : route.name === 'Map'
                   ? 'map-outline'
-                  : route.name === 'Terminals'
-                    ? 'car-outline'
-                    : 'person-outline';
+                  : 'person-outline';
           return <JamIcon ionicon={ionicon} size={size} color={color} />;
         },
         tabBarActiveTintColor: Colors.accent,
@@ -237,7 +220,6 @@ function MainTabs() {
           const focused = getFocusedRouteNameFromRoute(route) ?? 'HomeMain';
           const hideTab =
             focused === 'Notifications' ||
-            focused === 'TerminalDetail' ||
             focused === 'Directions' ||
             focused === 'FullRouteMap' ||
             focused === 'AboutEstablishment' ||
@@ -277,23 +259,9 @@ function MainTabs() {
             focused === 'PlaceDetail' ||
             focused === 'AboutEstablishment' ||
             focused === 'Directions' ||
-            focused === 'FullRouteMap' ||
-            focused === 'TerminalDetail';
+            focused === 'FullRouteMap';
           return {
             tabBarLabel: 'Map',
-            tabBarStyle: hideTab ? { display: 'none' } : mainTabBarStyle,
-          };
-        }}
-      />
-      <Tab.Screen
-        name="Terminals"
-        component={TerminalsStack}
-        options={({ route }) => {
-          const focused = getFocusedRouteNameFromRoute(route) ?? 'TerminalsMain';
-          const hideTab =
-            focused === 'TerminalDetail' || focused === 'Directions' || focused === 'FullRouteMap';
-          return {
-            tabBarLabel: 'Terminals',
             tabBarStyle: hideTab ? { display: 'none' } : mainTabBarStyle,
           };
         }}

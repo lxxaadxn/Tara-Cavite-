@@ -1,5 +1,5 @@
 /**
- * Backfill tourist_attractions rows with lat/lng = 0 using Google Places + Geocoding.
+ * Backfill sta_v3_cavite_2025 rows with lat/lng = 0 using Google Places + Geocoding.
  *
  * Requires: GOOGLE_MAPS_API_KEY (Places API + Geocoding API enabled)
  * Optional: write SQL only with --sql-only (default writes data/backfill-zero-coords-google.json)
@@ -163,13 +163,20 @@ async function geocodeRow(row) {
 function toSql(results) {
   const ok = results.filter((r) => r.latitude != null);
   const lines = [
-    '-- Google Maps backfill for tourist_attractions (zero coords)',
+    '-- Google Maps backfill for sta_v3_cavite_2025 (zero coords)',
     'BEGIN;',
   ];
   for (const r of ok) {
-    lines.push(
-      `UPDATE tourist_attractions SET latitude = ${r.latitude}, longitude = ${r.longitude} WHERE ta_id = ${r.ta_id}; -- ${String(r.ta_name).replace(/'/g, "''")}`
-    );
+    const id = r.id || r.establishment_public_id;
+    if (id) {
+      lines.push(
+        `UPDATE sta_v3_cavite_2025 SET latitude = ${r.latitude}, longitude = ${r.longitude} WHERE id = '${String(id).replace(/'/g, "''")}'; -- ${String(r.ta_name).replace(/'/g, "''")}`
+      );
+    } else {
+      lines.push(
+        `UPDATE sta_v3_cavite_2025 SET latitude = ${r.latitude}, longitude = ${r.longitude} WHERE lower(trim(ta_name)) = lower(trim('${String(r.ta_name).replace(/'/g, "''")}'));`
+      );
+    }
   }
   lines.push('COMMIT;');
   lines.push(`-- ok=${ok.length} failed=${results.length - ok.length}`);

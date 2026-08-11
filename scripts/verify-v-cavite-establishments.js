@@ -34,7 +34,7 @@ async function main() {
     console.log('Sample:', data.map((r) => `${r.name} (${r.lgu_slug})`).join('; '));
   }
   if (n === 0) {
-    console.warn('WARN: view exists but has no geocoded rows. Seed places_* or tourist_attractions.');
+    console.warn('WARN: view exists but has no geocoded rows. Seed sta_v3_cavite_2025 / places.');
   }
 }
 

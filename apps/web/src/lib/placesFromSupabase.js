@@ -1,6 +1,6 @@
 /**
- * Cavite establishments via normalized public.tourist_attractions
- * (read through v_tourist_attractions_catalog).
+ * Cavite establishments via CONTENT_PIPELINE.establishmentsView
+ * (v_sta_v3_cavite_2025_catalog — STA membership, coords, hours, media, contact).
  */
 import { getDemoEstablishmentById } from 'cavitour-shared/demoPlaces';
 import { CONTENT_PIPELINE } from 'cavitour-shared';
@@ -30,7 +30,7 @@ export function haversineDistanceKm(lat1, lon1, lat2, lon2) {
 }
 
 const CATALOG_SELECT =
-  'establishment_public_id, ta_name, address, type, hours, latitude, longitude, picture, gallery_urls, description, ntdp_category, type_code, city_mun, is_published, created_at';
+  'establishment_public_id, ta_name, address, type, hours, latitude, longitude, picture, gallery_urls, description, ntdp_category, type_code, city_mun, is_published, created_at, phone, email, website';
 
 function parseCoord(v) {
   if (v == null) return null;
@@ -72,21 +72,29 @@ function normalizeCatalogRow(row) {
   };
 }
 
-/** Published catalog rows with coordinates. */
+/** Listed catalog rows with coordinates (STA is_listed → is_published). */
 function publishedCatalogQuery(client) {
   return client
     .from(CATALOG_TABLE)
     .select(CATALOG_SELECT)
+    .eq('is_published', true)
     .not('latitude', 'is', null)
     .not('longitude', 'is', null);
 }
 
 async function queryPublishedPlaces(client, builder) {
   let lastError = null;
-  const base = publishedCatalogQuery(client);
   const attempts = [
-    () => builder(base),
-    () => builder(base.or('is_published.is.null,is_published.eq.true')),
+    () => builder(publishedCatalogQuery(client)),
+    // Fallback if view lacks is_published
+    () =>
+      builder(
+        client
+          .from(CATALOG_TABLE)
+          .select(CATALOG_SELECT)
+          .not('latitude', 'is', null)
+          .not('longitude', 'is', null)
+      ),
   ];
   for (const run of attempts) {
     const { data, error } = await run();
@@ -96,7 +104,7 @@ async function queryPublishedPlaces(client, builder) {
     if (/column.*does not exist/i.test(msg) && msg.includes('is_published')) continue;
     break;
   }
-  throw new Error(lastError?.message ?? 'tourist_attractions catalog query failed');
+  throw new Error(lastError?.message ?? 'STA catalog query failed');
 }
 
 /** Normalize catalog row → UI place */

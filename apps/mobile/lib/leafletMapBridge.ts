@@ -2,12 +2,10 @@ import type { LeafletMarker } from '../components/leafletMapTypes';
 
 export function buildLeafletMapPayload(
   markers: LeafletMarker[],
-  userLocation: { lat: number; lng: number } | null,
-  terminals: LeafletMarker[] = []
+  userLocation: { lat: number; lng: number } | null
 ) {
   return {
     markers: markers.map((m) => ({ id: m.id, name: m.name, lat: m.lat, lng: m.lng })),
-    terminals: terminals.map((m) => ({ id: m.id, name: m.name, lat: m.lat, lng: m.lng })),
     userLat: userLocation?.lat ?? null,
     userLng: userLocation?.lng ?? null,
   };

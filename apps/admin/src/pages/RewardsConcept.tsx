@@ -8,8 +8,8 @@ export function RewardsConcept() {
         <p className={styles.kicker}>Concept draft</p>
         <h1>Rewards</h1>
         <p className={styles.lead}>
-          Earn points for exploring Cavite establishments, completing itineraries, and using terminal
-          guides — then redeem vouchers, badges, and partner perks.
+          Earn points for exploring Cavite establishments, completing itineraries, and using map
+          directions — then redeem vouchers, badges, and partner perks.
         </p>
         <p className={styles.callout}>Concept draft — not wired to backend yet.</p>
       </header>

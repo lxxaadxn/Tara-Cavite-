@@ -1,3 +1,6 @@
+-- OBSOLETE — do not re-apply. Terminals removed; use migration
+-- supabase/migrations/20260802120000_drop_cavitour_terminals.sql instead.
+--
 -- Tara, Cavite! terminal dataset (matches data/sheets/*.csv column semantics)
 -- Tables are prefixed to avoid collisions with existing public tables.
 BEGIN;

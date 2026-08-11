@@ -815,7 +815,6 @@ export function PlaceDetailPage() {
                     destinationAddress={cleanPlaceAddress(spot.name, spot.address)}
                     destinationLat={spot.lat}
                     destinationLng={spot.lng}
-                    destMunicipality={spot.city_mun}
                     userCoords={userCoords}
                     onRequestLocation={requestUserLocation}
                     locationStatus={locationStatus}

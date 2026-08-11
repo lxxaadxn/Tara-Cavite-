@@ -15,7 +15,6 @@ export type { LeafletMarker } from './leafletMapTypes';
  */
 export function LeafletMapView({
   markers,
-  terminals = [],
   userLocation,
   onMarkerPress,
   onMarkerPreview,
@@ -33,9 +32,9 @@ export function LeafletMapView({
   const pushToFrame = useCallback(() => {
     const win = iframeRef.current?.contentWindow;
     if (!win) return;
-    const payload = buildLeafletMapPayload(markers, userLocation, terminals);
+    const payload = buildLeafletMapPayload(markers, userLocation);
     win.postMessage(leafletHostPostMessageData(payload), '*');
-  }, [markers, terminals, userLocation]);
+  }, [markers, userLocation]);
 
   useEffect(() => {
     pushToFrame();

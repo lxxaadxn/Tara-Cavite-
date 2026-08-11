@@ -1,5 +1,5 @@
 /**
- * Types and non-catalog mock data (itineraries, terminals, notifications).
+ * Types and non-catalog mock data (itineraries, notifications).
  * Establishments load from `public.places` via placesFromSupabase.
  */
 
@@ -75,32 +75,6 @@ export interface Notification {
   message: string;
   date: string;
   time: string;
-}
-
-export interface Terminal {
-  id: string;
-  name: string;
-  /** City or municipality for location filter */
-  municipality: string;
-  /** Subtitle under title, e.g. barangay, city, region */
-  addressLine?: string;
-  /** Long description for detail “Description” tab */
-  description?: string;
-  category: 'dasma-bayan' | 'other';
-  transportTypes: string[];
-  status: 'OPEN' | 'CLOSED';
-  operatingHours: string;
-  averageFare: string;
-  paymentType: string;
-  /** Simple route list when the terminal has no gate groupings */
-  primaryRoutes: { label: string }[];
-  /** PITX-style: routes grouped by gate (accordion in UI) */
-  routesByGate?: { gateName: string; routes: { label: string }[] }[];
-  reminders: string[];
-  latitude: number;
-  longitude: number;
-  /** Showcased route count (mall terminals list, matches web). */
-  routeCount?: number;
 }
 
 // Recent searches (empty initially, will be populated from user's search history)
@@ -234,7 +208,7 @@ export const mockSavedLists: SavedList[] = [
   },
   {
     id: '4',
-    name: 'Favorite Terminal',
+    name: 'Favorite spots',
     icon: 'business',
     iconColor: '#2196F3',
     isPrivate: true,
@@ -316,120 +290,7 @@ export function getItineraryEstablishments(itineraryRefId: string, catalog: Plac
 
 // Categories for home screen
 export const categories = [
-  { id: '1', name: 'Terminals', icon: 'business' },
-  { id: '2', name: 'Jeepney Stops', icon: 'car' },
-  { id: '3', name: 'Tricycle Stops', icon: 'bicycle' },
-  { id: '4', name: 'Bus Stops', icon: 'bus' },
-];
-
-// Mock terminals — six waypoints from the demo logistics route (NY → IL)
-export const mockTerminals: Terminal[] = [
-  {
-    id: '1',
-    name: 'Anytown, NY 12345',
-    municipality: 'Anytown',
-    addressLine: '123 Main St',
-    description:
-      'Northeast staging point on the demo corridor. Connects to regional freight and passenger services toward Pleasantville.',
-    category: 'other',
-    transportTypes: ['Bus', 'Van'],
-    status: 'OPEN',
-    operatingHours: '24 hours',
-    averageFare: 'Varies by carrier',
-    paymentType: 'Cash / Card',
-    primaryRoutes: [{ label: 'To Pleasantville, NY' }, { label: 'Regional connections' }],
-    reminders: ['Confirm cargo documentation before departure.'],
-    latitude: 42.8142,
-    longitude: -73.9396,
-  },
-  {
-    id: '2',
-    name: 'Pleasantville, NY 12345',
-    municipality: 'Pleasantville',
-    addressLine: '789 Oak Dr',
-    description:
-      'Westchester-area waypoint with organized loading zones. Mid-route pickups before continuing toward Greenville.',
-    category: 'other',
-    transportTypes: ['Bus', 'Van'],
-    status: 'OPEN',
-    operatingHours: '5:00 AM – 11:00 PM',
-    averageFare: 'Varies by carrier',
-    paymentType: 'Cash / Card',
-    primaryRoutes: [{ label: 'To Greenville, NY' }, { label: 'To Anytown, NY' }],
-    reminders: [],
-    latitude: 41.1329,
-    longitude: -73.794,
-  },
-  {
-    id: '3',
-    name: 'Greenville, NY 12345',
-    municipality: 'Greenville',
-    addressLine: 'ul. Słoneczna 10',
-    description:
-      'Final New York segment stop before long-haul transfer west. Confirm manifests and handoff windows with dispatch.',
-    category: 'other',
-    transportTypes: ['Bus', 'Van'],
-    status: 'OPEN',
-    operatingHours: '6:00 AM – 10:00 PM',
-    averageFare: 'Varies by carrier',
-    paymentType: 'Cash / Card',
-    primaryRoutes: [{ label: 'To Springfield, IL' }, { label: 'NY regional' }],
-    reminders: ['Long-haul transfers — verify trailer seals.'],
-    latitude: 42.4153,
-    longitude: -73.8232,
-  },
-  {
-    id: '4',
-    name: 'Springfield, IL 67890',
-    municipality: 'Springfield',
-    addressLine: '456 Elm Avenue',
-    description:
-      'Illinois hub — central state routes. Peak activity midday; allow extra time for dock assignment.',
-    category: 'other',
-    transportTypes: ['Bus', 'Van'],
-    status: 'OPEN',
-    operatingHours: '24 hours',
-    averageFare: 'Varies by carrier',
-    paymentType: 'Cash / Card',
-    primaryRoutes: [{ label: 'To Lakeside, IL' }, { label: 'Central IL corridors' }],
-    reminders: [],
-    latitude: 39.7817,
-    longitude: -89.6501,
-  },
-  {
-    id: '5',
-    name: 'Lakeside, IL 67890',
-    municipality: 'Lakeside',
-    addressLine: '456 Tanager Drive',
-    description:
-      'Lake-adjacent access. Staged unloading before the final leg to Mountain View.',
-    category: 'other',
-    transportTypes: ['Bus', 'Van'],
-    status: 'OPEN',
-    operatingHours: '5:00 AM – 12:00 AM',
-    averageFare: 'Varies by carrier',
-    paymentType: 'Cash / Card',
-    primaryRoutes: [{ label: 'To Mountain View, IL' }],
-    reminders: [],
-    latitude: 42.0189,
-    longitude: -87.6618,
-  },
-  {
-    id: '6',
-    name: 'Mountain View, IL 67890',
-    municipality: 'Mountain View',
-    addressLine: '321 Maple Lane',
-    description:
-      'End-of-route terminal in the northwest corridor. Final delivery confirmation and driver notes apply here.',
-    category: 'other',
-    transportTypes: ['Bus', 'Van'],
-    status: 'OPEN',
-    operatingHours: '24 hours',
-    averageFare: 'Varies by carrier',
-    paymentType: 'Cash / Card',
-    primaryRoutes: [{ label: 'End of demo route' }],
-    reminders: ['Inspect cargo before signing delivery.'],
-    latitude: 42.0664,
-    longitude: -88.0043,
-  },
+  { id: '1', name: 'Jeepney Stops', icon: 'car' },
+  { id: '2', name: 'Tricycle Stops', icon: 'bicycle' },
+  { id: '3', name: 'Bus Stops', icon: 'bus' },
 ];

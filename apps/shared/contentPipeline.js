@@ -4,10 +4,14 @@
  */
 
 export const CONTENT_PIPELINE = {
-  /** Admin writes curated destinations here (source_slug prefix admin:) */
-  adminPlacesTable: 'tourist_attractions',
-  /** Public read model for web + mobile (flat view over normalized tourist_attractions) */
-  establishmentsView: 'v_tourist_attractions_catalog',
+  /** Admin writes curated destinations here (STA is the single establishment table). */
+  adminPlacesTable: 'sta_v3_cavite_2025',
+  /**
+   * Public read model for web + mobile.
+   * STA UPDATED Excel membership + Maps-link coords + hours/media/contact on the same table.
+   * Only is_listed rows are exposed as is_published.
+   */
+  establishmentsView: 'v_sta_v3_cavite_2025_catalog',
   adminSourcePrefix: 'admin:',
   imageStorageBucket: 'place-images',
   /** Same Supabase project for admin, web, mobile */

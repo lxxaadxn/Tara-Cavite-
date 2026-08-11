@@ -316,8 +316,7 @@ const SavedListScreen: React.FC = () => {
             </View>
             <Text style={styles.emptyTitle}>Nothing saved yet</Text>
             <Text style={styles.emptySubtitle}>
-              Create a list for weekend cafés, commute terminals, or a full day trip — then add spots from anywhere in
-              the app.
+              Create a list for weekend cafés, day trips, or favorite spots — then add places from anywhere in the app.
             </Text>
             <TouchableOpacity
               style={styles.emptyCta}

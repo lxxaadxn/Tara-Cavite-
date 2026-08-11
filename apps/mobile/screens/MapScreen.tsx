@@ -22,8 +22,7 @@ import { placeToMapSpot, type CommuteLegKind } from '../data/mapBrowseSpots';
 import { getMainFloatingTabBarStyle } from '../lib/mainTabBarStyle';
 import { supabase } from '../lib/supabase';
 import { fetchTrendingPlacesFromSupabase, logPlacesFetchError } from '../lib/placesFromSupabase';
-import { fetchTerminalsFromSupabase } from '../lib/terminalsFromSupabase';
-import { mockTerminals, type Place, type Terminal } from '../data/mockData';
+import type { Place } from '../data/mockData';
 
 const H_PAD = 16;
 const OVERLAY_TOP = 10;
@@ -50,8 +49,6 @@ function legIonicon(kind: CommuteLegKind): string {
       return 'bicycle';
     case 'walk':
       return 'walk-outline';
-    case 'terminal':
-      return 'business-outline';
     case 'destination':
     default:
       return 'location-outline';
@@ -69,7 +66,6 @@ export default function MapScreen() {
   const [previewPoint, setPreviewPoint] = useState<LeafletPreviewPoint | null>(null);
   const [dbMarkers, setDbMarkers] = useState<LeafletMarker[]>([]);
   const [dbPlaces, setDbPlaces] = useState<Place[]>([]);
-  const [terminals, setTerminals] = useState<Terminal[]>(mockTerminals);
 
   const selectedSpot = useMemo(() => {
     if (!selectedId) return undefined;
@@ -107,32 +103,6 @@ export default function MapScreen() {
       cancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const live = await fetchTerminalsFromSupabase(supabase);
-        if (!cancelled && live.length > 0) setTerminals(live);
-      } catch {
-        if (!cancelled) setTerminals(mockTerminals);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const terminalMarkers = useMemo(
-    () =>
-      terminals.map((t) => ({
-        id: `terminal-${t.id}`,
-        name: t.name,
-        lat: t.latitude,
-        lng: t.longitude,
-      })),
-    [terminals]
-  );
 
   const combinedMarkers = dbMarkers;
 
@@ -208,16 +178,6 @@ export default function MapScreen() {
     setPreviewPoint(null);
   };
 
-  const openTerminal = (id: string) => {
-    if (!id.startsWith('terminal-')) return;
-    clearPreview();
-    const terminalId = id.replace('terminal-', '');
-    const terminal = terminals.find((t) => t.id === terminalId);
-    if (terminal) {
-      navigation.navigate('TerminalDetail' as never, { terminal } as never);
-    }
-  };
-
   const openDirectionsSheet = (id: string) => {
     clearPreview();
     setSelectedId(id);
@@ -251,11 +211,8 @@ export default function MapScreen() {
           <LeafletMapView
             style={styles.mapLayer}
             markers={combinedMarkers}
-            terminals={terminalMarkers}
             userLocation={userLocation}
-            onMarkerPress={openTerminal}
             onMarkerPreview={(id, point) => {
-              if (id.startsWith('terminal-')) return;
               setPreviewSpotId(id);
               setPreviewPoint(point);
             }}

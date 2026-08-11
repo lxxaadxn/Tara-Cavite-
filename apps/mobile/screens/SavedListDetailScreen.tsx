@@ -14,9 +14,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { JamIcon } from '../components/JamIcon';
-import { Place, mockTerminals, mockItineraries, type Terminal, type ItineraryCard } from '../data/mockData';
+import { CONTENT_PIPELINE } from 'cavitour-shared';
+import { Place, mockItineraries, type ItineraryCard } from '../data/mockData';
 import { supabase } from '../lib/supabase';
-import { fetchTerminalsFromSupabase } from '../lib/terminalsFromSupabase';
 
 const GREEN = '#7EA00E';
 const TEAL = '#1F4F59';
@@ -41,14 +41,13 @@ export type SavedListDetailParams = {
   };
 };
 
-type SavedKind = 'establishment' | 'terminal' | 'itinerary';
+type SavedKind = 'establishment' | 'itinerary';
 
 type SavedRow = {
   kind: SavedKind;
   key: string;
   title: string;
   place?: Place;
-  terminal?: Terminal;
   itinerary?: ItineraryCard;
 };
 
@@ -59,8 +58,6 @@ function rowIconForKind(kind: SavedKind) {
   switch (kind) {
     case 'establishment':
       return <JamIcon ionicon="business" size={24} color={color} />;
-    case 'terminal':
-      return <JamIcon ionicon="bus" size={24} color={color} />;
     default:
       return <JamIcon ionicon="map-outline" size={24} color={color} />;
   }
@@ -69,7 +66,6 @@ function rowIconForKind(kind: SavedKind) {
 const FILTER_OPTIONS: { key: TypeFilter; label: string }[] = [
   { key: 'all', label: 'All saves' },
   { key: 'establishment', label: 'Establishments' },
-  { key: 'terminal', label: 'Terminals' },
   { key: 'itinerary', label: 'Itineraries' },
 ];
 
@@ -94,10 +90,6 @@ export default function SavedListDetailScreen() {
         .eq('list_id', listId);
       if (placeLinkErr) throw placeLinkErr;
 
-      const { data: termLinks, error: termErr } = await supabase
-        .from('saved_list_terminal_items')
-        .select('terminal_ref')
-        .eq('list_id', listId);
       const { data: itinLinks, error: itinErr } = await supabase
         .from('saved_list_itinerary_items')
         .select('itinerary_ref')
@@ -108,7 +100,7 @@ export default function SavedListDetailScreen() {
       const placeIds = (placeLinks ?? []).map((r) => (r as { place_id: string }).place_id);
       if (placeIds.length > 0) {
         const { data: pRows, error } = await supabase
-          .from('v_tourist_attractions_catalog')
+          .from(CONTENT_PIPELINE.establishmentsView)
           .select(SAVED_PLACES_SELECT)
           .in('establishment_public_id', placeIds);
         if (error) throw error;
@@ -146,22 +138,6 @@ export default function SavedListDetailScreen() {
             title: p.name,
             place: p,
           });
-        }
-      }
-
-      if (!termErr) {
-        const tRefs = new Set((termLinks ?? []).map((r) => (r as { terminal_ref: string }).terminal_ref));
-        let terminalsCatalog: Terminal[] = mockTerminals;
-        try {
-          const liveTerminals = await fetchTerminalsFromSupabase(supabase);
-          if (liveTerminals.length) terminalsCatalog = liveTerminals;
-        } catch {
-          terminalsCatalog = mockTerminals;
-        }
-        for (const t of terminalsCatalog) {
-          if (tRefs.has(t.id)) {
-            rows.push({ kind: 'terminal', key: `t-${t.id}`, title: t.name, terminal: t });
-          }
         }
       }
 
@@ -205,13 +181,6 @@ export default function SavedListDetailScreen() {
       (navigation as { navigate: (name: string, params: object) => void }).navigate('Dashboard', {
         screen: 'AboutEstablishment',
         params: { place: item.place },
-      });
-      return;
-    }
-    if (item.kind === 'terminal' && item.terminal) {
-      (navigation as { navigate: (name: string, params: object) => void }).navigate('Terminals', {
-        screen: 'TerminalDetail',
-        params: { terminal: item.terminal },
       });
       return;
     }

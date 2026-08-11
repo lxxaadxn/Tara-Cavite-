@@ -17,8 +17,6 @@ import { PlaceDetailPage } from './pages/PlaceDetailPage';
 import { SavedPage } from './pages/SavedPage';
 import { ItineraryPage } from './pages/ItineraryPage';
 import { ItineraryDetailPage } from './pages/ItineraryDetailPage';
-import { TerminalsPage } from './pages/TerminalsPage';
-import { TerminalDetailPage } from './pages/TerminalDetailPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { Layout as AdminLayout } from '../../admin/src/components/Layout';
 import {
@@ -117,22 +115,6 @@ export default function App() {
           element={
             <ProtectedRoute>
               <ItineraryDetailPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/terminals"
-          element={
-            <ProtectedRoute>
-              <TerminalsPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/terminals/:id"
-          element={
-            <ProtectedRoute>
-              <TerminalDetailPage />
             </ProtectedRoute>
           }
         />

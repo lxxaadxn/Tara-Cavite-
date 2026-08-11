@@ -65,7 +65,7 @@ function LocationPill({ label, selected, onClick }) {
  * @param {AppliedPlaceFilters | null} [props.appliedFilters]
  * @param {(filters: AppliedPlaceFilters) => void} [props.onApply]
  * @param {any[]} [props.places] — current search list for live result count
- * @param {boolean} [props.hideCategories] — hide category grid (e.g. terminals page)
+ * @param {boolean} [props.hideCategories] — hide category grid when not needed
  * @param {string} [props.resultNoun] — label for apply button preview count
  */
 export function FilterModal({

@@ -8,15 +8,15 @@ export function MobileMapCommute() {
   const [layers, setLayers] = useState<MapLayerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [counts, setCounts] = useState({ establishments: 0, terminals: 0 });
+  const [establishmentCount, setEstablishmentCount] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const { layers: next, establishmentCount, terminalCount } = await fetchAdminMapLayers(supabase);
+      const { layers: next, establishmentCount: count } = await fetchAdminMapLayers(supabase);
       setLayers(next);
-      setCounts({ establishments: establishmentCount, terminals: terminalCount });
+      setEstablishmentCount(count);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load map data');
       setLayers([]);
@@ -39,11 +39,9 @@ export function MobileMapCommute() {
     <div className={styles.page}>
       <header className={styles.header}>
         <h1>Map &amp; commute</h1>
-        <p>Map layers driven by Supabase place and terminal counts.</p>
+        <p>Map layers driven by Supabase place counts.</p>
         <p className={styles.sourceNote}>
-          {loading
-            ? 'Loading...'
-            : `Live - ${counts.establishments} places - ${counts.terminals} terminals`}
+          {loading ? 'Loading...' : `Live - ${establishmentCount} places`}
         </p>
       </header>
 
@@ -58,11 +56,7 @@ export function MobileMapCommute() {
         </div>
         <div className={listStyles.stat}>
           <span className={listStyles.statLabel}>Establishments</span>
-          <span className={listStyles.statValue}>{loading ? '...' : counts.establishments}</span>
-        </div>
-        <div className={listStyles.stat}>
-          <span className={listStyles.statLabel}>Terminals</span>
-          <span className={listStyles.statValue}>{loading ? '...' : counts.terminals}</span>
+          <span className={listStyles.statValue}>{loading ? '...' : establishmentCount}</span>
         </div>
       </div>
 
@@ -79,27 +73,21 @@ export function MobileMapCommute() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={4} className={listStyles.empty}>
-                  Loading from Supabase...
-                </td>
+                <td colSpan={4}>Loading…</td>
+              </tr>
+            ) : layers.length === 0 ? (
+              <tr>
+                <td colSpan={4}>No layers</td>
               </tr>
             ) : (
-              layers.map((row) => (
-                <tr key={row.id} className={listStyles.row}>
+              layers.map((layer) => (
+                <tr key={layer.id}>
+                  <td>{layer.layer}</td>
+                  <td>{layer.description}</td>
+                  <td>{layer.source}</td>
                   <td>
-                    <strong>{row.layer}</strong>
-                  </td>
-                  <td>{row.description}</td>
-                  <td className={styles.source}>{row.source}</td>
-                  <td>
-                    <button
-                      type="button"
-                      className={`${listStyles.toggle} ${row.enabled ? listStyles.toggleOn : ''}`}
-                      onClick={() => toggle(row.id)}
-                      aria-pressed={row.enabled}
-                      aria-label={`${row.layer} layer`}
-                    >
-                      <span className={listStyles.knob} />
+                    <button type="button" onClick={() => toggle(layer.id)}>
+                      {layer.enabled ? 'On' : 'Off'}
                     </button>
                   </td>
                 </tr>

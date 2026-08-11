@@ -5,7 +5,7 @@ export type DirectionsMapPayload = {
   destLng: number;
   /** Single OSRM line (e.g. direct user → destination). */
   routeGeoJson: { type: 'LineString'; coordinates: number[][] } | null;
-  /** Multiple road-following segments (e.g. user → terminal → … → destination). All drawn in blue. */
+  /** Multiple road-following segments (e.g. corridor pieces). All drawn in blue. */
   routeSegmentsGeoJson?: { type: 'LineString'; coordinates: number[][] }[] | null;
 };
 

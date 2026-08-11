@@ -84,7 +84,6 @@ export const CAVITOUR_LEAFLET_HTML = `<!DOCTYPE html>
       ${LEAFLET_GREEN_PIN_SNIPPET}
 
       var markersLayer = L.layerGroup().addTo(map);
-      var terminalsLayer = L.layerGroup().addTo(map);
       var userLayer = L.layerGroup().addTo(map);
       var didCenterUser = false;
       var didFitPlaces = false;
@@ -126,12 +125,10 @@ export const CAVITOUR_LEAFLET_HTML = `<!DOCTYPE html>
       window.__cavitourUpdateMap = function (payload) {
         try {
           var markers = payload.markers || [];
-          var terminals = payload.terminals || [];
           var userLat = payload.userLat;
           var userLng = payload.userLng;
 
           markersLayer.clearLayers();
-          terminalsLayer.clearLayers();
           var bounds = [];
           if (activePreviewId && !markers.some(function (p) { return String(p.id) === activePreviewId; })) {
             clearMarkerPreview();
@@ -151,17 +148,6 @@ export const CAVITOUR_LEAFLET_HTML = `<!DOCTYPE html>
               if (activePreviewId === String(p.id)) clearMarkerPreview();
             });
             markersLayer.addLayer(m);
-            bounds.push([p.lat, p.lng]);
-          });
-
-          terminals.forEach(function (p) {
-            if (p.lat == null || p.lng == null || isNaN(p.lat) || isNaN(p.lng)) return;
-            var t = L.marker([p.lat, p.lng], { icon: greenPinIcon });
-            t.on('click', function () {
-              postToHost({ type: 'markerPress', id: String(p.id), name: String(p.name || '') });
-            });
-            t.bindPopup('Terminal · ' + String(p.name || ''));
-            terminalsLayer.addLayer(t);
             bounds.push([p.lat, p.lng]);
           });
 

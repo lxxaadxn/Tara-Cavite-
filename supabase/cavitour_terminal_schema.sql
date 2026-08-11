@@ -1,3 +1,6 @@
+-- OBSOLETE — do not re-apply. Terminals removed; use migration
+-- supabase/migrations/20260802120000_drop_cavitour_terminals.sql to drop these objects.
+--
 -- Tara, Cavite!: sheet-aligned terminal model (matches Google Sheets tabs).
 -- Safe table names (cavitour_* prefix). Run once before terminal_dataset_seed.sql
 

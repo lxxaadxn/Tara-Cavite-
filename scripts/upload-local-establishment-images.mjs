@@ -1,6 +1,6 @@
 /**
  * Upload bundled establishment PNGs to Supabase Storage and save URLs on
- * public.tourist_attractions (picture + gallery_urls).
+ * public.sta_v3_cavite_2025 (picture + gallery_urls).
  *
  * Matches local files by ta_name via parseLocalEstablishmentMedia.
  *
@@ -29,7 +29,7 @@ const REPO_ROOT = path.resolve(__dirname, '..');
 
 const DEFAULT_URL = 'https://bmsftpvixpvtjrlclnlz.supabase.co';
 const BUCKET = 'place-images';
-const CATALOG_TABLE = 'tourist_attractions';
+const CATALOG_TABLE = 'sta_v3_cavite_2025';
 
 const args = new Set(process.argv.slice(2));
 const APPLY = args.has('--apply');
@@ -125,7 +125,7 @@ async function main() {
   const catalog = await fetchAllRows(
     client,
     CATALOG_TABLE,
-    'establishment_public_id, ta_name, picture, gallery_urls'
+    'id, ta_name, picture, gallery_urls'
   );
   console.log(`public.${CATALOG_TABLE} rows: ${catalog.length}`);
 
@@ -160,7 +160,7 @@ async function main() {
 
     plan.push({
       taName: row.ta_name,
-      placeId: row.establishment_public_id,
+      placeId: row.id,
       placeName: row.ta_name,
       files,
     });
@@ -185,7 +185,7 @@ async function main() {
     }
     plan.push({
       taName,
-      placeId: row.establishment_public_id,
+      placeId: row.id,
       placeName: row.ta_name,
       files,
     });
@@ -223,9 +223,8 @@ async function main() {
         .update({
           picture: publicUrls[0] ?? null,
           gallery_urls: publicUrls,
-          updated_at: new Date().toISOString(),
         })
-        .eq('establishment_public_id', row.placeId);
+        .eq('id', row.placeId);
       if (error) throw new Error(error.message);
       ok++;
       console.log(`OK  ${row.placeName} (${publicUrls.length} images)`);

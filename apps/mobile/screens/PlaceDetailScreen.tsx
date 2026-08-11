@@ -15,8 +15,6 @@ import { Header } from '../components/Header';
 import { Place } from '../data/mockData';
 import { supabase } from '../lib/supabase';
 import { searchPlacesByText } from '../lib/placesFromSupabase';
-import { fetchTerminalsFromSupabase, filterTerminalsByText } from '../lib/terminalsFromSupabase';
-import type { Terminal } from '../data/mockData';
 
 type RouteParams = { place?: Place; query?: string; category?: string };
 
@@ -30,7 +28,6 @@ const PlaceDetailScreen: React.FC = () => {
 
   const [loading, setLoading] = useState(false);
   const [candidates, setCandidates] = useState<Place[]>([]);
-  const [terminalCandidates, setTerminalCandidates] = useState<Terminal[]>([]);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   const isSearchFlow = !initialPlace && Boolean(searchQuery);
@@ -47,7 +44,6 @@ const PlaceDetailScreen: React.FC = () => {
     if (initialPlace) return;
     if (!searchQuery) {
       setCandidates([]);
-      setTerminalCandidates([]);
       setFetchError(null);
       return;
     }
@@ -55,11 +51,10 @@ const PlaceDetailScreen: React.FC = () => {
     let cancelled = false;
     setLoading(true);
     setFetchError(null);
-    Promise.all([searchPlacesByText(supabase, searchQuery), fetchTerminalsFromSupabase(supabase)])
-      .then(([placeList, terminals]) => {
+    searchPlacesByText(supabase, searchQuery)
+      .then((placeList) => {
         if (cancelled) return;
         setCandidates(placeList);
-        setTerminalCandidates(filterTerminalsByText(terminals, searchQuery, 10));
       })
       .catch((e: Error) => {
         if (!cancelled) setFetchError(e.message ?? 'Search failed');
@@ -75,26 +70,15 @@ const PlaceDetailScreen: React.FC = () => {
 
   useLayoutEffect(() => {
     if (!isSearchFlow || loading || fetchError) return;
-    if (candidates.length === 1 && terminalCandidates.length === 0) {
+    if (candidates.length === 1) {
       (navigation as { replace: (name: string, params: object) => void }).replace('AboutEstablishment', {
         place: candidates[0],
       });
-      return;
     }
-    if (terminalCandidates.length === 1 && candidates.length === 0) {
-      (navigation as { replace: (name: string, params: object) => void }).replace('TerminalDetail', {
-        terminal: terminalCandidates[0],
-      });
-    }
-  }, [isSearchFlow, loading, fetchError, candidates, terminalCandidates, navigation]);
+  }, [isSearchFlow, loading, fetchError, candidates, navigation]);
 
-  const showList =
-    isSearchFlow &&
-    !loading &&
-    !fetchError &&
-    (candidates.length > 1 || terminalCandidates.length > 1 || (candidates.length && terminalCandidates.length));
-  const showEmpty =
-    isSearchFlow && !loading && !fetchError && candidates.length === 0 && terminalCandidates.length === 0;
+  const showList = isSearchFlow && !loading && !fetchError && candidates.length > 1;
+  const showEmpty = isSearchFlow && !loading && !fetchError && candidates.length === 0;
   const showLoading = isSearchFlow && loading;
   const showError = isSearchFlow && !loading && fetchError;
 
@@ -154,9 +138,6 @@ const PlaceDetailScreen: React.FC = () => {
           showsVerticalScrollIndicator={false}
         >
           <Text style={styles.listHeading}>{listHeading}</Text>
-          {candidates.length ? (
-            <Text style={styles.sectionCaption}>Places & establishments</Text>
-          ) : null}
           {candidates.map((item) => (
             <TouchableOpacity
               key={item.id}
@@ -179,29 +160,6 @@ const PlaceDetailScreen: React.FC = () => {
               <JamIcon ionicon="chevron-forward" size={20} color={Colors.text.light} />
             </TouchableOpacity>
           ))}
-          {terminalCandidates.length ? (
-            <Text style={styles.sectionCaption}>Terminals</Text>
-          ) : null}
-          {terminalCandidates.map((item) => (
-            <TouchableOpacity
-              key={`t-${item.id}`}
-              style={styles.resultRow}
-              onPress={() => navigation.navigate('TerminalDetail' as never, { terminal: item } as never)}
-              accessibilityRole="button"
-              accessibilityLabel={`${item.name}, ${item.addressLine ?? item.municipality}`}
-            >
-              <JamIcon ionicon="bus" size={22} color={Colors.primary} />
-              <View style={styles.resultTextCol}>
-                <Text style={styles.resultName} numberOfLines={2}>
-                  {item.name}
-                </Text>
-                <Text style={styles.resultAddr} numberOfLines={2}>
-                  {item.addressLine ?? item.municipality}
-                </Text>
-              </View>
-              <JamIcon ionicon="chevron-forward" size={20} color={Colors.text.light} />
-            </TouchableOpacity>
-          ))}
         </ScrollView>
       ) : null}
     </SafeAreaView>
@@ -218,72 +176,62 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: Theme.spacing.lg,
-    gap: Theme.spacing.sm,
   },
   hint: {
+    marginTop: Theme.spacing.md,
+    fontFamily: 'Inter_400Regular',
     fontSize: 14,
+    lineHeight: 20,
     color: Colors.text.secondary,
     textAlign: 'center',
-    marginTop: Theme.spacing.sm,
   },
   errorText: {
+    fontFamily: 'Poppins_700Bold',
     fontSize: 16,
-    color: Colors.text.primary,
+    color: Colors.primary,
     textAlign: 'center',
   },
   emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.text.primary,
     marginTop: Theme.spacing.md,
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 18,
+    color: Colors.primary,
   },
   listWrap: {
     flex: 1,
-    paddingHorizontal: Theme.spacing.md,
-  },
-  listHeading: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text.primary,
-    marginBottom: Theme.spacing.md,
-    marginTop: Theme.spacing.sm,
-  },
-  sectionCaption: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.text.secondary,
-    marginBottom: Theme.spacing.xs,
-    marginTop: Theme.spacing.sm,
-    textTransform: 'uppercase',
   },
   listContent: {
+    paddingHorizontal: Theme.spacing.lg,
     paddingBottom: Theme.spacing.xl,
+  },
+  listHeading: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 18,
+    color: Colors.primary,
+    marginBottom: Theme.spacing.md,
   },
   resultRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Theme.spacing.sm,
-    paddingVertical: Theme.spacing.md,
-    paddingHorizontal: Theme.spacing.sm,
-    backgroundColor: Colors.background,
-    borderRadius: Theme.borderRadius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,0,0,0.08)',
-    marginBottom: Theme.spacing.sm,
+    gap: 12,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(122, 120, 120, 0.25)',
   },
   resultTextCol: {
     flex: 1,
     minWidth: 0,
   },
   resultName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: Colors.text.primary,
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 15,
+    color: Colors.primary,
   },
   resultAddr: {
+    marginTop: 2,
+    fontFamily: 'Inter_400Regular',
     fontSize: 13,
     color: Colors.text.secondary,
-    marginTop: 4,
   },
 });
 

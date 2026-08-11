@@ -56,47 +56,6 @@ export type FullRouteMapParams = {
 
 
 
-// #region agent log
-
-function debugLog(
-
-  location: string,
-
-  message: string,
-
-  data: Record<string, unknown>,
-
-  hypothesisId: string
-
-) {
-
-  fetch('http://127.0.0.1:7604/ingest/c241c18c-94ef-45ef-99cf-e15fd3724139', {
-
-    method: 'POST',
-
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'c650a7' },
-
-    body: JSON.stringify({
-
-      sessionId: 'c650a7',
-
-      location,
-
-      message,
-
-      data,
-
-      hypothesisId,
-
-      timestamp: Date.now(),
-
-    }),
-
-  }).catch(() => {});
-
-}
-
-// #endregion
 
 
 
@@ -140,33 +99,6 @@ export default function FullRouteMapScreen() {
 
 
 
-    // #region agent log
-
-    debugLog(
-
-      'FullRouteMapScreen.tsx:hydrateMap',
-
-      'hydrate start',
-
-      {
-
-        initialUserLat: initialPayload.userLat,
-
-        initialUserLng: initialPayload.userLng,
-
-        hasInitialRoute: Boolean(initialPayload.routeGeoJson?.coordinates?.length),
-
-        destLat,
-
-        destLng,
-
-      },
-
-      'B'
-
-    );
-
-    // #endregion
 
 
 
@@ -194,21 +126,6 @@ export default function FullRouteMapScreen() {
 
       const { status } = await Location.requestForegroundPermissionsAsync();
 
-      // #region agent log
-
-      debugLog(
-
-        'FullRouteMapScreen.tsx:hydrateMap',
-
-        'location permission',
-
-        { status },
-
-        'A'
-
-      );
-
-      // #endregion
 
 
 
@@ -232,26 +149,8 @@ export default function FullRouteMapScreen() {
 
           userLng = pos.coords.longitude;
 
-        } catch (locErr) {
-
-          // #region agent log
-
-          debugLog(
-
-            'FullRouteMapScreen.tsx:hydrateMap',
-
-            'getCurrentPosition failed',
-
-            { err: locErr instanceof Error ? locErr.message : 'unknown' },
-
-            'A'
-
-          );
-
-          // #endregion
-
+        } catch {
           setLocDenied(true);
-
         }
 
       }
@@ -300,31 +199,6 @@ export default function FullRouteMapScreen() {
 
 
 
-      // #region agent log
-
-      debugLog(
-
-        'FullRouteMapScreen.tsx:hydrateMap',
-
-        'hydrate done',
-
-        {
-
-          userLat,
-
-          userLng,
-
-          routePointCount: routeGeoJson?.coordinates?.length ?? 0,
-
-          segmentCount: routeSegmentsGeoJson?.length ?? 0,
-
-        },
-
-        'C'
-
-      );
-
-      // #endregion
 
 
 

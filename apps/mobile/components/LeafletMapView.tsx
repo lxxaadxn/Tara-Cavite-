@@ -13,7 +13,6 @@ export type { LeafletMarker, LeafletPreviewPoint } from './leafletMapTypes';
 /** Leaflet + OpenStreetMap in WebView — iOS & Android (Expo Go / dev builds). */
 export function LeafletMapView({
   markers,
-  terminals = [],
   userLocation,
   onMarkerPress,
   onMarkerPreview,
@@ -23,9 +22,9 @@ export function LeafletMapView({
   const webRef = useRef<WebView>(null);
 
   const pushToWeb = useCallback(() => {
-    const payload = buildLeafletMapPayload(markers, userLocation, terminals);
+    const payload = buildLeafletMapPayload(markers, userLocation);
     webRef.current?.injectJavaScript(leafletInjectUpdateScript(payload));
-  }, [markers, terminals, userLocation]);
+  }, [markers, userLocation]);
 
   useEffect(() => {
     pushToWeb();

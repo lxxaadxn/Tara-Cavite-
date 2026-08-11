@@ -9,9 +9,6 @@
     ".": "./index.js",
     "./contentPipeline": "./contentPipeline.js",
     "./demoCatalog": "./demoCatalog.js",
-    "./terminalCatalogPolicy": "./terminalCatalogPolicy.js",
-    "./mallTerminalsSeed": "./mallTerminalsSeed.js",
-    "./terminalCoordinates.json": "./terminalCoordinates.json",
     "./defaultAvatar": "./defaultAvatar.js",
     "./commuterGuideBuilder": "./commuterGuideBuilder.js",
     "./demoPlaces": "./demoPlaces.js"

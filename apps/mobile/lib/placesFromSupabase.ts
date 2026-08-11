@@ -37,7 +37,7 @@ export type PlaceRow = PlacesCatalogRow;
 /** @deprecated Use PlacesCatalogRow */
 export type CavitePlaceRow = PlacesCatalogRow;
 
-type TouristAttractedRow = {
+type CatalogViewRow = {
   establishment_public_id?: string;
   ta_name?: string;
   picture?: string | null;
@@ -56,10 +56,13 @@ type TouristAttractedRow = {
   city_mun?: string | null;
   is_published?: boolean | null;
   created_at?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  website?: string | null;
 };
 
 const CATALOG_SELECT =
-  'establishment_public_id, ta_name, address, type, hours, latitude, longitude, picture, gallery_urls, description, ntdp_category, type_code, city_mun, is_published, created_at';
+  'establishment_public_id, ta_name, address, type, hours, latitude, longitude, picture, gallery_urls, description, ntdp_category, type_code, city_mun, is_published, created_at, phone, email, website';
 
 const KM_PER_DEG_LAT = 111;
 
@@ -118,7 +121,7 @@ function applyCatalogMedia(place: Place): Place {
   return enrichPlaceWithLocalEstablishmentMedia(place);
 }
 
-function normalizeCatalogRow(row: TouristAttractedRow | PlacesCatalogRow): PlacesCatalogRow | null {
+function normalizeCatalogRow(row: CatalogViewRow | PlacesCatalogRow): PlacesCatalogRow | null {
   if (!row || typeof row !== 'object') return null;
   const id = ('establishment_public_id' in row && row.establishment_public_id) || row.id;
   const name = ('ta_name' in row && row.ta_name) || row.name;
@@ -145,6 +148,7 @@ function publishedCatalogQuery(client: SupabaseClient) {
   return client
     .from(CATALOG_TABLE)
     .select(CATALOG_SELECT)
+    .eq('is_published', true)
     .not('latitude', 'is', null)
     .not('longitude', 'is', null);
 }
@@ -157,8 +161,17 @@ async function queryPublishedPlaces(
   }>
 ): Promise<PlacesCatalogRow[]> {
   let lastError: { message: string } | null = null;
-  const base = publishedCatalogQuery(client);
-  const attempts = [() => builder(base), () => builder(base.or('is_published.is.null,is_published.eq.true'))];
+  const attempts = [
+    () => builder(publishedCatalogQuery(client)),
+    () =>
+      builder(
+        client
+          .from(CATALOG_TABLE)
+          .select(CATALOG_SELECT)
+          .not('latitude', 'is', null)
+          .not('longitude', 'is', null)
+      ),
+  ];
   for (const run of attempts) {
     const { data, error } = await run();
     if (!error) {
@@ -171,7 +184,7 @@ async function queryPublishedPlaces(
     if (/column.*does not exist/i.test(msg) && msg.includes('is_published')) continue;
     break;
   }
-  throw new Error(lastError?.message ?? 'tourist_attractions catalog query failed');
+  throw new Error(lastError?.message ?? 'STA catalog query failed');
 }
 
 /** Map catalog row → Place (mockData shape). */

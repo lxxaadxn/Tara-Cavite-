@@ -1,3 +1,5 @@
+-- OBSOLETE — do not re-apply. Terminals removed from the apps.
+--
 -- SET 3 — Row Level Security: allow the mobile app (anon key) to read terminal data only.
 -- Run in SQL Editor AFTER schema + seed.
 

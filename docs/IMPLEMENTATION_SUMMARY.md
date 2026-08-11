@@ -9,7 +9,7 @@ All screens have been updated to match the Figma designs with full CRUD function
 - ✅ Trending Tourist Spots section (horizontal scrollable cards)
 - ✅ Recent Searches section (empty state with placeholder text)
 - ✅ Nearby Places section (horizontal scrollable with location pins)
-- ✅ Terminals and Categories buttons
+- ✅ Categories buttons
 - ✅ Dark teal background with rounded top corners
 - ✅ Search bar with location icon
 

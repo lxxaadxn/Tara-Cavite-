@@ -12,12 +12,12 @@ async function resolveCanonicalPlaceId(
   placeRefId: string
 ): Promise<string | null> {
   const { data: byId, error: byIdError } = await client
-    .from('tourist_attractions')
-    .select('establishment_public_id')
-    .eq('establishment_public_id', placeRefId)
+    .from('sta_v3_cavite_2025')
+    .select('id')
+    .eq('id', placeRefId)
     .maybeSingle();
   if (byIdError) throw byIdError;
-  if (byId?.establishment_public_id) return byId.establishment_public_id as string;
+  if (byId?.id) return byId.id as string;
   return null;
 }
 
@@ -41,7 +41,7 @@ export async function fetchPlaceCountByListId(
   return counts;
 }
 
-/** Total saved rows per list: places + terminals + itineraries. */
+/** Total saved rows per list: places + itineraries. */
 export async function fetchSavedItemCountsByListId(
   client: SupabaseClient,
   listIds: string[]
@@ -54,14 +54,12 @@ export async function fetchSavedItemCountsByListId(
     for (const row of rows ?? []) bump(counts, row.list_id);
   };
 
-  const [p, t, i] = await Promise.all([
+  const [p, i] = await Promise.all([
     client.from('saved_list_items').select('list_id').in('list_id', listIds),
-    client.from('saved_list_terminal_items').select('list_id').in('list_id', listIds),
     client.from('saved_list_itinerary_items').select('list_id').in('list_id', listIds),
   ]);
   if (p.error) throw p.error;
   merge((p.data ?? []) as { list_id: string }[]);
-  if (!t.error) merge((t.data ?? []) as { list_id: string }[]);
   if (!i.error) merge((i.data ?? []) as { list_id: string }[]);
   return counts;
 }
@@ -88,22 +86,6 @@ export async function isPlaceSavedByUser(
     .from('saved_list_items')
     .select('*', { count: 'exact', head: true })
     .eq('place_id', canonicalPlaceId)
-    .in('list_id', listIds);
-  if (error) throw error;
-  return (count ?? 0) > 0;
-}
-
-export async function isTerminalSavedByUser(
-  client: SupabaseClient,
-  userId: string,
-  terminalRef: string
-): Promise<boolean> {
-  const listIds = await fetchSavedListIdsForUser(client, userId);
-  if (listIds.length === 0) return false;
-  const { count, error } = await client
-    .from('saved_list_terminal_items')
-    .select('*', { count: 'exact', head: true })
-    .eq('terminal_ref', terminalRef)
     .in('list_id', listIds);
   if (error) throw error;
   return (count ?? 0) > 0;
@@ -142,21 +124,6 @@ export async function removePlaceFromAllUserLists(
   if (error) throw error;
 }
 
-export async function removeTerminalFromAllUserLists(
-  client: SupabaseClient,
-  userId: string,
-  terminalRef: string
-): Promise<void> {
-  const listIds = await fetchSavedListIdsForUser(client, userId);
-  if (listIds.length === 0) return;
-  const { error } = await client
-    .from('saved_list_terminal_items')
-    .delete()
-    .eq('terminal_ref', terminalRef)
-    .in('list_id', listIds);
-  if (error) throw error;
-}
-
 export async function removeItineraryFromAllUserLists(
   client: SupabaseClient,
   userId: string,
@@ -189,20 +156,6 @@ export async function addPlaceToSavedList(
   const { error } = await client
     .from('saved_list_items')
     .insert({ list_id: listId, place_id: canonicalPlaceId });
-  if (!error) return { ok: true };
-  if (error.code === '23505' || error.message?.includes('duplicate') || error.message?.includes('unique'))
-    return { ok: false, duplicate: true };
-  return { ok: false, duplicate: false, message: error.message };
-}
-
-export async function addTerminalToSavedList(
-  client: SupabaseClient,
-  listId: string,
-  terminalRef: string
-): Promise<{ ok: true } | { ok: false; duplicate: boolean; message?: string }> {
-  const { error } = await client
-    .from('saved_list_terminal_items')
-    .insert({ list_id: listId, terminal_ref: terminalRef });
   if (!error) return { ok: true };
   if (error.code === '23505' || error.message?.includes('duplicate') || error.message?.includes('unique'))
     return { ok: false, duplicate: true };

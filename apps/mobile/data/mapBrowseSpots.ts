@@ -1,6 +1,6 @@
 import type { Place } from './mockData';
 
-export type CommuteLegKind = 'bus' | 'tricycle' | 'walk' | 'terminal' | 'destination';
+export type CommuteLegKind = 'bus' | 'tricycle' | 'walk' | 'destination';
 
 export type CommuteRouteLeg = {
   id: string;

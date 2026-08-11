@@ -67,16 +67,6 @@ function isMissingTableError(error: { message?: string; code?: string } | null):
   );
 }
 
-export type TerminalRow = {
-  id: string;
-  name: string;
-  city: string;
-  route: string;
-  photos: number;
-  status: 'published' | 'draft';
-  updated: string;
-};
-
 export type SavedListRow = {
   id: string;
   name: string;
@@ -121,55 +111,6 @@ function formatRelative(iso?: string | null): string {
   }
 }
 
-export async function fetchAdminTerminals(client: SupabaseClient): Promise<TerminalRow[]> {
-  const [termRes, routeRes, linkRes] = await Promise.all([
-    client.from('cavitour_terminals').select('*').order('terminal_name'),
-    client.from('cavitour_routes').select('route_id, route_name, origin, destination'),
-    client.from('cavitour_terminal_routes').select('terminal_id, route_id'),
-  ]);
-
-  if (termRes.error) throw new Error(termRes.error.message);
-  if (routeRes.error) throw new Error(routeRes.error.message);
-  if (linkRes.error) throw new Error(linkRes.error.message);
-
-  const routeById = new Map(
-    (routeRes.data ?? []).map((r) => [
-      r.route_id as number,
-      `${r.origin} — ${r.destination}`,
-    ])
-  );
-
-  const routesByTerminal = new Map<number, string[]>();
-  for (const link of linkRes.data ?? []) {
-    const tid = link.terminal_id as number;
-    const label = routeById.get(link.route_id as number);
-    if (!label) continue;
-    const list = routesByTerminal.get(tid) ?? [];
-    if (!list.includes(label)) list.push(label);
-    routesByTerminal.set(tid, list);
-  }
-
-  return (termRes.data ?? []).map((t) => {
-    const tid = t.terminal_id as number;
-    const routes = routesByTerminal.get(tid) ?? [];
-    const routeLabel =
-      routes.length === 0
-        ? 'No linked routes'
-        : routes.length === 1
-          ? routes[0]
-          : `${routes[0]} (+${routes.length - 1} more)`;
-    return {
-      id: String(tid),
-      name: t.terminal_name as string,
-      city: (t.terminal_city as string) || 'Cavite',
-      route: routeLabel,
-      photos: 0,
-      status: routes.length > 0 ? 'published' : 'draft',
-      updated: [t.first_trip, t.last_trip].filter(Boolean).join(' · ') || '—',
-    };
-  });
-}
-
 async function countItemsByList(
   client: SupabaseClient,
   listIds: string[]
@@ -178,7 +119,7 @@ async function countItemsByList(
   for (const id of listIds) counts[id] = 0;
   if (listIds.length === 0) return counts;
 
-  const tables = ['saved_list_items', 'saved_list_terminal_items', 'saved_list_itinerary_items'] as const;
+  const tables = ['saved_list_items', 'saved_list_itinerary_items'] as const;
   for (const table of tables) {
     const { data, error } = await client.from(table).select('list_id').in('list_id', listIds);
     if (error) continue;
@@ -291,37 +232,27 @@ export async function fetchAdminItineraries(client: SupabaseClient): Promise<Adm
 export async function fetchAdminMapLayers(client: SupabaseClient): Promise<{
   layers: MapLayerRow[];
   establishmentCount: number;
-  terminalCount: number;
 }> {
-  const [placesRes, termRes] = await Promise.all([
-    client.from('tourist_attractions').select('establishment_public_id', { count: 'exact', head: true }),
-    client.from('cavitour_terminals').select('terminal_id', { count: 'exact', head: true }),
-  ]);
+  const placesRes = await client
+    .from('sta_v3_cavite_2025')
+    .select('id', { count: 'exact', head: true });
 
   const establishmentCount = placesRes.count ?? 0;
-  const terminalCount = termRes.count ?? 0;
 
   const layers: MapLayerRow[] = [
     {
       id: 'establishments',
       layer: 'Establishments',
-      description: `${establishmentCount.toLocaleString()} places in Supabase (published + LGU)`,
+      description: `${establishmentCount.toLocaleString()} places in Supabase (STA catalog)`,
       enabled: establishmentCount > 0,
-      source: 'places · v_cavite_establishments',
+      source: 'sta_v3_cavite_2025 · v_sta_v3_cavite_2025_catalog',
     },
     {
-      id: 'terminals',
-      layer: 'Jeepney terminals',
-      description: `${terminalCount.toLocaleString()} terminals from cavitour_terminals`,
-      enabled: terminalCount > 0,
-      source: 'cavitour_terminals',
-    },
-    {
-      id: 'transit',
-      layer: 'Transit corridors',
-      description: 'OSRM route lines between linked terminal pairs',
-      enabled: terminalCount > 0,
-      source: 'cavitour_terminal_routes + OSRM',
+      id: 'routes',
+      layer: 'Driving corridors',
+      description: 'OSRM route lines from user GPS to destinations',
+      enabled: establishmentCount > 0,
+      source: 'OSRM',
     },
     {
       id: 'ntdp',
@@ -332,5 +263,5 @@ export async function fetchAdminMapLayers(client: SupabaseClient): Promise<{
     },
   ];
 
-  return { layers, establishmentCount, terminalCount };
+  return { layers, establishmentCount };
 }

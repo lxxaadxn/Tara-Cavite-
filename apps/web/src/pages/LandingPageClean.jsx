@@ -42,8 +42,8 @@ const TRUST_CARDS = [
   },
   {
     icon: 'support',
-    title: 'Maps & terminal guides',
-    body: 'Find establishments on the map and check jeepney and bus terminal details.',
+    title: 'Maps & routes',
+    body: 'Find establishments on the map and get commute-ready driving directions.',
   },
 ];
 
@@ -380,8 +380,8 @@ export function LandingPageClean() {
                       CAVITE TOUR
                     </h1>
                     <p className="ct-fade-rise ct-delay-2 mt-4 max-w-xl text-sm text-white/90 md:text-base">
-                      Search the NTDP catalog, browse maps, save lists, follow curated routes, and check terminal
-                      guides — your Cavite travel companion in one place.
+                      Search the NTDP catalog, browse maps, save lists, and follow curated routes — your Cavite
+                      travel companion in one place.
                     </p>
 
                     <form

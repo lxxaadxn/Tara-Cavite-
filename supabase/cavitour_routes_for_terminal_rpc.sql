@@ -1,3 +1,5 @@
+-- OBSOLETE — do not re-apply. Terminals removed from the apps.
+--
 -- SET 4 — One RPC for the app: all routes for a terminal (joins routes + transport types).
 -- Run in SQL Editor AFTER SET 3.
 

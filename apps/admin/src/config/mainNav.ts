@@ -6,7 +6,7 @@ export const MAIN_ADMIN_NAV = [
   { to: '/web/settings', label: 'Settings', icon: 'gear' as const },
 ] as const;
 
-export const MORE_ADMIN_NAV = [{ to: '/web/terminals', label: 'Terminals', icon: 'bus' as const }] as const;
+export const MORE_ADMIN_NAV = [] as const;
 
 /** Recursive sidebar node: leaf has `to`, group has `children`. */
 export type AdminNavNode = {
@@ -19,7 +19,7 @@ export type AdminNavNode = {
 
 /**
  * Dashboard sidebar:
- * Analytics → Tourism → Business → Transportation → Itinerary → Map → Rewards
+ * Analytics → Tourism → Itinerary → Map
  */
 export const ADMIN_NAV: AdminNavNode[] = [
   { key: 'analytics', label: 'Analytics', icon: 'analytics', to: '/web/dashboard' },
@@ -32,46 +32,6 @@ export const ADMIN_NAV: AdminNavNode[] = [
       { key: 'tourism-filters', label: 'Categories/Filters', to: '/web/tourism/filters' },
       { key: 'tourism-municipalities', label: 'Municipalities', to: '/web/tourism/municipalities' },
       { key: 'tourism-featured', label: 'Featured Destinations', to: '/web/tourism/featured' },
-    ],
-  },
-  {
-    key: 'business',
-    label: 'Business Management',
-    icon: 'briefcase',
-    children: [
-      { key: 'biz-dash', label: 'Dashboard', to: '/web/business/dashboard' },
-      {
-        key: 'biz-apps',
-        label: 'Applications',
-        children: [
-          { key: 'biz-inbox', label: 'Inbox Queue', to: '/web/business/inbox' },
-          { key: 'biz-review', label: 'Application Review', to: '/web/business/review' },
-          { key: 'biz-logs', label: 'Processed Logs', to: '/web/business/logs' },
-          { key: 'biz-archive', label: 'Archive', to: '/web/business/archive' },
-        ],
-      },
-      {
-        key: 'biz-est',
-        label: 'Tourism Establishments',
-        children: [
-          { key: 'biz-est-approved', label: 'Approved Businesses', to: '/web/business/establishments/approved' },
-          { key: 'biz-est-pending', label: 'Pending Publication', to: '/web/business/establishments/pending' },
-          { key: 'biz-est-suspended', label: 'Suspended', to: '/web/business/establishments/suspended' },
-          { key: 'biz-est-archive', label: 'Archive', to: '/web/business/establishments/archive' },
-        ],
-      },
-      { key: 'biz-requirements', label: 'Requirements', to: '/web/business/requirements' },
-      { key: 'biz-inspections', label: 'Inspections', to: '/web/business/inspections' },
-    ],
-  },
-  {
-    key: 'transport',
-    label: 'Transportation',
-    icon: 'transport',
-    children: [
-      { key: 'transport-terminals', label: 'Terminals', to: '/web/transport/terminals' },
-      { key: 'transport-routes', label: 'Routes', to: '/web/transport/routes' },
-      { key: 'transport-types', label: 'Transport Types', to: '/web/transport/types' },
     ],
   },
   {
@@ -91,16 +51,6 @@ export const ADMIN_NAV: AdminNavNode[] = [
       { key: 'map-pins', label: 'Map Pins', to: '/web/maps/pins' },
       { key: 'map-geo', label: 'Geotagged Locations', to: '/web/maps/geotagged' },
       { key: 'map-routes', label: 'Route Connections', to: '/web/maps/connections' },
-    ],
-  },
-  {
-    key: 'rewards',
-    label: 'Rewards',
-    icon: 'rewards',
-    children: [
-      { key: 'rewards-items', label: 'Reward Items', to: '/web/rewards/items' },
-      { key: 'rewards-redemptions', label: 'Redemption Requests', to: '/web/rewards/redemptions' },
-      { key: 'rewards-history', label: 'Reward History', to: '/web/rewards/history' },
     ],
   },
 ];

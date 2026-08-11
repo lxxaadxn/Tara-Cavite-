@@ -19,7 +19,7 @@ export const Colors = {
     background: '#FFFFFF',
     shadow: 'rgba(0, 0, 0, 0.1)',
   },
-  // Purple-blue gradient for terminals/directions screens
+  // Purple-blue gradient (legacy accent)
   gradient: {
     start: '#6B2D8A',
     end: '#4169E1',

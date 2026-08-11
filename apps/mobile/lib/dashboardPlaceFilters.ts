@@ -44,7 +44,7 @@ export function placeSearchBlob(place: Place): string {
   );
 }
 
-/** Match TerminalsScreen / filter labels: drop trailing "City" for comparison. */
+/** Match filter labels: drop trailing "City" for comparison. */
 function normalizeAreaLabel(label: string): string {
   return label.replace(/\s+City\s*$/i, '').trim().toLowerCase();
 }
