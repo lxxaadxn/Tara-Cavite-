@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   LineChart,
   Line,
@@ -21,6 +21,8 @@ import {
   topRatedDestinations,
   userEngagementTrend,
 } from '../data/mockData';
+import { fetchMostVisitedPlaces } from '../lib/placeVisits';
+import { supabase } from '../lib/supabase';
 import styles from '../pages/Analytics.module.css';
 
 const PRIMARY = '#6B8E23';
@@ -44,11 +46,32 @@ function scaleByFilter<T extends object>(rows: T[], filter: DateFilter, keys: (k
 
 export function AnalyticsSection() {
   const [dateFilter, setDateFilter] = useState<DateFilter>('6 Months');
+  const [liveVisited, setLiveVisited] = useState<
+    { name: string; visits: number; city: string }[] | null
+  >(null);
 
-  const visited = useMemo(
-    () => scaleByFilter(mostVisitedDestinations, dateFilter, ['visits']),
-    [dateFilter]
-  );
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const rows = await fetchMostVisitedPlaces(supabase, 8);
+        if (!active) return;
+        setLiveVisited(rows.length ? rows : []);
+      } catch {
+        if (!active) return;
+        setLiveVisited(null);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const visited = useMemo(() => {
+    if (liveVisited && liveVisited.length > 0) return liveVisited;
+    return scaleByFilter(mostVisitedDestinations, dateFilter, ['visits']);
+  }, [liveVisited, dateFilter]);
+
   const searched = useMemo(
     () => scaleByFilter(mostSearchedLocations, dateFilter, ['searches']),
     [dateFilter]
@@ -70,11 +93,16 @@ export function AnalyticsSection() {
     };
   }, [dateFilter]);
 
+  const visitsAreLive = Boolean(liveVisited && liveVisited.length > 0);
+
   return (
     <div className={styles.charts}>
       <div className={styles.toolbar}>
         <ul className={styles.checklist} aria-label="Analytics coverage">
-          <li>Most visited destinations</li>
+          <li>
+            Most visited destinations{' '}
+            {visitsAreLive ? '(live QR + destination-reached)' : '(demo until check-ins exist)'}
+          </li>
           <li>Most searched locations</li>
           <li>Peak visitor times</li>
           <li>Top-rated destinations</li>
@@ -118,14 +146,18 @@ export function AnalyticsSection() {
       <div className={styles.grid2}>
         <div className={styles.card}>
           <h3>Most visited destinations</h3>
-          <p className={styles.cardHint}>Page and map views per published destination</p>
+          <p className={styles.cardHint}>
+            {visitsAreLive
+              ? 'Live counts from QR/code check-ins and destination reached'
+              : 'Demo data — run place_checkin_visits.sql and record check-ins to go live'}
+          </p>
           <div className={styles.chartWrap}>
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={visited} layout="vertical" margin={{ left: 8, right: 16 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 12 }} />
                 <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(v: number) => [`${v.toLocaleString()} views`, 'Visits']} />
+                <Tooltip formatter={(v: number) => [`${v.toLocaleString()} visits`, 'Visits']} />
                 <Bar dataKey="visits" fill={PRIMARY} radius={[0, 4, 4, 0]} name="Visits" />
               </BarChart>
             </ResponsiveContainer>
@@ -172,7 +204,13 @@ export function AnalyticsSection() {
                 <XAxis dataKey="label" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
                 <Tooltip formatter={(v: number) => [`${v.toLocaleString()} users`, 'Active']} />
-                <Area type="monotone" dataKey="visitors" stroke={PRIMARY} fill="rgba(107, 142, 35, 0.25)" strokeWidth={2} />
+                <Area
+                  type="monotone"
+                  dataKey="visitors"
+                  stroke={PRIMARY}
+                  fill="rgba(107, 142, 35, 0.25)"
+                  strokeWidth={2}
+                />
               </AreaChart>
             </ResponsiveContainer>
           </div>

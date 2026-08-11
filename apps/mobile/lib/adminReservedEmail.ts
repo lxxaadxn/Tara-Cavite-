@@ -1,7 +1,9 @@
-const ADMIN_RESERVED_EMAIL = 'forcapstone111@gmail.com';
+const ADMIN_RESERVED_EMAIL = 'forcapstone222@gmail.com';
 
 export function isAdminReservedEmail(email = ''): boolean {
-  return email.trim().toLowerCase() === ADMIN_RESERVED_EMAIL;
+  const reserved = ADMIN_RESERVED_EMAIL.trim().toLowerCase();
+  if (!reserved) return false;
+  return email.trim().toLowerCase() === reserved;
 }
 
 export function getAdminReservedEmailMessage(): string {

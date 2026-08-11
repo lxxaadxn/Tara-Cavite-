@@ -23,6 +23,7 @@ import {
   trafficByDevice,
   userEngagementTrend,
 } from '../data/mockData';
+import { AnalyticsSection } from '../components/AnalyticsSection';
 import styles from './Dashboard.module.css';
 
 const INK = '#111827';
@@ -238,8 +239,12 @@ export function Dashboard() {
         </div>
       </div>
 
+      <div className={styles.card} id="analytics">
+        <AnalyticsSection />
+      </div>
+
       <div className={styles.card}>
-        <h3 className={styles.cardTitle}>Most Visited Destinations</h3>
+        <h3 className={styles.cardTitle}>Most Visited Destinations (monthly demo)</h3>
         <div className={styles.chartWrap}>
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={monthlyVisited} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>

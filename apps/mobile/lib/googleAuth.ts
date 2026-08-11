@@ -1,139 +1,242 @@
-import { Platform } from 'react-native';
+import { AppState, InteractionManager, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase } from './supabase';
 import {
-  buildOAuthRedirectUrl,
+  applyOAuthCallbackFromUrl,
   createSessionFromOAuthUrl,
-  getDevOAuthBridgeBaseUrl,
   getExpoOAuthCallbackUrl,
   getRedirectToFromAuthorizeUrl,
   isLocalhostAuthUrl,
-  OAuthLocalhostRedirectError,
-  OAuthRedirectMode,
+  isOAuthCallbackUrl,
   patchOAuthAuthorizeUrl,
   persistOAuthRedirectMode,
-  resolveOAuthRedirectModes,
 } from './authOAuth';
 
 WebBrowser.maybeCompleteAuthSession();
 
-function getOAuthSetupHint(mode: OAuthRedirectMode): string {
-  const bridgeBase = getDevOAuthBridgeBaseUrl();
-  if (mode === 'bridge' && bridgeBase) {
-    return (
-      `Google sign-in needs the web dev server on your PC.\n\n` +
-      `1. In apps/web run: npm run dev\n` +
-      `2. Supabase → Redirect URLs: ${bridgeBase}/**\n` +
-      `3. Add exp://** and cavitour://** as well`
-    );
-  }
-  return 'Add exp://** and cavitour://** under Supabase → Authentication → Redirect URLs.';
+const OAUTH_REDIRECT_MODE_KEY = 'google_oauth_redirect_mode';
+
+const SETUP_HINT =
+  'Google signed in, but the app did not get the return link.\n\n' +
+  'In Supabase → Authentication → URL Configuration → Redirect URLs, add:\n\n' +
+  '     cavitour://**\n' +
+  '     cavitour://auth/callback\n' +
+  '     exp://**\n\n' +
+  'Site URL can stay http://localhost:5173\n' +
+  'Remove old http://192.168.x.x… rows, Save, reload the app, try again.';
+
+export type GoogleSignInPhase = 'starting' | 'google' | 'finishing' | 'done';
+
+type GoogleSignInOptions = {
+  onPhase?: (phase: GoogleSignInPhase) => void;
+};
+
+function isHttpUrl(url: string | undefined | null): boolean {
+  return !!url && /^https?:\/\//i.test(url);
 }
 
-async function runGoogleOAuthWithMode(mode: OAuthRedirectMode): Promise<void> {
-  const redirectTo = buildOAuthRedirectUrl(mode);
-  const expoReturnUrl = getExpoOAuthCallbackUrl();
+function waitForInteractions(): Promise<void> {
+  return new Promise((resolve) => {
+    InteractionManager.runAfterInteractions(() => resolve());
+  });
+}
+
+function isOAuthReturnUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  return (
+    isOAuthCallbackUrl(url) ||
+    /[?&#]code=/i.test(url) ||
+    /access_token=/i.test(url) ||
+    /^cavitour:/i.test(url)
+  );
+}
+
+async function ensureSessionFromCallback(callbackUrl: string): Promise<void> {
+  // Must return via app deep link — never a LAN/web page on the phone.
+  if (isLocalhostAuthUrl(callbackUrl) || isHttpUrl(callbackUrl)) {
+    throw new Error(SETUP_HINT);
+  }
 
   if (__DEV__) {
-    console.info(`[authOAuth] mode=${mode} redirectTo=`, redirectTo.split('?')[0]);
+    console.info('[authOAuth] finishing with callback', callbackUrl.split('?')[0]);
   }
+
+  const ok = await applyOAuthCallbackFromUrl(supabase, callbackUrl);
+  if (!ok) {
+    try {
+      await createSessionFromOAuthUrl(callbackUrl);
+    } catch (err) {
+      if (__DEV__) console.warn('[authOAuth] createSessionFromOAuthUrl:', err);
+    }
+  }
+
+  for (let i = 0; i < 40; i++) {
+    const { data } = await supabase.auth.getSession();
+    if (data.session) {
+      await persistOAuthRedirectMode('expo');
+      await AsyncStorage.setItem('isAuthenticated', 'true');
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+
+  throw new Error('Google sign-in finished, but no session was created. Try again.');
+}
+
+/**
+ * Same logic as apps/web Google OAuth (PKCE → Google → callback → session),
+ * in-app via AuthSession. Return URL uses cavitour:// (not exp://LAN) so
+ * iOS can leave Google and open the app after account pick.
+ */
+async function runGoogleOAuthExpoOnly(options?: GoogleSignInOptions): Promise<void> {
+  const onPhase = options?.onPhase;
+  await AsyncStorage.setItem(OAUTH_REDIRECT_MODE_KEY, 'expo');
+
+  const redirectTo = getExpoOAuthCallbackUrl();
+
+  if (__DEV__) {
+    console.info('[authOAuth] mobile Google redirectTo=', redirectTo, 'os=', Platform.OS);
+  }
+
+  if (isHttpUrl(redirectTo) || isLocalhostAuthUrl(redirectTo)) {
+    throw new Error(SETUP_HINT);
+  }
+
+  onPhase?.('starting');
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
       redirectTo,
       skipBrowserRedirect: true,
+      queryParams: { prompt: 'select_account' },
     },
   });
 
-  if (error) {
-    throw error;
-  }
-  if (!data?.url) {
-    throw new Error('Unable to start Google sign in.');
-  }
+  if (error) throw error;
+  if (!data?.url) throw new Error('Unable to start Google sign in.');
 
   const authorizeUrl = patchOAuthAuthorizeUrl(data.url, redirectTo);
   const redirectInUrl = getRedirectToFromAuthorizeUrl(authorizeUrl);
 
-  if (isLocalhostAuthUrl(redirectInUrl)) {
-    throw new OAuthLocalhostRedirectError();
+  if (__DEV__) {
+    console.info('[authOAuth] authorize redirect_to=', redirectInUrl);
+  }
+
+  if (isLocalhostAuthUrl(redirectInUrl) || isHttpUrl(redirectInUrl)) {
+    throw new Error(SETUP_HINT);
   }
 
   if (Platform.OS === 'web') {
-    if (typeof window === 'undefined') {
-      throw new Error('Google sign in is not available in this environment.');
-    }
     window.location.assign(authorizeUrl);
     return;
   }
 
-  // Native: wait for exp:// (bridge page forwards here after LAN callback).
-  const result = await WebBrowser.openAuthSessionAsync(authorizeUrl, expoReturnUrl);
-
-  if (result.type === 'success' && result.url) {
-    if (isLocalhostAuthUrl(result.url)) {
-      throw new OAuthLocalhostRedirectError();
+  let linkCallback: string | null = null;
+  const linkSub = Linking.addEventListener('url', ({ url }) => {
+    if (isOAuthReturnUrl(url)) {
+      linkCallback = url;
+      // Unstick iOS if the auth sheet does not auto-dismiss on cavitour://
+      void WebBrowser.dismissAuthSession();
     }
-    await createSessionFromOAuthUrl(result.url);
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData.session) {
-      throw new Error('Google sign in did not return a valid session.');
+  });
+
+  const appStateSub = AppState.addEventListener('change', (state) => {
+    if (state === 'active' && !linkCallback) {
+      void Linking.getInitialURL().then((url) => {
+        if (isOAuthReturnUrl(url)) {
+          linkCallback = url;
+          void WebBrowser.dismissAuthSession();
+        }
+      });
     }
-    return;
-  }
+  });
 
-  const { data: sessionData } = await supabase.auth.getSession();
-  if (sessionData.session) {
-    return;
-  }
+  try {
+    onPhase?.('google');
+    await waitForInteractions();
+    await new Promise((r) => setTimeout(r, Platform.OS === 'ios' ? 350 : 150));
 
-  if (result.type === 'cancel' || result.type === 'dismiss') {
-    throw new Error('Google sign in was cancelled.');
-  }
+    if (Platform.OS === 'android') {
+      await WebBrowser.warmUpAsync().catch(() => undefined);
+    }
 
-  throw new Error('Google sign in did not return a valid session.');
+    // Match prefix: cavitour://… — must match Supabase redirect_to.
+    const authSessionOptions =
+      Platform.OS === 'android'
+        ? { showInRecents: true, createTask: true }
+        : { preferEphemeralSession: false, createTask: false };
+
+    const result = await WebBrowser.openAuthSessionAsync(
+      authorizeUrl,
+      redirectTo,
+      authSessionOptions
+    );
+
+    onPhase?.('finishing');
+
+    let callbackUrl: string | null =
+      result.type === 'success' && result.url ? result.url : linkCallback;
+
+    if (!callbackUrl) {
+      await new Promise((r) => setTimeout(r, Platform.OS === 'android' ? 900 : 600));
+      callbackUrl = linkCallback;
+    }
+
+    if (!callbackUrl) {
+      const initial = await Linking.getInitialURL();
+      if (isOAuthReturnUrl(initial)) {
+        callbackUrl = initial;
+      }
+    }
+
+    if (callbackUrl) {
+      await ensureSessionFromCallback(callbackUrl);
+      onPhase?.('done');
+      return;
+    }
+
+    const { data: existing } = await supabase.auth.getSession();
+    if (existing.session) {
+      await persistOAuthRedirectMode('expo');
+      await AsyncStorage.setItem('isAuthenticated', 'true');
+      onPhase?.('done');
+      return;
+    }
+
+    if (result.type === 'cancel' || result.type === 'dismiss') {
+      // Late deep link after dismiss
+      if (linkCallback) {
+        await ensureSessionFromCallback(linkCallback);
+        onPhase?.('done');
+        return;
+      }
+      throw new Error('Google sign in was cancelled.');
+    }
+
+    throw new Error(SETUP_HINT);
+  } finally {
+    linkSub.remove();
+    appStateSub.remove();
+    if (Platform.OS === 'android') {
+      await WebBrowser.coolDownAsync().catch(() => undefined);
+    }
+  }
 }
 
-export async function signInWithGoogleMobile(): Promise<void> {
-  const modes = await resolveOAuthRedirectModes();
-  let lastError: Error | null = null;
-
-  for (let i = 0; i < modes.length; i++) {
-    const mode = modes[i];
-    const hasFallback = i < modes.length - 1;
-
-    try {
-      await runGoogleOAuthWithMode(mode);
-      await persistOAuthRedirectMode(mode);
-      if (__DEV__ && mode === 'bridge') {
-        console.info('[authOAuth] Using LAN bridge. Keep apps/web `npm run dev` running.');
-      }
+export async function signInWithGoogleMobile(options?: GoogleSignInOptions): Promise<void> {
+  try {
+    await runGoogleOAuthExpoOnly(options);
+  } catch (err) {
+    const { data } = await supabase.auth.getSession();
+    if (data.session) {
+      await persistOAuthRedirectMode('expo');
+      await AsyncStorage.setItem('isAuthenticated', 'true');
+      options?.onPhase?.('done');
       return;
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      lastError = error;
-
-      const localhostFailure = err instanceof OAuthLocalhostRedirectError;
-      if (localhostFailure && hasFallback && mode === 'bridge') {
-        if (__DEV__) {
-          console.info('[authOAuth] LAN bridge failed — retrying with exp://…');
-        }
-        continue;
-      }
-      if (localhostFailure && hasFallback && mode === 'expo') {
-        if (__DEV__) {
-          console.info('[authOAuth] exp:// blocked — retrying via LAN bridge…');
-        }
-        continue;
-      }
-
-      if (localhostFailure) {
-        lastError = new Error(getOAuthSetupHint(mode));
-      }
-      break;
     }
+    throw err;
   }
-
-  throw lastError ?? new Error('Google sign in failed.');
 }

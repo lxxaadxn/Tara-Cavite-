@@ -17,6 +17,16 @@ import { readSavedLists, savePlaceToList, savePlaceToListId } from '../lib/saved
 import { useSaveSuccessToast } from '../lib/useSaveSuccessToast';
 import { formatNtdpCategoryTagLabel, getEstablishmentAboutBody } from '../lib/ntdpDisplayLabels';
 import { readCachedUserLocation } from '../lib/promptLocationOnLogin';
+import { fetchPlaceCheckinDisplay, recordCheckinByCode } from 'cavitour-shared/placeCheckin';
+import { CheckinScannerModal } from '../components/CheckinScannerModal';
+
+function thankYouVisitMessage(placeName, alreadyCheckedIn) {
+  const name = String(placeName || '').trim() || 'this establishment';
+  if (alreadyCheckedIn) {
+    return `You already checked in today at ${name}. Thank you for visiting!`;
+  }
+  return `Thank you for visiting ${name}! Your visit was counted.`;
+}
 
 const olive = '#7ea00e';
 const PLACEHOLDER_IMG =
@@ -256,6 +266,10 @@ export function PlaceDetailPage() {
   const [authUser, setAuthUser] = useState(null);
   const { showSaveSuccess, toastProps } = useSaveSuccessToast();
   const [lightboxIndex, setLightboxIndex] = useState(null);
+  const [checkinInfo, setCheckinInfo] = useState(null);
+  const [checkinBusy, setCheckinBusy] = useState(false);
+  const [checkinMsg, setCheckinMsg] = useState('');
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   const openRoutePanel = useCallback(() => {
     setRoutePanelOpen(true);
@@ -459,6 +473,66 @@ export function PlaceDetailPage() {
       cancelled = true;
     };
   }, [spot?.id]);
+
+  useEffect(() => {
+    if (!spot?.id) {
+      setCheckinInfo(null);
+      setCheckinMsg('');
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const info = await fetchPlaceCheckinDisplay(supabase, spot.id, window.location.origin);
+        if (!cancelled) setCheckinInfo(info);
+      } catch {
+        if (!cancelled) setCheckinInfo(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [spot?.id]);
+
+  const handleEstablishmentCheckin = async () => {
+    if (!checkinInfo?.code) {
+      setCheckinMsg('No QR code for this establishment yet. Ask admin to run the check-in SQL.');
+      return;
+    }
+    if (!authUser) {
+      window.location.assign(`/login?next=${encodeURIComponent(`/place/${spot.id}`)}`);
+      return;
+    }
+    setCheckinBusy(true);
+    setCheckinMsg('');
+    try {
+      const result = await recordCheckinByCode(supabase, checkinInfo.code, 'qr');
+      const msg = thankYouVisitMessage(result.placeName, result.alreadyCheckedIn);
+      setCheckinMsg(msg);
+      window.alert(
+        result.alreadyCheckedIn
+          ? `Already checked in\n\n${msg}`
+          : `Thank you for visiting!\n\n${msg}`
+      );
+    } catch (err) {
+      setCheckinMsg(err instanceof Error ? err.message : 'Check-in failed.');
+    } finally {
+      setCheckinBusy(false);
+    }
+  };
+
+  const handleScannedCheckin = async (code) => {
+    if (!authUser) {
+      window.location.assign(`/login?next=${encodeURIComponent(`/place/${spot.id}`)}`);
+      return;
+    }
+    const result = await recordCheckinByCode(supabase, code, 'qr');
+    const msg = thankYouVisitMessage(result.placeName, result.alreadyCheckedIn);
+    setCheckinMsg(msg);
+    window.alert(
+      result.alreadyCheckedIn ? `Already checked in\n\n${msg}` : `Thank you for visiting!\n\n${msg}`
+    );
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -741,6 +815,86 @@ export function PlaceDetailPage() {
                 </button>
               </div>
             </div>
+
+            {checkinInfo ? (
+              <div className="mb-4 overflow-hidden rounded-2xl border border-[#1f4f59]/20 bg-white p-4 shadow-[0_4px_20px_rgba(0,0,0,0.04)] sm:p-5">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
+                  Check in at this place
+                </p>
+                <p className="mt-1 text-sm text-neutral-600">
+                  You are already on this establishment page — tap Check in here to count your visit. The camera
+                  cannot scan a QR on this same screen; use Scan poster QR only for printed posters.
+                </p>
+                <div className="mt-4 flex flex-col items-center gap-4 sm:flex-row sm:items-start">
+                  <button
+                    type="button"
+                    onClick={() => void handleEstablishmentCheckin()}
+                    disabled={checkinBusy}
+                    className="rounded-xl border border-neutral-200 bg-white p-1 disabled:opacity-60"
+                    title="Tap to check in"
+                  >
+                    <img
+                      src={checkinInfo.qrUrl}
+                      alt={`Check-in QR for ${spot.name}`}
+                      width={168}
+                      height={168}
+                      className="rounded-lg"
+                    />
+                  </button>
+                  <div className="min-w-0 flex-1 text-center sm:text-left">
+                    <p className="font-mono text-base font-semibold tracking-wide text-neutral-900">
+                      {checkinInfo.code}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void handleEstablishmentCheckin()}
+                      disabled={checkinBusy}
+                      className="mt-3 inline-flex h-11 items-center justify-center rounded-full px-5 text-sm font-semibold text-white disabled:opacity-60"
+                      style={{ backgroundColor: '#1f4f59' }}
+                    >
+                      {checkinBusy ? 'Counting visit…' : 'Check in here'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!authUser) {
+                          window.location.assign(`/login?next=${encodeURIComponent(`/place/${spot.id}`)}`);
+                          return;
+                        }
+                        setScannerOpen(true);
+                      }}
+                      className="mt-2 inline-flex h-11 w-full items-center justify-center rounded-full border-2 border-[#1f4f59] bg-white px-5 text-sm font-semibold text-[#1f4f59] sm:w-auto"
+                    >
+                      Scan poster QR
+                    </button>
+                    {checkinMsg ? <p className="mt-2 text-sm text-neutral-600">{checkinMsg}</p> : null}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="mb-4 overflow-hidden rounded-2xl border border-[#1f4f59]/20 bg-white p-4">
+                <p className="text-sm text-neutral-600">Scan an establishment poster QR to count your visit.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!authUser) {
+                      window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname)}`);
+                      return;
+                    }
+                    setScannerOpen(true);
+                  }}
+                  className="mt-3 inline-flex h-11 items-center justify-center rounded-full border-2 border-[#1f4f59] bg-white px-5 text-sm font-semibold text-[#1f4f59]"
+                >
+                  Scan QR to check in
+                </button>
+              </div>
+            )}
+
+            <CheckinScannerModal
+              open={scannerOpen}
+              onClose={() => setScannerOpen(false)}
+              onCode={handleScannedCheckin}
+            />
 
             <div className="overflow-hidden rounded-2xl border border-neutral-200/90 bg-white shadow-[0_4px_28px_rgba(0,0,0,0.05)]">
               {!routePanelOpen && (

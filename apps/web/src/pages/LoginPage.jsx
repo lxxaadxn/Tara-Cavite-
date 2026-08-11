@@ -64,6 +64,13 @@ export function LoginPage() {
   }, [searchParams, navigate]);
 
   useEffect(() => {
+    if (location.state?.passwordReset) {
+      setInfo('Password updated. Sign in with your new password.');
+      navigate(location.pathname + location.search, { replace: true, state: {} });
+    }
+  }, [location.pathname, location.search, location.state, navigate]);
+
+  useEffect(() => {
     const googleError = location.state?.googleError;
     if (typeof googleError === 'string' && googleError.trim()) {
       setError(googleError);

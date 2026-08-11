@@ -25,8 +25,9 @@ Optional later (full Cavite LGU data): `20260414052141_cavite_lgu_establishments
 
 ## 3. Supabase Auth (admin login)
 
-- **Authentication → Users**: user `forcapstone111@gmail.com` (or your team allowlist email).
-- Allowlist row exists after migration step 1 (`cavitour_admin_allowlist`).
+- **Authentication → Users**: create the admin user your team will use.
+- Add that email to `cavitour_admin_allowlist` (migration step 1 seeds none by default after `20260807150000_remove_forcapstone111_admin_allowlist.sql`).
+- Set the same email in `apps/admin/src/lib/adminEmail.ts` and the web/mobile `adminReservedEmail` helpers if you want that address blocked from tourist signup.
 
 ## 4. Run apps
 
@@ -55,7 +56,9 @@ npm run mobile
 |-----|----------------|--------------|
 | Admin | `cd apps/admin` → `npm run dev` (port 3001) | `npm run admin` |
 | Web | `cd apps/web` → `npm run dev` | `npm run web` |
-| Mobile | `cd apps/mobile` → `npm run start` | `npm run mobile` |
+| Mobile | `cd apps/mobile` → `npm start` | `npm run mobile` |
+
+**Expo Go (phone):** same Wi‑Fi as your PC → `npm start` in `apps/mobile` → scan the QR in Expo Go. Use **`npm start`**, not `npx expo start --tunnel`.
 
 If you see **`vite` is not recognized** or **`expo` is not recognized**, you skipped step 1 or install failed:
 
@@ -89,6 +92,7 @@ If lists are empty but admin save works, re-run migration **20260510120004**.
 
 - **`cavitour-shared` not found**: run `npm install` from repo root; restart dev servers. Aliases are in `apps/web/vite.config.js`, `apps/admin/vite.config.ts`, and `apps/mobile/metro.config.js`.
 - **Mobile Metro**: if shared package fails, clear cache: `npm run mobile:clear`.
+- **Mobile Expo manifest / icons warning**: remove `EXPO_OFFLINE` from any `apps/mobile/.env` file and restart with `npm start` (online mode). If port **8081** is busy, close other Metro terminals first.
 - **`npm install` fails with `UNABLE_TO_VERIFY_LEAF_SIGNATURE`** (school/corporate Wi‑Fi or antivirus): run once from repo root:
   ```bash
   npm install --strict-ssl=false --no-audit

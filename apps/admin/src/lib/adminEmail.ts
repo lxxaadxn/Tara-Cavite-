@@ -1,5 +1,7 @@
-export const ADMIN_ALLOWED_EMAIL = 'forcapstone111@gmail.com';
+export const ADMIN_ALLOWED_EMAIL = 'forcapstone222@gmail.com';
 
 export function isAllowedAdminEmail(email: string): boolean {
-  return email.trim().toLowerCase() === ADMIN_ALLOWED_EMAIL;
+  const allowed = ADMIN_ALLOWED_EMAIL.trim().toLowerCase();
+  if (!allowed) return false;
+  return email.trim().toLowerCase() === allowed;
 }

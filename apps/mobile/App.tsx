@@ -24,10 +24,19 @@ import { createNavigationContainerRef } from '@react-navigation/native';
 import { JamIcon } from './components/JamIcon';
 import { AuthRecoveryProvider } from './context/AuthRecoveryContext';
 import { Colors } from './constants/Colors';
+import {
+  extractCheckinCodeFromText,
+} from 'cavitour-shared/placeCheckin';
 import { applyOAuthCallbackFromUrl, isOAuthCallbackUrl } from './lib/authOAuth';
 import { applyPasswordRecoveryFromUrl, isPasswordRecoveryUrl } from './lib/authRecoveryDeepLink';
 import { isStoredSessionInvalidError } from './lib/authHelpers';
-import { isSupabaseConfigured, supabase } from './lib/supabase';
+import { isSupabaseConfigured, supabase, clearBrokenAuthSession } from './lib/supabase';
+import {
+  consumePendingCheckinCode,
+  isCheckinUrl,
+  savePendingCheckinCode,
+} from './lib/checkinDeepLink';
+import { confirmCheckinFromCode } from './lib/confirmCheckin';
 
 // Keep native splash (Tara, Cavite! logo) visible until app is ready
 SplashScreen.preventAutoHideAsync();
@@ -43,6 +52,7 @@ import MapCommuteDetailScreen from './screens/MapCommuteDetailScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
 import PlaceDetailScreen from './screens/PlaceDetailScreen';
 import AboutEstablishmentScreen from './screens/AboutEstablishmentScreen';
+import CheckinScreen from './screens/CheckinScreen';
 import EstablishmentsBrowseScreen from './screens/EstablishmentsBrowseScreen';
 import PreferencesScreen from './screens/PreferencesScreen';
 import ProfileScreen from './screens/ProfileScreen';
@@ -105,6 +115,7 @@ const DashboardStack = () => (
     <Stack.Screen name="HomeMain" component={HomeScreen} />
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
     <Stack.Screen name="AboutEstablishment" component={AboutEstablishmentScreen} />
+    <Stack.Screen name="Checkin" component={CheckinScreen} />
     <Stack.Screen name="EstablishmentsBrowse" component={EstablishmentsBrowseScreen} />
     <Stack.Screen name="Directions" component={DirectionsScreen} />
     <Stack.Screen name="FullRouteMap" component={FullRouteMapScreen} />
@@ -122,6 +133,7 @@ const ItinerariesStack = () => (
     <Stack.Screen name="Notifications" component={NotificationsScreen} />
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
     <Stack.Screen name="AboutEstablishment" component={AboutEstablishmentScreen} />
+    <Stack.Screen name="Checkin" component={CheckinScreen} />
     <Stack.Screen name="EstablishmentsBrowse" component={EstablishmentsBrowseScreen} />
     <Stack.Screen name="Directions" component={DirectionsScreen} />
     <Stack.Screen name="FullRouteMap" component={FullRouteMapScreen} />
@@ -142,6 +154,7 @@ const ProfileStack = () => (
     <Stack.Screen name="NewList" component={NewListScreen} />
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
     <Stack.Screen name="AboutEstablishment" component={AboutEstablishmentScreen} />
+    <Stack.Screen name="Checkin" component={CheckinScreen} />
     <Stack.Screen name="EstablishmentsBrowse" component={EstablishmentsBrowseScreen} />
     <Stack.Screen name="Directions" component={DirectionsScreen} />
     <Stack.Screen name="FullRouteMap" component={FullRouteMapScreen} />
@@ -155,6 +168,7 @@ const MapStack = () => (
     <Stack.Screen name="MapMain" component={MapScreen} />
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
     <Stack.Screen name="AboutEstablishment" component={AboutEstablishmentScreen} />
+    <Stack.Screen name="Checkin" component={CheckinScreen} />
     <Stack.Screen name="EstablishmentsBrowse" component={EstablishmentsBrowseScreen} />
     <Stack.Screen name="Directions" component={DirectionsScreen} />
     <Stack.Screen name="MapCommuteDetail" component={MapCommuteDetailScreen} />
@@ -309,6 +323,7 @@ export default function App() {
   const [blockMainForRecovery, setBlockMainForRecovery] = useState(false);
   const didClearAuthRef = useRef(false);
   const pendingRecoveryNavRef = useRef(false);
+  const pendingCheckinNavRef = useRef(false);
 
   const navigateToRecoveryScreen = useCallback(() => {
     requestAnimationFrame(() => {
@@ -326,11 +341,21 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | undefined;
+    let cancelled = false;
+    const safety = setTimeout(() => {
+      if (!cancelled) setAuthHydrated(true);
+    }, 8000);
 
     const init = async () => {
       let skipStartupSignOut = false;
       try {
+        if (isSupabaseConfigured) {
+          await Promise.race([
+            clearBrokenAuthSession(),
+            new Promise<void>((resolve) => setTimeout(resolve, 4000)),
+          ]);
+        }
+        if (cancelled) return;
         const initialUrl = await Linking.getInitialURL();
         if (initialUrl && isPasswordRecoveryUrl(initialUrl)) {
           setBlockMainForRecovery(true);
@@ -345,6 +370,12 @@ export default function App() {
             skipStartupSignOut = true;
             await AsyncStorage.setItem('isAuthenticated', 'true');
             setIsAuthenticated(true);
+          }
+        } else if (initialUrl && isCheckinUrl(initialUrl)) {
+          const code = extractCheckinCodeFromText(initialUrl);
+          if (code) {
+            await savePendingCheckinCode(code);
+            pendingCheckinNavRef.current = true;
           }
         } else if (Platform.OS === 'web' && typeof window !== 'undefined') {
           const webUrl = window.location.href;
@@ -362,6 +393,8 @@ export default function App() {
         // Ignore invalid recovery URLs on cold start.
       }
 
+      if (cancelled) return;
+
       if (REQUIRE_SIGN_IN_ON_EACH_LAUNCH && isSupabaseConfigured && !skipStartupSignOut) {
         try {
           await supabase.auth.signOut();
@@ -372,31 +405,41 @@ export default function App() {
         setIsAuthenticated(false);
         setUnauthedStackKey((k) => k + 1);
       }
-      await checkAuthStatus();
-      setAuthHydrated(true);
-      if (isSupabaseConfigured) {
-        interval = setInterval(() => {
-          checkAuthStatus();
-        }, 500);
+      try {
+        await Promise.race([
+          checkAuthStatus(),
+          new Promise<void>((resolve) => setTimeout(resolve, 4000)),
+        ]);
+      } catch {
+        /* ignore */
       }
+      if (!cancelled) setAuthHydrated(true);
     };
 
     void init();
-
     return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
+      cancelled = true;
+      clearTimeout(safety);
     };
   }, []);
 
   useEffect(() => {
+    const openCheckinIfNeeded = (url: string) => {
+      const code = extractCheckinCodeFromText(url);
+      if (!code || !isCheckinUrl(url)) return false;
+      // Stay on the current screen — only confirm + count the visit.
+      void confirmCheckinFromCode(code, 'qr');
+      return true;
+    };
+
     const sub = Linking.addEventListener('url', ({ url }) => {
+      if (openCheckinIfNeeded(url)) return;
       if (isOAuthCallbackUrl(url)) {
         void (async () => {
           const ok = await applyOAuthCallbackFromUrl(supabase, url);
           if (ok) {
             await AsyncStorage.setItem('isAuthenticated', 'true');
+            // Force Main tabs on both iOS and Android as soon as the session exists.
             setIsAuthenticated(true);
             await markMobileLocationPromptPending();
             try {
@@ -423,6 +466,26 @@ export default function App() {
     return () => sub.remove();
   }, [navigateToRecoveryScreen]);
 
+  // After sign-in, finish any QR check-in that was waiting — popup only, no page change.
+  useEffect(() => {
+    if (!isAuthenticated || blockMainForRecovery) return;
+    let cancelled = false;
+    void (async () => {
+      const code = await consumePendingCheckinCode();
+      if (cancelled || !code) {
+        pendingCheckinNavRef.current = false;
+        return;
+      }
+      pendingCheckinNavRef.current = false;
+      setTimeout(() => {
+        if (!cancelled) void confirmCheckinFromCode(code, 'qr');
+      }, 400);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, blockMainForRecovery]);
+
   // Sync auth state with Supabase session (persisted across app restarts)
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -442,7 +505,7 @@ export default function App() {
         if (error && isStoredSessionInvalidError(error) && !didClearAuthRef.current) {
           didClearAuthRef.current = true;
           try {
-            await supabase.auth.signOut();
+            await supabase.auth.signOut({ scope: 'local' });
           } catch {
             // Best-effort; SDK may have already cleared storage.
           }
@@ -454,7 +517,7 @@ export default function App() {
         if (!didClearAuthRef.current) {
           didClearAuthRef.current = true;
           try {
-            await supabase.auth.signOut();
+            await supabase.auth.signOut({ scope: 'local' });
           } catch {
             // Ignore; we only want to clear local auth state best-effort.
           }
@@ -507,7 +570,7 @@ export default function App() {
         if (!didClearAuthRef.current) {
           didClearAuthRef.current = true;
           try {
-            await supabase.auth.signOut();
+            await supabase.auth.signOut({ scope: 'local' });
           } catch {
             // Best-effort cleanup only.
           }
@@ -518,7 +581,7 @@ export default function App() {
         return;
       }
       if (error) {
-        // Transient refresh failure: keep optimistic flag until the next poll succeeds.
+        // Transient refresh failure: keep optimistic flag until auth state settles.
         const value = await AsyncStorage.getItem('isAuthenticated');
         setIsAuthenticated(value === 'true');
         return;
@@ -529,7 +592,7 @@ export default function App() {
       if (!didClearAuthRef.current) {
         didClearAuthRef.current = true;
         try {
-          await supabase.auth.signOut();
+          await supabase.auth.signOut({ scope: 'local' });
         } catch {
           // Best-effort cleanup only.
         }
@@ -538,18 +601,18 @@ export default function App() {
     }
   };
 
-  // Hide native splash once fonts + first auth read are ready
+  // Hide native splash once fonts are ready (don't wait forever on auth)
   useEffect(() => {
-    if (fontsLoaded && authHydrated) {
-      SplashScreen.hideAsync();
+    if (fontsLoaded) {
+      void SplashScreen.hideAsync().catch(() => undefined);
     }
-  }, [fontsLoaded, authHydrated]);
+  }, [fontsLoaded]);
 
   if (!fontsLoaded) {
     return null;
   }
 
-  // Bundling page: always use our logo from assets/images/cavitour-logo.png
+  // Brief logo while session is read — capped by init safety timeout
   if (!authHydrated) {
     return (
       <SafeAreaProvider>

@@ -21,4 +21,15 @@ config.resolver.extraNodeModules = {
 
 config.resolver.sourceExts = [...(config.resolver.sourceExts || []), 'js', 'jsx', 'ts', 'tsx'];
 
+// Faster startup + smaller initial evaluate; assets load when screens need them.
+config.transformer = {
+  ...config.transformer,
+  getTransformOptions: async () => ({
+    transform: {
+      experimentalImportSupport: false,
+      inlineRequires: true,
+    },
+  }),
+};
+
 module.exports = config;

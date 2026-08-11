@@ -18,6 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { JamIcon } from '../components/JamIcon';
 import { GoogleLogoMark } from '../components/GoogleLogoMark';
+import { GoogleConsentModal } from '../components/GoogleConsentModal';
 import { Colors } from '../constants/theme';
 import { Button } from '../components/Button';
 import {
@@ -51,7 +52,11 @@ const SignUpScreen: React.FC = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showGoogleConsent, setShowGoogleConsent] = useState(false);
   const [googleAuthInProgress, setGoogleAuthInProgress] = useState(false);
+  const [googlePhase, setGooglePhase] = useState<'starting' | 'google' | 'finishing' | 'done'>(
+    'starting'
+  );
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -123,11 +128,33 @@ const SignUpScreen: React.FC = () => {
   const runGoogleSignUp = async () => {
     setFormError(null);
     setLoading(true);
+    setGooglePhase('starting');
     setGoogleAuthInProgress(true);
     try {
-      await signInWithGoogleMobile();
+      await signInWithGoogleMobile({
+        onPhase: (phase) => {
+          setGooglePhase(phase);
+          if (phase === 'google') {
+            setGoogleAuthInProgress(false);
+          } else if (phase === 'finishing' || phase === 'starting') {
+            setGoogleAuthInProgress(true);
+          }
+        },
+      });
+      setGooglePhase('done');
+      setGoogleAuthInProgress(true);
       await AsyncStorage.setItem('isAuthenticated', 'true');
+      setFormError(null);
+      await new Promise((r) => setTimeout(r, 400));
     } catch (error: unknown) {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        setGoogleAuthInProgress(true);
+        await AsyncStorage.setItem('isAuthenticated', 'true');
+        setFormError(null);
+        await new Promise((r) => setTimeout(r, 400));
+        return;
+      }
       const message =
         error instanceof Error && error.message
           ? error.message
@@ -144,18 +171,36 @@ const SignUpScreen: React.FC = () => {
       setFormError(SUPABASE_ENV_MISSING_MESSAGE);
       return;
     }
-    void runGoogleSignUp();
+    setShowGoogleConsent(true);
   };
 
   return (
     <View style={styles.root}>
+      <GoogleConsentModal
+        visible={showGoogleConsent}
+        mode="sign-up"
+        onCancel={() => setShowGoogleConsent(false)}
+        onContinue={() => {
+          setShowGoogleConsent(false);
+          void runGoogleSignUp();
+        }}
+      />
+
       <Modal visible={googleAuthInProgress} transparent animationType="fade" statusBarTranslucent>
         <View style={styles.authOverlay}>
           <View style={styles.authCard}>
             <GoogleLogoMark size={32} />
             <ActivityIndicator size="large" color={Colors.accent} style={styles.authSpinner} />
-            <Text style={styles.authTitle}>Signing up with Google</Text>
-            <Text style={styles.authSubtitle}>Complete sign-in in the Google window.</Text>
+            <Text style={styles.authTitle}>
+              {googlePhase === 'finishing' || googlePhase === 'done'
+                ? 'Finishing sign-in…'
+                : 'Authenticating with Google'}
+            </Text>
+            <Text style={styles.authSubtitle}>
+              {googlePhase === 'finishing' || googlePhase === 'done'
+                ? 'Almost done — opening your home screen.'
+                : 'Please continue in the Google sign-in window.'}
+            </Text>
           </View>
         </View>
       </Modal>

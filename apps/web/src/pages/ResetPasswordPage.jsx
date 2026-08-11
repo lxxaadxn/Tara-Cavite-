@@ -2,6 +2,13 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { LogoWordmark } from '../components/LogoWordmark';
+import {
+  completePasswordRecoveryFromUrl,
+  stripAuthParamsFromUrl,
+  urlLooksLikePasswordRecovery,
+} from '../lib/passwordRecovery';
+import { isAdminReservedEmail } from '../lib/adminReservedEmail';
+import { ADMIN_APP_HOME_PATH } from '../lib/adminPortalPath';
 
 const MIN_LEN = 8;
 const teal = 'var(--ct-teal)';
@@ -13,27 +20,59 @@ export function ResetPasswordPage() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
+  const [bootstrapping, setBootstrapping] = useState(true);
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
+    let active = true;
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active) return;
       if (event === 'PASSWORD_RECOVERY' && session) {
         setReady(true);
+        setBootstrapping(false);
+        setError('');
       }
     });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        const hash = window.location.hash.replace(/^#/, '');
-        const type = new URLSearchParams(hash).get('type');
-        if (type === 'recovery') {
+    const bootstrap = async () => {
+      try {
+        const href = window.location.href;
+        // Only exchange recovery links here — never steal Google OAuth codes.
+        if (urlLooksLikePasswordRecovery(href)) {
+          const session = await completePasswordRecoveryFromUrl(supabase, href);
+          if (!active) return;
+          if (session) {
+            stripAuthParamsFromUrl('/reset-password');
+            setReady(true);
+            setError('');
+            return;
+          }
+        }
+
+        const { data } = await supabase.auth.getSession();
+        if (!active) return;
+        if (data.session) {
+          // Already in a recovery/session from the email link.
           setReady(true);
         }
+      } catch (err) {
+        if (!active) return;
+        setError(err instanceof Error ? err.message : 'This reset link is invalid or expired.');
+        setReady(false);
+      } finally {
+        if (active) setBootstrapping(false);
       }
-    });
+    };
 
-    return () => subscription.unsubscribe();
+    void bootstrap();
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const handleSubmit = async (e) => {
@@ -51,7 +90,16 @@ export function ResetPasswordPage() {
     try {
       const { error: err } = await supabase.auth.updateUser({ password });
       if (err) throw err;
-      navigate('/search', { replace: true });
+      const { data } = await supabase.auth.getUser();
+      const email = data.user?.email?.trim().toLowerCase() ?? '';
+      const nextPath = email && isAdminReservedEmail(email) ? '/admin' : '/login';
+      setSaved(true);
+      window.setTimeout(() => {
+        navigate(nextPath, {
+          replace: true,
+          state: nextPath === '/login' ? { passwordReset: true } : undefined,
+        });
+      }, 1600);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update password.');
     } finally {
@@ -69,13 +117,29 @@ export function ResetPasswordPage() {
           <h1 className="mt-4 font-['Poppins',sans-serif] text-3xl font-semibold" style={{ color: ink }}>
             Set new password
           </h1>
-          <p className="mt-2 text-sm text-neutral-500">Use the link from your email to open this page, then choose a new password.</p>
+          <p className="mt-2 text-sm text-neutral-500">
+            Choose a new password for your account, then sign in with it.
+          </p>
         </div>
 
-        {!ready ? (
+        {bootstrapping ? (
           <div className="rounded-2xl border border-neutral-200 bg-white p-6 text-center text-sm text-neutral-600 shadow-sm">
-            Waiting for a valid reset link… If this stays here, open the link from your email again.{' '}
-            <Link to="/forgot-password" className="font-semibold hover:underline" style={{ color: teal }}>
+            Opening your reset link…
+          </div>
+        ) : saved ? (
+          <div className="rounded-2xl border border-neutral-200 bg-white p-6 text-center shadow-sm">
+            <p className="text-base font-semibold text-neutral-900">Password updated</p>
+            <p className="mt-2 text-sm text-neutral-600">Your password was successfully changed. Redirecting to login…</p>
+          </div>
+        ) : !ready ? (
+          <div className="rounded-2xl border border-neutral-200 bg-white p-6 text-center text-sm text-neutral-600 shadow-sm">
+            {error ? <p className="mb-3 text-red-600">{error}</p> : null}
+            <p>
+              Waiting for a valid reset link… If this stays here, request a new link and make sure
+              <span className="font-semibold"> /reset-password </span>
+              is allowlisted in Supabase Auth redirect URLs.
+            </p>
+            <Link to="/forgot-password" className="mt-4 inline-block font-semibold hover:underline" style={{ color: teal }}>
               Request a new link
             </Link>
           </div>
@@ -90,6 +154,7 @@ export function ResetPasswordPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 className="h-11 w-full rounded-full border border-neutral-200 px-4 text-sm outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(126,160,14,0.22)]"
                 minLength={MIN_LEN}
+                autoComplete="new-password"
                 required
               />
               <p className="mt-1 text-xs text-neutral-500">At least {MIN_LEN} characters.</p>
@@ -103,6 +168,7 @@ export function ResetPasswordPage() {
                 onChange={(e) => setConfirm(e.target.value)}
                 className="h-11 w-full rounded-full border border-neutral-200 px-4 text-sm outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(126,160,14,0.22)]"
                 minLength={MIN_LEN}
+                autoComplete="new-password"
                 required
               />
             </div>

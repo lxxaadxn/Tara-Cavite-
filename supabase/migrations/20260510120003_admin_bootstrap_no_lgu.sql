@@ -15,9 +15,8 @@ CREATE POLICY "No direct allowlist access"
   USING (false)
   WITH CHECK (false);
 
-INSERT INTO public.cavitour_admin_allowlist (email)
-VALUES ('forcapstone111@gmail.com')
-ON CONFLICT (email) DO NOTHING;
+-- Admin emails are added manually when needed (see cavitour_admin_allowlist).
+-- Do not seed a reserved Gmail here — it blocks tourist Google signup for that address.
 
 CREATE OR REPLACE FUNCTION public.is_cavitour_session_admin()
 RETURNS BOOLEAN

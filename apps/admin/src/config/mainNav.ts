@@ -28,7 +28,7 @@ export const ADMIN_NAV: AdminNavNode[] = [
     label: 'Tourism Management',
     icon: 'tourism',
     children: [
-      { key: 'tourism-attractions', label: 'Tourist Attractions', to: '/web/tourism/attractions' },
+      { key: 'tourism-attractions', label: 'Destinations (QR visits)', to: '/web/tourism/attractions' },
       { key: 'tourism-filters', label: 'Categories/Filters', to: '/web/tourism/filters' },
       { key: 'tourism-municipalities', label: 'Municipalities', to: '/web/tourism/municipalities' },
       { key: 'tourism-featured', label: 'Featured Destinations', to: '/web/tourism/featured' },

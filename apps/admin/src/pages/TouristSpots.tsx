@@ -10,6 +10,7 @@ import {
   persistGalleryUrls,
   updateAdminPlace,
 } from '../lib/destinationPlaces';
+import { fetchPlaceCheckinMap, type PlaceCheckinInfo } from '../lib/placeVisits';
 import { supabase } from '../lib/supabase';
 import styles from './TouristSpots.module.css';
 
@@ -43,6 +44,7 @@ function destinationToForm(d: Destination): typeof emptyForm {
 
 export function TouristSpots() {
   const [rows, setRows] = useState<Destination[]>([]);
+  const [checkins, setCheckins] = useState<Map<string, PlaceCheckinInfo>>(new Map());
   const [loadState, setLoadState] = useState<'idle' | 'loading' | 'error'>('loading');
   const [search, setSearch] = useState('');
   const [cityFilter, setCityFilter] = useState('All Cities');
@@ -67,7 +69,18 @@ export function TouristSpots() {
     setLoadState('loading');
     try {
       const data = await fetchAdminDestinations(supabase);
-      setRows(data.map(adminPlaceRowToDestination));
+      const mapped = data.map(adminPlaceRowToDestination);
+      setRows(mapped);
+      try {
+        const cmap = await fetchPlaceCheckinMap(
+          supabase,
+          mapped.map((d) => d.id)
+        );
+        setCheckins(cmap);
+      } catch (e) {
+        setCheckins(new Map());
+        console.warn(e);
+      }
       setLoadState('idle');
     } catch (e) {
       setLoadState('error');
@@ -225,14 +238,22 @@ export function TouristSpots() {
         <div>
           <h1>Destinations</h1>
           <p>
-            Admin-managed rows in <code className={styles.inlineCode}>public.places</code> (catalog for web and mobile).
-            Optional <code className={styles.inlineCode}>source_slug</code> values like{' '}
-            <code className={styles.inlineCode}>admin:%</code> distinguish hand-added destinations.
+            Each establishment gets its own check-in <strong>QR code</strong>. Print/display it at the venue —
+            visitors scan with their phone camera and the visit counts for Admin and the establishment.
           </p>
         </div>
         <button type="button" className={styles.addBtn} onClick={openCreate} disabled={loadState === 'loading'}>
           <span>+</span> Add destination
         </button>
+      </div>
+
+      <div className={styles.specCard}>
+        <strong>Visitor QR (shown on web + mobile app)</strong>
+        <ul>
+          <li>Each establishment has its own QR. Scanning only confirms check-in (thank-you popup) and counts the visit.</li>
+          <li>Web / printed QR → phone opens a thank-you confirmation (keep <code>apps/web</code> running in dev).</li>
+          <li>Mobile Expo QR → thank-you alert in the app — no other page opens.</li>
+        </ul>
       </div>
 
       {loadState === 'error' && (
@@ -289,17 +310,32 @@ export function TouristSpots() {
                 <th>Name</th>
                 <th>Category</th>
                 <th>City</th>
+                <th>Visits</th>
+                <th>Check-in QR</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {list.map((spot) => (
+              {list.map((spot) => {
+                const ci = checkins.get(spot.id);
+                return (
                 <tr key={spot.id} className={styles.row}>
                   <td>{thumbFor(spot)}</td>
                   <td>{spot.name}</td>
                   <td>{spot.category}</td>
                   <td>{spot.city}</td>
+                  <td>{ci?.totalVisits ?? 0}</td>
+                  <td>
+                    {ci ? (
+                      <div className={styles.qrCell}>
+                        <img src={ci.qrUrl} alt={`QR for ${spot.name}`} width={56} height={56} />
+                        <code className={styles.qrCode}>{ci.code}</code>
+                      </div>
+                    ) : (
+                      <span className={styles.muted}>Run check-in SQL</span>
+                    )}
+                  </td>
                   <td>
                     <span className={`${styles.badge} ${spot.status === 'active' ? styles.active : styles.hidden}`}>
                       {spot.status}
@@ -316,7 +352,8 @@ export function TouristSpots() {
                     </div>
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
         )}
@@ -335,6 +372,55 @@ export function TouristSpots() {
             onClick={(e) => e.stopPropagation()}
           >
             <h2 id="dest-modal-title">{editingId ? 'Edit destination' : 'Add destination'}</h2>
+            {editingId && checkins.get(editingId) ? (
+              <div className={styles.qrPanel}>
+                <img
+                  src={checkins.get(editingId)!.qrUrl}
+                  alt="Establishment check-in QR"
+                  width={180}
+                  height={180}
+                />
+                <div>
+                  <p className={styles.qrPanelTitle}>This establishment’s QR (give this to the business)</p>
+                  <p className={styles.qrPanelHint}>
+                    Print or download this image and post it at the entrance. Visitors scan it with their phone —
+                    they should not need to type anything. Visits appear here and on the establishment side.
+                  </p>
+                  <p>
+                    Code: <code>{checkins.get(editingId)!.code}</code>
+                  </p>
+                  <p className={styles.qrPanelHint}>
+                    Visits recorded: <strong>{checkins.get(editingId)!.totalVisits}</strong>
+                  </p>
+                  <div className={styles.qrActions}>
+                    <a
+                      href={checkins.get(editingId)!.qrUrl}
+                      download={`cavitour-qr-${checkins.get(editingId)!.code}.png`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={styles.qrActionBtn}
+                    >
+                      Download QR image
+                    </a>
+                    <a
+                      href={`/checkin/poster/${encodeURIComponent(checkins.get(editingId)!.code)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={styles.qrActionBtnPrimary}
+                    >
+                      Print QR poster
+                    </a>
+                    <a href={checkins.get(editingId)!.checkinUrl} target="_blank" rel="noreferrer">
+                      Test check-in link
+                    </a>
+                  </div>
+                </div>
+              </div>
+            ) : editingId ? (
+              <p className={styles.qrPanelHint}>
+                No QR yet — run <code>place_checkin_visits.sql</code> in Supabase, then reload this page.
+              </p>
+            ) : null}
             <div className={styles.form}>
               <label className={styles.fieldLabel}>
                 Images (multiple)
