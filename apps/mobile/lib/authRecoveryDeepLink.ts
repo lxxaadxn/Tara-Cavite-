@@ -8,7 +8,6 @@ function isResetPasswordDeepLink(url: string): boolean {
 
 /**
  * True if this deep link is our password reset return URL (not OAuth).
- * Supabase may use PKCE (`?code=`) or implicit hash (`#access_token=...&type=recovery`).
  */
 export function isPasswordRecoveryUrl(url: string): boolean {
   if (!isResetPasswordDeepLink(url)) {

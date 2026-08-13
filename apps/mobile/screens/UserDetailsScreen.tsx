@@ -371,7 +371,6 @@ const UserDetailsScreen: React.FC = () => {
       try {
         await deleteUserAvatarFiles(supabase, authData.user.id, null);
       } catch {
-        // Best-effort storage cleanup; account is already removed.
       }
 
       await supabase.auth.signOut();

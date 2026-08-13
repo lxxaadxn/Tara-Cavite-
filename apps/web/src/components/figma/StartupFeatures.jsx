@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { RandomIcon } from './RandomIcon';
 function Dots({ active }) {
-    // The dots match your Figma: thin rounded bars.
     const dots = [0, 1, 2, 3];
     return (<div className="ft-dots" role="group" aria-label="Carousel progress">
       {dots.map((i) => (<div key={i} className={`ft-dot ${i < active ? 'ft-dot--active' : ''}`} aria-hidden="true"/>))}

@@ -110,16 +110,13 @@ export function getExpoOAuthCallbackUrl(): string {
     return Linking.createURL(AUTH_CALLBACK_PATH);
   }
 
-  // Prefer the app scheme (app.json "scheme": "cavitour").
-  // exp://IP:port/… breaks when Wi‑Fi IP changes and often fails to return
-  // from Google/ASWebAuthenticationSession on iOS (stuck on accounts.google.com).
   try {
     const withScheme = Linking.createURL(AUTH_CALLBACK_PATH, { scheme: 'cavitour' });
     if (/^cavitour:/i.test(withScheme)) {
       return withScheme;
     }
   } catch {
-    /* fall through */
+    /* empty */
   }
 
   return 'cavitour://auth/callback';

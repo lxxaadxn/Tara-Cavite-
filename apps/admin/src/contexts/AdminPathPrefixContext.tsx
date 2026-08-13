@@ -18,7 +18,6 @@ export function useAdminPathPrefix(): string {
   return useContext(AdminPathPrefixContext);
 }
 
-/** Prefix absolute admin-app paths for router links ("" or "/admin"). */
 export function useAdminHref(path: string): string {
   const prefix = useAdminPathPrefix();
   const normalized = path.startsWith('/') ? path : `/${path}`;

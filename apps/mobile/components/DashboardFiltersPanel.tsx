@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from
 import { JamIcon } from './JamIcon';
 export { FILTER_OPTION_LABEL_BY_KEY } from '../lib/dashboardFilterOptions';
 
-/** Figma filter export: dark green chevron (#213502) */
 const CHEVRON = '#213502';
 const BORDER = 'rgba(122, 120, 120, 0.5)';
 const TRACK_OFF_BORDER = '#636366';

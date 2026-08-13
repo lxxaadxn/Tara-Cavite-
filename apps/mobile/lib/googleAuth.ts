@@ -85,11 +85,6 @@ async function ensureSessionFromCallback(callbackUrl: string): Promise<void> {
   throw new Error('Google sign-in finished, but no session was created. Try again.');
 }
 
-/**
- * Same logic as apps/web Google OAuth (PKCE → Google → callback → session),
- * in-app via AuthSession. Return URL uses cavitour:// (not exp://LAN) so
- * iOS can leave Google and open the app after account pick.
- */
 async function runGoogleOAuthExpoOnly(options?: GoogleSignInOptions): Promise<void> {
   const onPhase = options?.onPhase;
   await AsyncStorage.setItem(OAUTH_REDIRECT_MODE_KEY, 'expo');

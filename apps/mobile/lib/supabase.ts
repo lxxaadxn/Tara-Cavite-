@@ -32,14 +32,12 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
-    // Same as web — PKCE (polyfillCrypto provides SHA-256 on Expo Go).
     flowType: 'pkce',
   },
 });
 
 export const isSupabaseConfigured = configured;
 
-/** Clear a broken persisted session so Expo Go does not red-screen after bundle. */
 export async function clearBrokenAuthSession(): Promise<void> {
   try {
     const { data, error } = await supabase.auth.getSession();
@@ -61,7 +59,6 @@ export async function clearBrokenAuthSession(): Promise<void> {
     try {
       await supabase.auth.signOut({ scope: 'local' });
     } catch {
-      /* ignore */
     }
     await AsyncStorage.setItem('isAuthenticated', 'false');
   }

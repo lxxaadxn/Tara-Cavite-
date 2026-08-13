@@ -1,6 +1,5 @@
 import type { ImageSourcePropType } from 'react-native';
 
-/** `require()` asset, remote URI string, or `{ uri }` for React Native Image. */
 export function placeImageSource(image: unknown): ImageSourcePropType | undefined {
   if (image == null) return undefined;
   if (typeof image === 'number') return image;
@@ -12,4 +11,17 @@ export function placeImageSource(image: unknown): ImageSourcePropType | undefine
     return image as ImageSourcePropType;
   }
   return undefined;
+}
+
+export function placeHasDisplayImage(place: {
+  image?: unknown;
+  gallery?: unknown[];
+}): boolean {
+  if (placeImageSource(place.image)) return true;
+  if (Array.isArray(place.gallery)) {
+    for (const g of place.gallery) {
+      if (placeImageSource(g)) return true;
+    }
+  }
+  return false;
 }

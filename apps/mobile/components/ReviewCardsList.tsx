@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { JamIcon } from './JamIcon';
 import { getPreviewReviewEntries } from '../lib/ntdpDisplayLabels';
+import type { PlaceReview } from '../lib/placeReviews';
 
 const GREEN = '#7EA00E';
 const TITLE = '#241D13';
@@ -12,7 +13,7 @@ const STAR_EMPTY = '#E5E5E5';
 const AVATAR_BG = '#6B6B6B';
 const CARD_BORDER = 'rgba(122, 120, 120, 0.18)';
 
-export type MockReview = {
+export type ReviewCardItem = {
   id: string;
   username: string;
   rating: number;
@@ -20,7 +21,7 @@ export type MockReview = {
   body: string;
 };
 
-function buildMockReviews(placeName: string, ntdpCategory?: string | null): MockReview[] {
+function buildMockReviews(placeName: string, ntdpCategory?: string | null): ReviewCardItem[] {
   const entries = getPreviewReviewEntries(placeName, ntdpCategory);
   return entries.map((e, i) => ({
     id: `r${i + 1}`,
@@ -31,18 +32,57 @@ function buildMockReviews(placeName: string, ntdpCategory?: string | null): Mock
   }));
 }
 
+function formatReviewMeta(at: number): string {
+  try {
+    return new Date(at).toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  } catch {
+    return 'Guest review';
+  }
+}
+
+export function mapPlaceReviewsToCards(reviews: PlaceReview[]): ReviewCardItem[] {
+  return reviews.map((r) => ({
+    id: r.id,
+    username: r.nickname,
+    rating: r.rating,
+    metaLine: formatReviewMeta(r.at),
+    body: r.text,
+  }));
+}
+
 export type ReviewCardsListProps = {
   placeName?: string;
   ntdpCategory?: string | null;
+  reviews?: PlaceReview[] | null;
+  emptyAsSamples?: boolean;
 };
 
-export function ReviewCardsList({ placeName = 'This place', ntdpCategory }: ReviewCardsListProps) {
+export function ReviewCardsList({
+  placeName = 'This place',
+  ntdpCategory,
+  reviews,
+  emptyAsSamples = true,
+}: ReviewCardsListProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const reviews = useMemo(() => buildMockReviews(placeName, ntdpCategory), [placeName, ntdpCategory]);
+  const cards = useMemo(() => {
+    if (reviews && reviews.length > 0) return mapPlaceReviewsToCards(reviews);
+    if (emptyAsSamples) return buildMockReviews(placeName, ntdpCategory);
+    return [];
+  }, [reviews, placeName, ntdpCategory, emptyAsSamples]);
+
+  if (cards.length === 0) {
+    return (
+      <Text style={styles.emptyHint}>No reviews yet. Be the first to share your visit.</Text>
+    );
+  }
 
   return (
     <View style={styles.reviewsList}>
-      {reviews.map((rev) => {
+      {cards.map((rev) => {
         const isOpen = !!expanded[rev.id];
         return (
           <View key={rev.id} style={styles.reviewCard}>
@@ -86,6 +126,12 @@ export function ReviewCardsList({ placeName = 'This place', ntdpCategory }: Revi
 const styles = StyleSheet.create({
   reviewsList: {
     gap: 14,
+  },
+  emptyHint: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    color: MUTED,
   },
   reviewCard: {
     backgroundColor: WHITE,

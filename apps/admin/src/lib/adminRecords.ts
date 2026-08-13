@@ -9,7 +9,6 @@ type CuratedItinerary = {
   featured?: boolean;
 };
 
-/** Curated routes shipped in the web/mobile app (no itineraries table in Supabase yet). */
 const CURATED_CATALOG: CuratedItinerary[] = [
   {
     id: 'highlands',
@@ -173,7 +172,6 @@ export async function fetchAdminSavedLists(client: SupabaseClient): Promise<Save
 
 export type AdminItinerariesResult = {
   rows: ItineraryRow[];
-  /** False when saved_list_itinerary_items is not migrated yet. */
   savesTableReady: boolean;
 };
 

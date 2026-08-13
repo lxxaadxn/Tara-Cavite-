@@ -10,19 +10,25 @@ import {
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { extractCheckinCodeFromText } from 'cavitour-shared/placeCheckin';
-import { confirmCheckinFromCode } from '../lib/confirmCheckin';
+import { confirmCheckinFromCode, type ConfirmCheckinOptions } from '../lib/confirmCheckin';
 
 const TEAL = '#1f4f59';
 
 type Props = {
   visible: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
+  checkinOptions?: ConfirmCheckinOptions;
+  title?: string;
 };
 
-/**
- * Full-screen in-app QR scanner. On a valid establishment code, shows thank-you alert and closes.
- */
-export function CheckinScannerModal({ visible, onClose }: Props) {
+export function CheckinScannerModal({
+  visible,
+  onClose,
+  onSuccess,
+  checkinOptions,
+  title = 'Scan poster QR',
+}: Props) {
   const [permission, requestPermission] = useCameraPermissions();
   const locked = useRef(false);
   const [busy, setBusy] = useState(false);
@@ -46,24 +52,26 @@ export function CheckinScannerModal({ visible, onClose }: Props) {
       locked.current = true;
       setBusy(true);
       try {
-        await confirmCheckinFromCode(code, 'qr');
-        onClose();
+        const ok = await confirmCheckinFromCode(code, 'qr', checkinOptions);
+        if (ok) {
+          onSuccess?.();
+          onClose();
+        }
       } finally {
         setBusy(false);
-        // Allow another scan after a short pause if user reopens
         setTimeout(() => {
           locked.current = false;
         }, 1500);
       }
     },
-    [busy, onClose, visible]
+    [busy, checkinOptions, onClose, onSuccess, visible]
   );
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={styles.root}>
         <View style={styles.header}>
-          <Text style={styles.title}>Scan poster QR</Text>
+          <Text style={styles.title}>{title}</Text>
           <TouchableOpacity onPress={onClose} hitSlop={12} accessibilityRole="button">
             <Text style={styles.close}>Close</Text>
           </TouchableOpacity>
@@ -101,7 +109,6 @@ export function CheckinScannerModal({ visible, onClose }: Props) {
   );
 }
 
-/** Small entry button used on place pages / home. */
 export function ScanCheckinButton({
   onPress,
   label = 'Scan poster QR',

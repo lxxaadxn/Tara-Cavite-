@@ -24,7 +24,7 @@ import {
   haversineDistanceKm,
   logPlacesFetchError,
 } from '../lib/placesFromSupabase';
-import { placeImageSource } from '../lib/placeImageSource';
+import { placeImageSource, placeHasDisplayImage } from '../lib/placeImageSource';
 import {
   placePassesAppliedFilters,
   type AppliedPlaceFilters,
@@ -36,7 +36,6 @@ const CARD_GAP = 40;
 const CARD_WIDTH = Math.min(320, Math.round(SCREEN_WIDTH * 0.74));
 const IMAGE_HEIGHT = Math.round(CARD_WIDTH * 0.58);
 
-/** Figma dashboard export tokens */
 const FIGMA = {
   textTitle: '#241D13',
   textSubtitle: '#425466',
@@ -46,7 +45,6 @@ const FIGMA = {
   white: '#FFFFFF',
   bg: '#FFFFFF',
 };
-/** Match Itineraries tab search row (filter icon on white circle). */
 const TEAL = '#1F4F59';
 const SEARCH_PLACEHOLDER = '#B3AAAA';
 
@@ -100,7 +98,6 @@ const HomeScreen: React.FC = () => {
           setUserPt({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         }
       } catch {
-        /* ignore */
       }
     })();
     return () => {
@@ -109,19 +106,21 @@ const HomeScreen: React.FC = () => {
   }, []);
 
   const filteredSorted = useMemo(() => {
-    return catalogPlaces.filter((p) => placePassesAppliedFilters(p, appliedFilters));
+    return catalogPlaces
+      .filter((p) => placeHasDisplayImage(p))
+      .filter((p) => placePassesAppliedFilters(p, appliedFilters));
   }, [catalogPlaces, appliedFilters]);
 
-  const trendingRow = useMemo(() => filteredSorted.slice(0, 36), [filteredSorted]);
+  const trendingRow = useMemo(() => filteredSorted, [filteredSorted]);
 
   const nearbyRow = useMemo(() => {
-    if (!userPt) return filteredSorted.slice(0, 36);
+    if (!userPt) return filteredSorted;
     const scored = filteredSorted.map((p) => ({
       place: p,
       km: haversineDistanceKm(userPt.lat, userPt.lng, p.latitude, p.longitude),
     }));
     scored.sort((a, b) => a.km - b.km);
-    return scored.map((s) => s.place).slice(0, 36);
+    return scored.map((s) => s.place);
   }, [filteredSorted, userPt]);
 
   const handleSearch = () => {
@@ -206,7 +205,9 @@ const HomeScreen: React.FC = () => {
               <ActivityIndicator color={FIGMA.searchGreen} />
             </View>
           ) : trendingRow.length === 0 ? (
-            <Text style={styles.emptyHint}>No establishments match your filters. Try resetting filters or another city.</Text>
+            <Text style={styles.emptyHint}>
+              No pictured establishments match your filters. Try resetting filters or another city.
+            </Text>
           ) : (
             <ScrollView
               horizontal
@@ -225,7 +226,7 @@ const HomeScreen: React.FC = () => {
               <ActivityIndicator color={FIGMA.searchGreen} />
             </View>
           ) : nearbyRow.length === 0 ? (
-            <Text style={styles.emptyHint}>No establishments match your filters.</Text>
+            <Text style={styles.emptyHint}>No pictured establishments match your filters.</Text>
           ) : (
             <ScrollView
               horizontal

@@ -6,6 +6,7 @@ import {
   logPlacesFetchError,
   searchPlacesByText,
 } from '../lib/placesFromSupabase';
+import { filterPlacesWithMedia } from '../lib/marketingPlaces';
 import { countActiveFilters, placePassesAppliedFilters } from '../lib/placeFilterHelpers';
 import { AppHeader } from '../components/AppHeader';
 import { FilterModal } from '../components/FilterModal';
@@ -79,7 +80,7 @@ export function SearchPage() {
     let cancelled = false;
     (async () => {
       try {
-        const list = await fetchAllPlacesFromSupabase(supabase, 1000);
+        const list = filterPlacesWithMedia(await fetchAllPlacesFromSupabase(supabase, 1000));
         if (cancelled) return;
         trendingRef.current = list;
         setDisplayPlaces(list);
@@ -136,7 +137,7 @@ export function SearchPage() {
     const t = setTimeout(() => {
       if (dataSource === 'supabase' || dataSource === 'empty') {
         searchPlacesByText(supabase, q, 1000)
-          .then((list) => setDisplayPlaces(list.length ? list : []))
+          .then((list) => setDisplayPlaces(filterPlacesWithMedia(list.length ? list : [])))
           .catch((err) => logPlacesFetchError('searchPlacesByText', err));
         return;
       }

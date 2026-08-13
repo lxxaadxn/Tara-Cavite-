@@ -1,6 +1,3 @@
-/**
- * Shared helpers for public marketing pages (landing, auth panels).
- */
 import { fetchAllPlacesFromSupabase } from './placesFromSupabase';
 import { formatNtdpCategoryTagLabel } from './ntdpDisplayLabels';
 
@@ -8,7 +5,15 @@ export const MARKETING_PLACEHOLDER_IMG =
   'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80';
 
 function hasMedia(place) {
-  return Boolean(place?.imageUrl?.trim() || place?.galleryUrls?.[0]);
+  const image = String(place?.imageUrl ?? '').trim();
+  if (image) return true;
+  const gallery = place?.galleryUrls;
+  if (Array.isArray(gallery) && gallery.some((u) => String(u ?? '').trim())) return true;
+  return false;
+}
+
+export function filterPlacesWithMedia(places) {
+  return (places || []).filter(hasMedia);
 }
 
 function isRemoteUrl(url) {
@@ -42,15 +47,17 @@ function placeToDestinationCard(place) {
   };
 }
 
-/** Published places that have a hero image (DB, gallery, or bundled local asset). */
 export async function fetchPlacesWithMedia(client, { limit } = {}) {
   const all = await fetchAllPlacesFromSupabase(client);
-  const withMedia = all.filter(hasMedia);
+  const withMedia = filterPlacesWithMedia(all);
   if (limit && limit > 0) return withMedia.slice(0, limit);
   return withMedia;
 }
 
-/** Stable login vs signup side-panel picks (newest first, then name). */
+export function placesToDestinationCards(places) {
+  return filterPlacesWithMedia(places).map(placeToDestinationCard);
+}
+
 export function pickAuthHeroPlaces(places, count = 2) {
   const sorted = [...places].sort((a, b) => {
     const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
@@ -61,7 +68,6 @@ export function pickAuthHeroPlaces(places, count = 2) {
   return sorted.slice(0, count);
 }
 
-/** Featured destination cards with diverse NTDP category and municipality. */
 export function pickFeaturedDestinations(places, { limit = 8 } = {}) {
   const withMedia = places.filter(hasMedia);
   const picks = [];
@@ -87,7 +93,6 @@ export function pickFeaturedDestinations(places, { limit = 8 } = {}) {
   return picks;
 }
 
-/** Filter chips from categories present in the catalog (`All` + top NTDP types). */
 export function buildDestinationFilters(places, maxCategories = 5) {
   const counts = new Map();
   for (const p of places) {
@@ -104,7 +109,6 @@ export function buildDestinationFilters(places, maxCategories = 5) {
   return [{ label: 'All', value: 'all' }, ...sorted.map(({ value, label }) => ({ label, value }))];
 }
 
-/** Single hero establishment (admin-curated preferred, else first remote image). */
 export function pickHeroPlace(places) {
   const withMedia = places.filter(hasMedia);
   const adminCurated = withMedia.find((p) => String(p.source_slug ?? '').startsWith('admin:'));
@@ -114,7 +118,6 @@ export function pickHeroPlace(places) {
   return withMedia[0] ?? null;
 }
 
-/** Live stats for marketing copy (establishment and municipality counts). */
 export function buildMarketingStats(places) {
   const municipalities = new Set();
   for (const p of places) {

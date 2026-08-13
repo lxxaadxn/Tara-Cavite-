@@ -1,5 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { buildCheckinUrl, qrImageUrl } from 'cavitour-shared/placeCheckin';
+import {
+  buildCheckinUrl,
+  foldEstablishmentName,
+  qrImageUrl,
+} from 'cavitour-shared/placeCheckin';
 
 export type PlaceCheckinInfo = {
   placeId: string;
@@ -21,7 +25,6 @@ export type EstablishmentVisitStatRow = {
   lastVisitAt: string | null;
 };
 
-/** Public marketing-web origin used inside QR codes (must host /checkin/:code). */
 export function getPublicWebOrigin(): string {
   const fromEnv = String(
     (import.meta as ImportMeta & { env?: Record<string, string> }).env?.VITE_PUBLIC_WEB_ORIGIN ||
@@ -34,7 +37,6 @@ export function getPublicWebOrigin(): string {
 
   if (typeof window !== 'undefined' && window.location?.origin) {
     const { protocol, hostname, port } = window.location;
-    // Standalone admin (:3001) does not serve /checkin — point QR at the web app.
     if (port === '3001' || port === '3000') {
       return `${protocol}//${hostname}:5173`;
     }
@@ -43,63 +45,228 @@ export function getPublicWebOrigin(): string {
   return 'http://localhost:5173';
 }
 
-export async function fetchPlaceCheckinMap(
+type RawCounts = Map<string, { total: number; qr: number }>;
+
+function emptyCounts(): { total: number; qr: number } {
+  return { total: 0, qr: 0 };
+}
+
+function addCount(map: RawCounts, placeId: string, source?: string) {
+  const prev = map.get(placeId) ?? emptyCounts();
+  prev.total += 1;
+  if (source === 'qr' || source === 'code') prev.qr += 1;
+  map.set(placeId, prev);
+}
+
+function buildAliasMaps(
+  places: { id: string; name: string }[],
+  sta: { id: string; name: string }[]
+): { placesToAliases: Map<string, string[]>; aliasToPlaces: Map<string, string> } {
+  const staByFold = new Map<string, string>();
+  for (const row of sta) {
+    const fold = foldEstablishmentName(row.name);
+    if (fold && row.id && !staByFold.has(fold)) staByFold.set(fold, row.id);
+  }
+
+  const placesToAliases = new Map<string, string[]>();
+  const aliasToPlaces = new Map<string, string>();
+
+  for (const p of places) {
+    const placeId = String(p.id);
+    const aliases = [placeId];
+    const fold = foldEstablishmentName(p.name);
+    const staId = fold ? staByFold.get(fold) : undefined;
+    if (staId && staId !== placeId) {
+      aliases.push(staId);
+      aliasToPlaces.set(staId, placeId);
+    }
+    aliasToPlaces.set(placeId, placeId);
+    placesToAliases.set(placeId, aliases);
+  }
+
+  return { placesToAliases, aliasToPlaces };
+}
+
+function sumAliases(
+  placesToAliases: Map<string, string[]>,
+  raw: RawCounts
+): Map<string, { total: number; qr: number }> {
+  const out = new Map<string, { total: number; qr: number }>();
+  for (const [placeId, aliases] of placesToAliases) {
+    const sum = emptyCounts();
+    for (const alias of aliases) {
+      const c = raw.get(alias);
+      if (!c) continue;
+      sum.total += c.total;
+      sum.qr += c.qr;
+    }
+    out.set(placeId, sum);
+  }
+  return out;
+}
+
+async function loadPlacesNames(
   client: SupabaseClient,
   placeIds: string[]
-): Promise<Map<string, PlaceCheckinInfo>> {
-  const map = new Map<string, PlaceCheckinInfo>();
-  if (!placeIds.length) return map;
+): Promise<{ id: string; name: string }[]> {
+  if (!placeIds.length) return [];
+  const { data, error } = await client.from('places').select('id, name').in('id', placeIds);
+  if (error) {
+    console.warn('[placeVisits] places', error.message);
+    return placeIds.map((id) => ({ id, name: '' }));
+  }
+  return (data ?? []).map((r) => ({ id: String(r.id), name: String(r.name || '') }));
+}
 
-  const origin = getPublicWebOrigin();
-  const visitCounts = new Map<string, { total: number; qr: number }>();
+async function loadViaAdminRpc(client: SupabaseClient): Promise<{
+  rawCounts: RawCounts;
+  codes: { placeId: string; code: string; isActive: boolean }[];
+  sta: { id: string; name: string }[];
+} | null> {
+  try {
+    const { data, error } = await client.rpc('get_admin_destination_checkin_stats');
+    if (error || !data || typeof data !== 'object') return null;
+    const payload = data as {
+      visit_counts?: { place_id?: string; total_visits?: number; qr_visits?: number }[];
+      visits_flat?: { place_id?: string; source?: string }[];
+      codes?: { place_id?: string; code?: string; is_active?: boolean }[];
+      sta?: { id?: string; name?: string }[];
+    };
+
+    const rawCounts: RawCounts = new Map();
+    if (Array.isArray(payload.visit_counts) && payload.visit_counts.length) {
+      for (const row of payload.visit_counts) {
+        const id = String(row.place_id || '');
+        if (!id) continue;
+        rawCounts.set(id, {
+          total: Number(row.total_visits) || 0,
+          qr: Number(row.qr_visits) || 0,
+        });
+      }
+    } else if (Array.isArray(payload.visits_flat)) {
+      for (const row of payload.visits_flat) {
+        const id = String(row.place_id || '');
+        if (!id) continue;
+        addCount(rawCounts, id, row.source);
+      }
+    }
+
+    const codes = (payload.codes ?? [])
+      .map((c) => ({
+        placeId: String(c.place_id || ''),
+        code: String(c.code || ''),
+        isActive: c.is_active !== false,
+      }))
+      .filter((c) => c.placeId && c.code);
+
+    const sta = (payload.sta ?? [])
+      .map((s) => ({ id: String(s.id || ''), name: String(s.name || '') }))
+      .filter((s) => s.id);
+
+    return { rawCounts, codes, sta };
+  } catch (e) {
+    console.warn('[placeVisits] admin RPC', e);
+    return null;
+  }
+}
+
+async function loadViaDirectQueries(client: SupabaseClient): Promise<{
+  rawCounts: RawCounts;
+  codes: { placeId: string; code: string; isActive: boolean }[];
+  sta: { id: string; name: string }[];
+}> {
+  const rawCounts: RawCounts = new Map();
 
   const { data: counts, error: countErr } = await client
     .from('v_place_visit_counts')
-    .select('place_id, total_visits, qr_visits')
-    .in('place_id', placeIds);
+    .select('place_id, total_visits, qr_visits');
 
-  if (!countErr && counts) {
+  if (!countErr && counts?.length) {
     for (const row of counts) {
-      visitCounts.set(String(row.place_id), {
+      rawCounts.set(String(row.place_id), {
         total: Number(row.total_visits) || 0,
         qr: Number(row.qr_visits) || 0,
       });
     }
   } else {
-    const { data: visits, error: visitErr } = await client
-      .from('place_visits')
-      .select('place_id, source')
-      .in('place_id', placeIds);
-    if (visitErr) {
-      console.warn('[placeVisits]', visitErr.message);
-    } else {
-      for (const row of visits ?? []) {
-        const id = String(row.place_id);
-        const prev = visitCounts.get(id) ?? { total: 0, qr: 0 };
-        prev.total += 1;
-        if (row.source === 'qr' || row.source === 'code') prev.qr += 1;
-        visitCounts.set(id, prev);
-      }
+    const { data: visits } = await client.from('place_visits').select('place_id, source').limit(20000);
+    for (const row of visits ?? []) {
+      addCount(rawCounts, String(row.place_id), row.source as string | undefined);
     }
   }
 
-  const { data: codes, error: codeErr } = await client
+  const { data: codeRows } = await client
     .from('place_checkin_codes')
-    .select('place_id, code, is_active')
-    .in('place_id', placeIds);
-  if (codeErr) throw new Error(codeErr.message);
+    .select('place_id, code, is_active');
+  const codes = (codeRows ?? [])
+    .map((c) => ({
+      placeId: String(c.place_id || ''),
+      code: String(c.code || ''),
+      isActive: c.is_active !== false,
+    }))
+    .filter((c) => c.placeId && c.code);
 
-  for (const row of codes ?? []) {
-    const placeId = String(row.place_id);
-    const code = String(row.code || '');
-    const checkinUrl = buildCheckinUrl(origin, code);
-    const c = visitCounts.get(placeId) ?? { total: 0, qr: 0 };
+  let sta: { id: string; name: string }[] = [];
+  const staView = await client
+    .from('v_sta_v3_cavite_2025_catalog')
+    .select('establishment_public_id, ta_name')
+    .limit(1200);
+  if (!staView.error && staView.data?.length) {
+    sta = staView.data.map((r) => ({
+      id: String(r.establishment_public_id || ''),
+      name: String(r.ta_name || ''),
+    }));
+  } else {
+    const staTable = await client.from('sta_v3_cavite_2025').select('id, ta_name').limit(1200);
+    if (!staTable.error) {
+      sta = (staTable.data ?? []).map((r) => ({
+        id: String(r.id || ''),
+        name: String(r.ta_name || ''),
+      }));
+    }
+  }
+
+  return { rawCounts, codes, sta: sta.filter((s) => s.id) };
+}
+
+export async function fetchPlaceCheckinMap(
+  client: SupabaseClient,
+  placeIds: string[]
+): Promise<Map<string, PlaceCheckinInfo>> {
+  const map = new Map<string, PlaceCheckinInfo>();
+  const ids = [...new Set(placeIds.map(String).filter(Boolean))];
+  if (!ids.length) return map;
+
+  const origin = getPublicWebOrigin();
+  const places = await loadPlacesNames(client, ids);
+
+  const viaRpc = await loadViaAdminRpc(client);
+  const bundle = viaRpc ?? (await loadViaDirectQueries(client));
+
+  const { placesToAliases } = buildAliasMaps(places, bundle.sta);
+  const visitCounts = sumAliases(placesToAliases, bundle.rawCounts);
+
+  const codeById = new Map(bundle.codes.map((c) => [c.placeId, c]));
+
+  for (const placeId of ids) {
+    const aliases = placesToAliases.get(placeId) || [placeId];
+    let codeProp: { code: string; isActive: boolean } | null = null;
+    for (const alias of aliases) {
+      const hit = codeById.get(alias);
+      if (hit?.code) {
+        codeProp = { code: hit.code, isActive: hit.isActive };
+        break;
+      }
+    }
+    const c = visitCounts.get(placeId) ?? emptyCounts();
+    const code = codeProp?.code || '';
+    const checkinUrl = code ? buildCheckinUrl(origin, code) : '';
     map.set(placeId, {
       placeId,
       code,
-      isActive: row.is_active !== false,
+      isActive: codeProp?.isActive ?? false,
       checkinUrl,
-      qrUrl: qrImageUrl(checkinUrl, 200),
+      qrUrl: checkinUrl ? qrImageUrl(checkinUrl, 200) : '',
       totalVisits: c.total,
       qrVisits: c.qr,
     });
@@ -112,64 +279,32 @@ export async function fetchMostVisitedPlaces(
   client: SupabaseClient,
   limit = 8
 ): Promise<{ name: string; visits: number; city: string; placeId: string }[]> {
-  const { data: counts, error } = await client
-    .from('v_place_visit_counts')
-    .select('place_id, total_visits')
-    .order('total_visits', { ascending: false })
-    .limit(limit);
-
-  if (error) {
-    const { data: visits, error: visitErr } = await client
-      .from('place_visits')
-      .select('place_id')
-      .order('created_at', { ascending: false })
-      .limit(5000);
-    if (visitErr) throw new Error(visitErr.message);
-    if (!visits?.length) return [];
-    const tally = new Map<string, number>();
-    for (const row of visits) {
-      const id = String(row.place_id);
-      tally.set(id, (tally.get(id) ?? 0) + 1);
-    }
-    const ranked = [...tally.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit);
-    return attachPlaceNames(client, ranked);
-  }
-
-  if (!counts?.length) return [];
-  const ranked = counts.map((r) => [String(r.place_id), Number(r.total_visits) || 0] as [string, number]);
-  return attachPlaceNames(client, ranked);
-}
-
-async function attachPlaceNames(
-  client: SupabaseClient,
-  ranked: [string, number][]
-): Promise<{ name: string; visits: number; city: string; placeId: string }[]> {
-  const ids = ranked.map(([id]) => id);
-  const { data: places, error: placeErr } = await client
-    .from('v_tourist_attractions_catalog')
-    .select('establishment_public_id, ta_name, city_mun')
-    .in('establishment_public_id', ids);
+  const { data: places, error: placeErr } = await client.from('places').select('id, name, city_mun');
   if (placeErr) throw new Error(placeErr.message);
-
-  const byId = new Map(
-    (places ?? []).map((p) => [
-      String(p.establishment_public_id),
-      {
-        name: String(p.ta_name || 'Place'),
-        city: String(p.city_mun || '—'),
-      },
-    ])
+  const placeRows = (places ?? []).map((p) => ({
+    id: String(p.id),
+    name: String(p.name || 'Place'),
+    city: String(p.city_mun || '—'),
+  }));
+  const cmap = await fetchPlaceCheckinMap(
+    client,
+    placeRows.map((p) => p.id)
   );
 
-  return ranked.map(([placeId, visitsCount]) => ({
-    placeId,
-    visits: visitsCount,
-    name: byId.get(placeId)?.name ?? placeId.slice(0, 8),
-    city: byId.get(placeId)?.city ?? '—',
-  }));
+  const ranked = placeRows
+    .map((p) => ({
+      placeId: p.id,
+      name: p.name,
+      city: p.city,
+      visits: cmap.get(p.id)?.totalVisits ?? 0,
+    }))
+    .filter((r) => r.visits > 0)
+    .sort((a, b) => b.visits - a.visits)
+    .slice(0, limit);
+
+  return ranked;
 }
 
-/** Future Establishment portal — same visit totals the business will see. */
 export async function fetchMyEstablishmentVisitStats(
   client: SupabaseClient
 ): Promise<EstablishmentVisitStatRow[]> {

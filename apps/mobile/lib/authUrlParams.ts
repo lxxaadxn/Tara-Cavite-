@@ -1,4 +1,3 @@
-/** Merge query string and hash fragment into one param map (Supabase uses either PKCE `code` or implicit tokens). */
 export function parseAuthParams(url: string): URLSearchParams {
   const merged = new URLSearchParams();
   const hashIdx = url.indexOf('#');

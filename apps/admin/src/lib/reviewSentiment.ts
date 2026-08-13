@@ -1,11 +1,3 @@
-/**
- * Decides whether a user review should be shown publicly.
- * Prefer calling OpenAI (or another model) from your backend in production; browser keys are unsafe.
- *
- * If VITE_OPENAI_API_KEY is set, attempts a lightweight chat classification (demo / internal only).
- * Otherwise uses a heuristic (keywords + star rating).
- */
-
 const NEGATIVE_PATTERNS =
   /\b(scam|worst|terrible|awful|disgusting|rude|dirty|never again|waste of money|rip-?off|0\/10)\b/i;
 
@@ -68,9 +60,6 @@ export type ReviewVisibilityInput = {
   rating?: number;
 };
 
-/**
- * Returns true if the review should appear on public surfaces (maps, place detail, etc.).
- */
 export async function shouldPublishReview(input: ReviewVisibilityInput): Promise<boolean> {
   const text = input.text ?? '';
   const key = import.meta.env.VITE_OPENAI_API_KEY as string | undefined;

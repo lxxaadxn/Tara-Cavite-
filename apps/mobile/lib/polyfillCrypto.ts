@@ -1,7 +1,3 @@
-/**
- * WebCrypto for Supabase PKCE on Expo Go.
- * Uses react-native-get-random-values + pure JS SHA-256 (no ExpoCryptoAES).
- */
 import 'react-native-get-random-values';
 
 type SubtleDigest = {
@@ -32,7 +28,6 @@ function ensureBtoa() {
   };
 }
 
-/** Minimal SHA-256 (sync) for PKCE — avoids native ExpoCrypto modules. */
 function sha256(bytes: Uint8Array): ArrayBuffer {
   const K = new Uint32Array([
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -185,7 +180,6 @@ function ensureCrypto() {
         try {
           (prev as { subtle: SubtleDigest }).subtle = subtle;
         } catch {
-          /* ignore */
         }
       }
     }
@@ -193,7 +187,6 @@ function ensureCrypto() {
   try {
     (global as typeof globalThis & { crypto?: Crypto }).crypto = stub;
   } catch {
-    /* ignore */
   }
 }
 

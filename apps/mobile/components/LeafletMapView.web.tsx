@@ -59,9 +59,8 @@ export function LeafletMapView({
         } else if (msg.type === 'markerPress' && msg.id) {
           onMarkerPressRef.current?.(msg.id, msg.name ?? '');
         }
-      } catch {
-        /* ignore */
-      }
+        } catch {
+        }
     };
     window.addEventListener('message', onWindowMessage);
     return () => window.removeEventListener('message', onWindowMessage);

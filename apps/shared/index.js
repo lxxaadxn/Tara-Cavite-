@@ -21,9 +21,12 @@ export {
 export {
   CHECKIN_PATH_PREFIX,
   CHECKIN_APP_PATH,
+  aggregateVisitCountsOntoPlaces,
   buildCheckinUrl,
+  buildPlaceVisitAliasMap,
   extractCheckinCodeFromText,
   fetchPlaceCheckinDisplay,
+  foldEstablishmentName,
   normalizeCheckinCode,
   qrImageUrl,
   recordCheckinByCode,
