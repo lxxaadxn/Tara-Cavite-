@@ -6,6 +6,8 @@ import { usePageHeader } from '../../contexts/PageHeaderContext';
 import { useToast } from '../../components/Toast';
 import {
   type AdminEstablishment,
+  ensureEstablishmentQr,
+  establishmentQrPosterUrl,
   establishmentSetupRedirect,
   fetchAdminEstablishment,
   formatAdminDate,
@@ -16,6 +18,8 @@ import {
   updateEstablishmentProfile,
   verificationLabel,
 } from '../../lib/adminEstablishments';
+import { buildCheckinUrl, qrImageUrl } from 'cavitour-shared/placeCheckin';
+import { getPublicWebOrigin } from '../../lib/placeVisits';
 import { supabase } from '../../lib/supabase';
 import shared from '../users/UsersAdmin.module.css';
 import styles from './EstablishmentDetail.module.css';
@@ -75,10 +79,12 @@ export function EstablishmentDetail() {
     businessType: '',
     lgu: '',
     address: '',
+    googleMapsLink: '',
     fullName: '',
     phone: '',
     email: '',
   });
+  const [generatingQr, setGeneratingQr] = useState(false);
   const [confirm, setConfirm] = useState<null | 'deactivate'>(null);
   const [saving, setSaving] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -102,6 +108,7 @@ export function EstablishmentDetail() {
         businessType: next.businessType,
         lgu: next.lgu,
         address: next.address,
+        googleMapsLink: next.googleMapsLink,
         fullName: next.fullName,
         phone: next.phone,
         email: next.email,
@@ -165,6 +172,20 @@ export function EstablishmentDetail() {
       await reload();
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Could not update visibility', 'error');
+    }
+  };
+
+  const generateQr = async () => {
+    if (!row) return;
+    setGeneratingQr(true);
+    try {
+      await ensureEstablishmentQr(supabase, row.id);
+      toast('QR code generated', 'success');
+      await reload();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Could not generate QR code', 'error');
+    } finally {
+      setGeneratingQr(false);
     }
   };
 
@@ -293,7 +314,90 @@ export function EstablishmentDetail() {
                   rows={3}
                 />
               </label>
+              <label className={`${styles.field} ${styles.span2}`}>
+                <span className={styles.label}>Google Maps link</span>
+                <input
+                  className={styles.input}
+                  type="url"
+                  placeholder="https://www.google.com/maps/..."
+                  value={form.googleMapsLink}
+                  onChange={(e) => setForm((f) => ({ ...f, googleMapsLink: e.target.value }))}
+                />
+              </label>
             </div>
+
+            {/* QR Code section */}
+            {(() => {
+              const code = row.checkinCode;
+              if (!code) {
+                return (
+                  <div className={styles.qrSection}>
+                    <div className={styles.qrBody}>
+                      <p className={styles.qrTitle}>Check-in QR code</p>
+                      <p className={styles.qrHint}>
+                        No QR code has been generated yet for this establishment.
+                        Click the button to create one now — it will be permanently
+                        stored in the database.
+                      </p>
+                      <div className={styles.qrActions}>
+                        <button
+                          type="button"
+                          className={styles.qrGenerateBtn}
+                          disabled={generatingQr}
+                          onClick={() => void generateQr()}
+                        >
+                          {generatingQr ? 'Generating…' : 'Generate QR code'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              const origin = getPublicWebOrigin();
+              const checkinUrl = buildCheckinUrl(origin, code);
+              const qrUrl = qrImageUrl(checkinUrl, 280);
+              const posterUrl = establishmentQrPosterUrl(code);
+              return (
+                <div className={styles.qrSection}>
+                  <img src={qrUrl} alt={`QR code for ${row.businessName}`} className={styles.qrImage} />
+                  <div className={styles.qrBody}>
+                    <p className={styles.qrTitle}>Check-in QR code</p>
+                    <code className={styles.qrCode}>{code}</code>
+                    <p className={styles.qrHint}>
+                      Print this QR and display it at the entrance. Visitors scan it
+                      with the Tara, Cavite! app to record their visit.
+                    </p>
+                    <div className={styles.qrActions}>
+                      <a
+                        href={posterUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={`${shared.actionBtn}`}
+                      >
+                        Print poster
+                      </a>
+                      <a
+                        href={qrUrl}
+                        download={`cavitour-qr-${code}.png`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={shared.actionBtn}
+                      >
+                        Download QR
+                      </a>
+                      <a
+                        href={checkinUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={shared.actionBtn}
+                      >
+                        Test link
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             <div className={styles.facts}>
               <div>

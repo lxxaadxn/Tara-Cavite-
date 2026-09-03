@@ -30,6 +30,7 @@ export type AdminEstablishment = {
   businessType: string;
   lgu: string;
   address: string;
+  googleMapsLink: string;
   avatarUrl: string | null;
   verificationStatus: OwnerVerificationStatus;
   accountStatus: OwnerAccountStatus;
@@ -39,6 +40,10 @@ export type AdminEstablishment = {
   setupCompletedAt: string | null;
   createdAt: string | null;
   initials: string;
+  /** UUID of the linked STA catalog row (auto-created on invite). */
+  staPlaceId: string | null;
+  /** Active QR check-in code for this establishment (CT-XXXXXXXX). */
+  checkinCode: string | null;
 };
 
 export type EstablishmentProfilePatch = {
@@ -46,6 +51,7 @@ export type EstablishmentProfilePatch = {
   businessType: string;
   lgu: string;
   address: string;
+  googleMapsLink: string;
   fullName: string;
   phone: string;
   email: string;
@@ -59,13 +65,14 @@ export type InviteEstablishmentInput = {
   address: string;
   lgu: string;
   phone?: string;
+  googleMapsLink?: string;
 };
 
 const SELECT_FULL =
-  'id, email, full_name, phone, business_name, business_type, lgu, address, avatar_url, verification_status, account_status, notes, created_at, invited_at, setup_completed_at, public_visible';
+  'id, email, full_name, phone, business_name, business_type, lgu, address, google_maps_link, avatar_url, verification_status, account_status, notes, created_at, invited_at, setup_completed_at, public_visible, sta_place_id, place_checkin_codes!establishment_owners_sta_place_id_fkey(code, is_active)';
 
 const SELECT_BASE =
-  'id, email, full_name, phone, business_name, business_type, lgu, address, avatar_url, verification_status, account_status, notes, created_at';
+  'id, email, full_name, phone, business_name, business_type, lgu, address, google_maps_link, avatar_url, verification_status, account_status, notes, created_at, sta_place_id';
 
 function isMissingRelationError(error: { message?: string; code?: string } | null): boolean {
   if (!error) return false;
@@ -125,6 +132,18 @@ function mapRow(row: Record<string, unknown>): AdminEstablishment {
   const businessName = String(row.business_name ?? '').trim() || 'Unnamed establishment';
   const fullName = String(row.full_name ?? '').trim();
   const email = String(row.email ?? '').trim();
+
+  // place_checkin_codes is a joined relation (array or single object depending on PostgREST)
+  let checkinCode: string | null = null;
+  const codeRel = row.place_checkin_codes;
+  if (Array.isArray(codeRel)) {
+    const active = (codeRel as { code?: string; is_active?: boolean }[]).find((c) => c.is_active !== false);
+    checkinCode = active?.code ? String(active.code) : null;
+  } else if (codeRel && typeof codeRel === 'object') {
+    const c = codeRel as { code?: string; is_active?: boolean };
+    if (c.is_active !== false && c.code) checkinCode = String(c.code);
+  }
+
   return {
     id: String(row.id),
     email,
@@ -134,6 +153,7 @@ function mapRow(row: Record<string, unknown>): AdminEstablishment {
     businessType: String(row.business_type ?? '').trim(),
     lgu: String(row.lgu ?? '').trim(),
     address: String(row.address ?? '').trim(),
+    googleMapsLink: String(row.google_maps_link ?? '').trim(),
     avatarUrl: String(row.avatar_url ?? '').trim() || null,
     verificationStatus: parseVerification(row.verification_status),
     accountStatus: parseAccount(row.account_status),
@@ -143,6 +163,8 @@ function mapRow(row: Record<string, unknown>): AdminEstablishment {
     setupCompletedAt: row.setup_completed_at ? String(row.setup_completed_at) : null,
     createdAt: row.created_at ? String(row.created_at) : null,
     initials: initialsFrom(businessName, email),
+    staPlaceId: row.sta_place_id ? String(row.sta_place_id) : null,
+    checkinCode,
   };
 }
 
@@ -210,6 +232,7 @@ export async function updateEstablishmentProfile(
       business_type: patch.businessType.trim() || null,
       lgu: patch.lgu.trim() || null,
       address: patch.address.trim() || null,
+      google_maps_link: patch.googleMapsLink.trim() || null,
       full_name: patch.fullName.trim() || null,
       phone: patch.phone.trim() || null,
       email: patch.email.trim() || null,
@@ -272,6 +295,7 @@ export async function inviteEstablishment(
       lgu: input.lgu.trim(),
       address: input.address.trim(),
       phone: (input.phone ?? '').trim(),
+      googleMapsLink: (input.googleMapsLink ?? '').trim(),
       redirectTo,
       resend,
     },
@@ -285,4 +309,26 @@ export async function inviteEstablishment(
 export function establishmentSetupRedirect(): string {
   if (typeof window === 'undefined') return '';
   return `${window.location.origin}/establishment/setup`;
+}
+
+/** Build the printable QR poster URL for an establishment given its check-in code. */
+export function establishmentQrPosterUrl(checkinCode: string): string {
+  if (typeof window === 'undefined') return '';
+  return `${window.location.origin}/checkin/poster/${encodeURIComponent(checkinCode)}`;
+}
+
+/**
+ * Ensure an existing establishment owner has a STA catalog row + QR code.
+ * Calls the `ensure_establishment_owner_sta_row` DB function.
+ * Returns the STA place UUID (or null if already exists / name missing).
+ */
+export async function ensureEstablishmentQr(
+  client: SupabaseClient,
+  ownerId: string
+): Promise<string | null> {
+  const { data, error } = await client.rpc('ensure_establishment_owner_sta_row', {
+    p_owner_id: ownerId,
+  });
+  if (error) throw friendlyAdminError(error, 'Failed to generate QR code');
+  return data ? String(data) : null;
 }

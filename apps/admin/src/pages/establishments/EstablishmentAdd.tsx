@@ -19,6 +19,7 @@ const emptyForm = {
   address: '',
   lgu: '',
   phone: '',
+  googleMapsLink: '',
 };
 
 export function EstablishmentAdd() {
@@ -56,7 +57,7 @@ export function EstablishmentAdd() {
     }
     setSaving(true);
     try {
-      const result = await inviteEstablishment(supabase, form, establishmentSetupRedirect());
+      const result = await inviteEstablishment(supabase, { ...form }, establishmentSetupRedirect());
       toast(`Invitation sent to ${form.email.trim().toLowerCase()}`, 'success');
       if (result.ownerId) {
         navigate(withPrefix(`/web/establishments/${result.ownerId}`), { replace: true });
@@ -133,6 +134,19 @@ export function EstablishmentAdd() {
           <div className={styles.row}>
             <span className={styles.label}>Address</span>
             <input className={styles.textInput} value={form.address} onChange={(e) => field('address', e.target.value)} />
+          </div>
+          <div className={styles.row}>
+            <span className={styles.label}>Google Maps link (optional)</span>
+            <input
+              className={styles.textInput}
+              type="url"
+              placeholder="https://www.google.com/maps/..."
+              value={form.googleMapsLink}
+              onChange={(e) => field('googleMapsLink', e.target.value)}
+            />
+            <p className={styles.hint} style={{ marginTop: 4 }}>
+              Paste the Google Maps URL for this establishment. This is used to automatically assign a QR code.
+            </p>
           </div>
           <div className={styles.row}>
             <span className={styles.label}>City / Municipality</span>
