@@ -247,3 +247,25 @@ export async function recordPlaceVisit(client, placeId, source = 'destination_re
   if (error) throw error;
   return data;
 }
+
+/** True when the signed-in user has a QR or code check-in for this place. */
+export async function hasQrPlaceVisit(client, placeId) {
+  const pid = String(placeId ?? '').trim();
+  if (!pid) return false;
+
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+  if (!user) return false;
+
+  const { data, error } = await client
+    .from('place_visits')
+    .select('id')
+    .eq('place_id', pid)
+    .eq('user_id', user.id)
+    .in('source', ['qr', 'code'])
+    .limit(1);
+
+  if (error) return false;
+  return (data?.length ?? 0) > 0;
+}

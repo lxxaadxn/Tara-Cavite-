@@ -1,4 +1,3 @@
-import { publishedItineraries } from '../data/mockItineraries';
 import { catalogPlaceToFeatured, resolveEstablishment } from './itineraryPlaces';
 import { cityMunMatchesFilter } from './placeFilterHelpers';
 
@@ -19,11 +18,12 @@ export function extractMunicipalityFromStopPlace(place) {
 
 /**
  * @param {object[]} [catalog] places from Supabase
+ * @param {object[]} [itineraries] published itineraries from Supabase
  */
-export function buildRouteEstablishmentRows(catalog = []) {
+export function buildRouteEstablishmentRows(catalog = [], itineraries = []) {
   const rows = [];
   const seen = new Set();
-  for (const itinerary of publishedItineraries) {
+  for (const itinerary of itineraries) {
     for (const stop of itinerary.stopList || []) {
       const catalogPlace = resolveEstablishment(stop.establishment, catalog);
       const featured = catalogPlaceToFeatured(catalogPlace);
@@ -58,19 +58,20 @@ export function buildRouteEstablishmentRows(catalog = []) {
   return rows;
 }
 
-function findHostItineraryForMunicipality(cityMun, routeRows) {
+function findHostItineraryForMunicipality(cityMun, routeRows, itineraries = []) {
   if (!cityMun || !routeRows?.length) return null;
   const row = routeRows.find((r) => r.city_mun && cityMunMatchesFilter(cityMun, r.city_mun));
   if (!row?.itineraryId) return null;
-  return publishedItineraries.find((it) => it.id === row.itineraryId) ?? null;
+  return itineraries.find((it) => it.id === row.itineraryId) ?? null;
 }
 
 /**
  * Adds Supabase establishments whose `city_mun` matches any featured-route stop municipality.
  * @param {any[]} routeRows from {@link buildRouteEstablishmentRows}
  * @param {any[]} supabasePlaces from {@link import('./placesFromSupabase').fetchAllPlacesFromSupabase}
+ * @param {object[]} [itineraries]
  */
-export function mergeSupabaseIntoItineraryBrowse(routeRows, supabasePlaces) {
+export function mergeSupabaseIntoItineraryBrowse(routeRows, supabasePlaces, itineraries = []) {
   const munLabels = [];
   for (const r of routeRows) {
     if (r.city_mun && !munLabels.includes(r.city_mun)) munLabels.push(r.city_mun);
@@ -82,7 +83,7 @@ export function mergeSupabaseIntoItineraryBrowse(routeRows, supabasePlaces) {
     const ok = munLabels.some((m) => cityMunMatchesFilter(p.city_mun, m));
     if (!ok) continue;
     if (out.some((r) => r.kind === 'supabase' && r.placeId === p.id)) continue;
-    const hostIt = findHostItineraryForMunicipality(p.city_mun, routeRows);
+    const hostIt = findHostItineraryForMunicipality(p.city_mun, routeRows, itineraries);
     out.push({
       key: `sb-${p.id}`,
       kind: 'supabase',

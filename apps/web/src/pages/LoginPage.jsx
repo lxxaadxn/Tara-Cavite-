@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { LogoWordmark } from '../components/LogoWordmark';
-import { isAdminReservedEmail } from '../lib/adminReservedEmail';
-import { ADMIN_APP_HOME_PATH } from '../lib/adminPortalPath';
 import { GoogleAuthButton, GoogleLogoMark } from '../components/GoogleAuthButton';
 import { startGoogleOAuth } from '../lib/startGoogleOAuth';
 import { markLocationPromptPending } from '../lib/promptLocationOnLogin';
+import { TRAVELER_ACCOUNT_DISABLED_MESSAGE } from 'cavitour-shared/accountStatus';
+import { rejectDisabledTraveler } from '../lib/rejectDisabledTraveler';
+import { ESTABLISHMENT_DISABLED_MESSAGE, resolveAccountHome } from '../lib/accountHome';
+import { useSiteContent } from '../lib/useSiteContent';
+import { siteContentValue } from 'cavitour-shared/siteContent';
 
 const olive = 'var(--ct-olive)';
 const teal = 'var(--ct-teal)';
@@ -34,6 +37,9 @@ function safeNextPath(raw) {
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const cms = useSiteContent();
+  const loginWelcome = 'Welcome back! Enter your details to continue exploring';
+  const loginBanner = siteContentValue(cms, 'auth.login.banner_url');
   const [searchParams] = useSearchParams();
   const nextPath = safeNextPath(searchParams.get('next'));
   const [email, setEmail] = useState('');
@@ -49,23 +55,31 @@ export function LoginPage() {
     /verify your email|email not confirmed|confirmation link/i.test(error);
 
   useEffect(() => {
-    if (searchParams.get('confirmed') !== '1') return;
-    setInfo('Email confirmed. You can sign in now.');
+    if (searchParams.get('confirmed') === '1') {
+      setInfo('Email confirmed. You can sign in now.');
+    }
     let active = true;
-    supabase.auth.getSession().then(({ data }) => {
-      if (!active) return;
-      if (data.session) {
-        navigate('/search', { replace: true });
-      }
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!active || !data.session) return;
+      const home = await resolveAccountHome(supabase, data.session, nextPath);
+      if (!active || home.blocked) return;
+      navigate(home.path, { replace: true });
     });
     return () => {
       active = false;
     };
-  }, [searchParams, navigate]);
+  }, [navigate, nextPath, searchParams]);
 
   useEffect(() => {
     if (location.state?.passwordReset) {
       setInfo('Password updated. Sign in with your new password.');
+      navigate(location.pathname + location.search, { replace: true, state: {} });
+    }
+  }, [location.pathname, location.search, location.state, navigate]);
+
+  useEffect(() => {
+    if (location.state?.accountDisabled) {
+      setError(location.state.establishmentDisabled ? ESTABLISHMENT_DISABLED_MESSAGE : TRAVELER_ACCOUNT_DISABLED_MESSAGE);
       navigate(location.pathname + location.search, { replace: true, state: {} });
     }
   }, [location.pathname, location.search, location.state, navigate]);
@@ -128,19 +142,37 @@ export function LoginPage() {
 
     setLoading(true);
     try {
-      const { error: err } = await supabase.auth.signInWithPassword({
+      const { data, error: err } = await supabase.auth.signInWithPassword({
         email: trimmedEmail,
         password,
       });
       if (err) throw err;
-      const { data: { session } } = await supabase.auth.getSession();
+      let session = data.session;
+      if (!session) {
+        const got = await supabase.auth.getSession();
+        session = got.data.session;
+      }
       if (!session) {
         setError('Signed in but session was not ready. Please try again.');
         return;
       }
-      markLocationPromptPending(session.user?.id);
-      const fallback = isAdminReservedEmail(trimmedEmail) ? ADMIN_APP_HOME_PATH : '/search';
-      navigate(nextPath || fallback, { replace: true });
+      const home = await resolveAccountHome(supabase, session, nextPath);
+      if (home.blocked) {
+        await supabase.auth.signOut();
+        setError(home.message || TRAVELER_ACCOUNT_DISABLED_MESSAGE);
+        return;
+      }
+      if (!home.owner) {
+        const allowed = await rejectDisabledTraveler(session);
+        if (!allowed) {
+          setError(TRAVELER_ACCOUNT_DISABLED_MESSAGE);
+          return;
+        }
+      }
+      if (!String(home.path).startsWith('/establishment')) {
+        markLocationPromptPending(session.user?.id);
+      }
+      navigate(home.path, { replace: true });
     } catch (err) {
       setError(toFriendlyLoginError(err));
     } finally {
@@ -149,7 +181,7 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen px-4 py-6 font-['Inter',sans-serif] sm:px-8 sm:py-8" style={{ backgroundColor: cream }}>
+    <div className="flex min-h-screen items-center justify-center px-4 py-8 font-['Poppins',sans-serif]" style={{ backgroundColor: cream }}>
       {showGoogleConsent ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4"
@@ -206,13 +238,20 @@ export function LoginPage() {
       ) : null}
 
       <div className="mx-auto w-full max-w-md overflow-hidden rounded-[1.7rem] bg-white p-3 shadow-[0_24px_60px_rgba(0,0,0,0.10)] sm:p-6">
+        {loginBanner ? (
+          <img
+            src={loginBanner}
+            alt=""
+            className="mb-3 h-36 w-full rounded-2xl object-cover sm:h-44"
+          />
+        ) : null}
         <div className="w-full px-2 py-2 sm:px-4">
             <div className="mb-6 text-center">
               <Link to="/" className="inline-flex items-center justify-center">
                 <LogoWordmark className="text-sm" />
               </Link>
               <h1 className="mt-4 font-['Poppins',sans-serif] text-3xl font-semibold" style={{ color: ink }}>Login to your account</h1>
-              <p className="mt-2 text-sm text-neutral-500">Welcome back. Enter your details to log in.</p>
+              <p className="mt-2 text-sm text-neutral-500">{loginWelcome}</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -223,7 +262,7 @@ export function LoginPage() {
                   placeholder="Enter your email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="h-11 w-full rounded-full border border-neutral-200 px-4 text-sm outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(126,160,14,0.22)]"
+                  className="h-11 w-full rounded-full border border-neutral-200 px-4 text-sm outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(16, 163, 127,0.22)]"
                   style={{ boxShadow: 'none' }}
                   required
                 />
@@ -236,7 +275,7 @@ export function LoginPage() {
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="h-11 w-full rounded-full border border-neutral-200 px-4 text-sm outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(126,160,14,0.22)]"
+                  className="h-11 w-full rounded-full border border-neutral-200 px-4 text-sm outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(16, 163, 127,0.22)]"
                   style={{ boxShadow: 'none' }}
                   required
                 />

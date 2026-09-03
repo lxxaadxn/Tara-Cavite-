@@ -74,7 +74,14 @@ function freeListenPort(port) {
   }
 }
 
-const rawArgs = process.argv.slice(2);
+const rawArgs = process.argv.slice(2).filter((a, i, all) => {
+  // `npm start mobile` is a common mix-up; Expo treats extra paths as project root.
+  if (a === 'mobile' || a === 'web' || a === 'admin') {
+    const prev = all[i - 1];
+    if (prev === 'start' || prev === '--' || !prev) return false;
+  }
+  return true;
+});
 const env = { ...process.env };
 const lan = detectLanIPv4();
 const wantsTunnel = rawArgs.includes('--tunnel');

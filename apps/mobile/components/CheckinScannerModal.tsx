@@ -12,7 +12,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { extractCheckinCodeFromText } from 'cavitour-shared/placeCheckin';
 import { confirmCheckinFromCode, type ConfirmCheckinOptions } from '../lib/confirmCheckin';
 
-const TEAL = '#1f4f59';
+const TEAL = '#1B8A70';
 
 type Props = {
   visible: boolean;

@@ -23,6 +23,10 @@ ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS phone TEXT;
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS email TEXT;
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS auth_provider TEXT;
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS display_name TEXT;
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS birthday DATE;
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS favorite_categories TEXT[] NOT NULL DEFAULT '{}'::text[];
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS preferred_lgus TEXT[] NOT NULL DEFAULT '{}'::text[];
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS accessibility_notes TEXT;
 
 -- Saved Lists table
 CREATE TABLE IF NOT EXISTS public.saved_lists (

@@ -5,17 +5,17 @@ import { getMapPlacePreviewTags, type MapPreviewTagVariant } from '../lib/mapPla
 import { sanitizeAddress } from '../lib/placeDisplayHelpers';
 import { placeImageSource } from '../lib/placeImageSource';
 
-const GREEN = '#7EA00E';
-const TEAL = '#1F4F59';
+const GREEN = '#10A37F';
+const TEAL = '#1B8A70';
 const TITLE = '#241D13';
 const MUTED = '#7A7878';
 const PLACEHOLDER_URI =
   'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&q=80';
 
 const TAG_PILL: Record<MapPreviewTagVariant, { bg: string; text: string }> = {
-  olive: { bg: 'rgba(126, 160, 14, 0.18)', text: GREEN },
-  teal: { bg: 'rgba(31, 79, 89, 0.14)', text: TEAL },
-  pale: { bg: 'rgba(126, 160, 14, 0.1)', text: '#5C7A0A' },
+  olive: { bg: 'rgba(16, 163, 127, 0.18)', text: GREEN },
+  teal: { bg: 'rgba(27, 138, 112, 0.14)', text: TEAL },
+  pale: { bg: 'rgba(16, 163, 127, 0.1)', text: '#5C7A0A' },
 };
 
 export type MapPlacePreviewCardProps = {
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(229, 229, 229, 0.8)',
-    shadowColor: '#1F4F59',
+    shadowColor: '#1B8A70',
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.14,
     shadowRadius: 16,
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(31, 79, 89, 0.35)',
+    borderColor: 'rgba(27, 138, 112, 0.35)',
     alignItems: 'center',
   },
   exploreLabel: {

@@ -1,8 +1,9 @@
-/** Keyword filters aligned with mobile `dashboardPlaceFilters.ts`. */
+/** Filters aligned with mobile `dashboardPlaceFilters.ts`. */
 
+import { ntdpCategoriesMatch } from 'cavitour-shared/ntdpFilterMeta';
 import { FILTER_OPTION_LABEL_BY_KEY } from './dashboardFilterOptions';
 
-const CAT_KEYWORDS = {
+const DEFAULT_CAT_KEYWORDS = {
   'cat-nature': ['nature', 'eco', 'farm', 'agri', 'agritourism', 'wildlife', 'forest'],
   'cat-mice': ['mice', 'meeting', 'convention', 'conference', 'event venue', 'events', 'banquet'],
   'cat-restaurant': ['restaurant', 'dining', 'food service', 'eatery', 'bistro', 'cafe', 'café', 'food hub'],
@@ -12,6 +13,31 @@ const CAT_KEYWORDS = {
   'cat-leisure': ['leisure', 'entertainment', 'resort', 'recreation', 'amusement', 'park', 'waterpark'],
   'cat-shopping': ['shopping', 'mall', 'market', 'retail', 'boutique', 'bazaar', 'commercial'],
 };
+
+/** Runtime keyword map (overridden when FilterModal loads DB categories). */
+let CAT_KEYWORDS = { ...DEFAULT_CAT_KEYWORDS };
+
+/** Extra labels for category keys loaded from DB. */
+let EXTRA_CATEGORY_LABELS = {};
+
+/** Extra labels for location keys loaded from DB. */
+let EXTRA_LOCATION_LABELS = {};
+
+export function setRuntimeCategoryKeywords(map) {
+  CAT_KEYWORDS = { ...DEFAULT_CAT_KEYWORDS, ...(map || {}) };
+}
+
+export function setRuntimeCategoryLabels(map) {
+  EXTRA_CATEGORY_LABELS = { ...(map || {}) };
+}
+
+export function setRuntimeLocationLabels(map) {
+  EXTRA_LOCATION_LABELS = { ...(map || {}) };
+}
+
+export function getDefaultCategoryKeywords() {
+  return { ...DEFAULT_CAT_KEYWORDS };
+}
 
 export function foldHaystack(value) {
   return String(value ?? '')
@@ -47,11 +73,26 @@ function normalizeAreaLabel(label) {
     .toLowerCase();
 }
 
+function categorySelectionLabel(key) {
+  if (!key) return '';
+  return EXTRA_CATEGORY_LABELS[key] || FILTER_OPTION_LABEL_BY_KEY[key] || key;
+}
+
 export function placeMatchesCategoryKeysWeb(place, keys) {
   if (!keys?.length) return true;
   const blob = placeSearchBlobWeb(place);
   return keys.some((key) => {
-    const words = CAT_KEYWORDS[key];
+    const label = categorySelectionLabel(key);
+    if (ntdpCategoriesMatch(place.ntdp_category, label) || ntdpCategoriesMatch(place.ntdp_category, key)) {
+      return true;
+    }
+    if (!String(key).startsWith('cat-')) return false;
+    let words = CAT_KEYWORDS[key];
+    if (!words?.length) {
+      words = foldHaystack(label)
+        .split(/[^a-z0-9]+/)
+        .filter((w) => w.length > 2);
+    }
     if (!words?.length) return false;
     return words.some((w) => blob.includes(w));
   });
@@ -64,7 +105,7 @@ export function placeMatchesLocationKeysWeb(place, keys) {
   const addr = foldHaystack(place.address ?? '');
   const hay = `${cm} ${addr}`;
   return keys.some((key) => {
-    const label = FILTER_OPTION_LABEL_BY_KEY[key];
+    const label = EXTRA_LOCATION_LABELS[key] || FILTER_OPTION_LABEL_BY_KEY[key] || key;
     if (!label) return false;
     const core = foldHaystack(normalizeAreaLabel(label));
     if (!core) return false;

@@ -11,8 +11,17 @@
     "./demoCatalog": "./demoCatalog.js",
     "./defaultAvatar": "./defaultAvatar.js",
     "./changePassword": "./changePassword.js",
+    "./brand": "./brand.js",
     "./placeCheckin": "./placeCheckin.js",
     "./commuterGuideBuilder": "./commuterGuideBuilder.js",
-    "./demoPlaces": "./demoPlaces.js"
+    "./demoPlaces": "./demoPlaces.js",
+    "./ntdpFilterMeta": "./ntdpFilterMeta.js",
+    "./lguKind": "./lguKind.js",
+    "./accountStatus": "./accountStatus.js",
+    "./announcements": "./announcements.js",
+    "./itineraries": "./itineraries.js",
+    "./siteContent": "./siteContent.js",
+    "./mapPins": "./mapPins.js",
+    "./travelAchievements": "./travelAchievements.js"
   }
 }

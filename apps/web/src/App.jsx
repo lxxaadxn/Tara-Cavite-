@@ -19,16 +19,27 @@ import { PlaceDetailPage } from './pages/PlaceDetailPage';
 import { SavedPage } from './pages/SavedPage';
 import { ItineraryPage } from './pages/ItineraryPage';
 import { ItineraryDetailPage } from './pages/ItineraryDetailPage';
+import { AnnouncementsPage } from './pages/AnnouncementsPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { NotificationsPage } from './pages/NotificationsPage';
+import { TravelHistoryPage } from './pages/TravelHistoryPage';
+import { PrivacyPage } from './pages/PrivacyPage';
+import { TermsPage } from './pages/TermsPage';
 import { Layout as AdminLayout } from '../../admin/src/components/Layout';
 import {
   AdminEmbedRoot,
   AdminAuthGate,
   adminLayoutChildRoutes,
 } from '../../admin/src/embed';
+import { EstablishmentSetupPage } from './pages/EstablishmentSetupPage';
+import { EstablishmentDashboardPage } from './pages/EstablishmentDashboardPage';
 import { ADMIN_APP_HOME_PATH } from './lib/adminPortalPath';
 import { isAdminReservedEmail } from './lib/adminReservedEmail';
 import { PasswordRecoveryRedirect } from './components/PasswordRecoveryRedirect';
+import { SiteBrandEffects } from './components/SiteBrandEffects';
+import { SiteContentProvider } from './lib/useSiteContent';
+import { rejectDisabledTraveler } from './lib/rejectDisabledTraveler';
+import { resolveAccountHome } from './lib/accountHome';
 
 function AuthGoogleLegacyRedirect() {
   const { search } = useLocation();
@@ -37,26 +48,68 @@ function AuthGoogleLegacyRedirect() {
 
 function ProtectedRoute({ children }) {
   const [sessionUser, setSessionUser] = useState(undefined);
+  const [blocked, setBlocked] = useState(false);
+  const [ownerPath, setOwnerPath] = useState(null);
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => setSessionUser(session ?? null));
+    let active = true;
+    const applySession = async (session) => {
+      if (!session) {
+        if (active) {
+          setBlocked(false);
+          setOwnerPath(null);
+          setSessionUser(null);
+        }
+        return;
+      }
+      const ok = await rejectDisabledTraveler(session);
+      if (!active) return;
+      if (!ok) {
+        setBlocked(true);
+        setOwnerPath(null);
+        setSessionUser(null);
+        return;
+      }
+      const home = await resolveAccountHome(supabase, session);
+      if (!active) return;
+      setBlocked(false);
+      setOwnerPath(home.owner ? home.path : null);
+      setSessionUser(session);
+    };
+    supabase.auth.getSession().then(({ data: { session } }) => applySession(session ?? null));
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, s) => setSessionUser(s ?? null));
-    return () => subscription.unsubscribe();
+    } = supabase.auth.onAuthStateChange((_event, s) => {
+      void applySession(s ?? null);
+    });
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   if (sessionUser === undefined) {
     return (
-      <div className="min-h-screen flex items-center justify-center font-['Inter',sans-serif] text-neutral-600">
+      <div className="min-h-screen flex items-center justify-center font-['Poppins',sans-serif] text-neutral-600">
         Loading…
       </div>
     );
   }
-  if (!sessionUser) return <Navigate to="/login" replace />;
+  if (!sessionUser) {
+    return (
+      <Navigate
+        to="/login"
+        replace
+        state={blocked ? { accountDisabled: true } : undefined}
+      />
+    );
+  }
 
   const email = sessionUser.user?.email?.trim().toLowerCase() ?? '';
   if (email && isAdminReservedEmail(email)) {
     return <Navigate to={ADMIN_APP_HOME_PATH} replace />;
+  }
+  if (ownerPath) {
+    return <Navigate to={ownerPath} replace />;
   }
 
   return children;
@@ -65,11 +118,15 @@ function ProtectedRoute({ children }) {
 export default function App() {
   return (
     <BrowserRouter>
+      <SiteContentProvider>
+      <SiteBrandEffects />
       <PasswordRecoveryRedirect />
       <Routes>
         <Route path="/" element={<LandingPageClean />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
+        <Route path="/terms" element={<TermsPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/checkin" element={<CheckinPage />} />
@@ -82,12 +139,14 @@ export default function App() {
         <Route path="/auth/callback" element={<OAuthCallbackPage />} />
         <Route path="/auth/google" element={<AuthGoogleLegacyRedirect />} />
         <Route path="/auth/mobile-callback" element={<MobileExpoOAuthBridgePage />} />
+        <Route path="/establishment/setup" element={<EstablishmentSetupPage />} />
+        <Route path="/establishment" element={<EstablishmentDashboardPage />} />
 
         {/* Admin (apps/admin) — same dev server as marketing web */}
         <Route path="/admin" element={<AdminEmbedRoot />}>
           <Route index element={<Navigate to="web/dashboard" replace />} />
-          <Route path="login" element={<Navigate to="/" replace />} />
-          <Route element={<AdminAuthGate loginPath="/" />}>
+          <Route path="login" element={<Navigate to="/login" replace />} />
+          <Route element={<AdminAuthGate loginPath="/login" />}>
             <Route element={<AdminLayout />}>{adminLayoutChildRoutes()}</Route>
           </Route>
         </Route>
@@ -126,10 +185,42 @@ export default function App() {
           }
         />
         <Route
+          path="/announcements"
+          element={
+            <ProtectedRoute>
+              <AnnouncementsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/profile"
           element={
             <ProtectedRoute>
               <ProfilePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile/history"
+          element={
+            <ProtectedRoute>
+              <TravelHistoryPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile/privacy"
+          element={
+            <ProtectedRoute>
+              <PrivacyPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/notifications"
+          element={
+            <ProtectedRoute>
+              <NotificationsPage />
             </ProtectedRoute>
           }
         />
@@ -143,6 +234,7 @@ export default function App() {
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </SiteContentProvider>
     </BrowserRouter>
   );
 }

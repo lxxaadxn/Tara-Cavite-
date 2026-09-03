@@ -271,8 +271,12 @@ export function resolveItineraryEstablishment(
 }
 
 /** Unique establishments linked from itinerary stops (requires catalog from Supabase). */
-export function getItineraryEstablishments(itineraryRefId: string, catalog: Place[]): Place[] {
-  const it = publishedItineraries.find((x) => x.id === itineraryRefId);
+export function getItineraryEstablishments(
+  itineraryRefId: string,
+  catalog: Place[],
+  itineraries: { id: string; stopList?: { establishment?: ItineraryStopEstablishmentRef }[] }[] = publishedItineraries
+): Place[] {
+  const it = itineraries.find((x) => x.id === itineraryRefId);
   if (!it?.stopList?.length || !catalog.length) return [];
   const seen = new Set<string>();
   const out: Place[] = [];

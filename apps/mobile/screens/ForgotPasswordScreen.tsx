@@ -12,9 +12,7 @@ import {
 import * as Linking from 'expo-linking';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
-import { JamIcon } from '../components/JamIcon';
-import { Colors } from '../constants/theme';
+import { LogoWordmark } from '../components/LogoWordmark';
 import { Button } from '../components/Button';
 import {
   isSupabaseConfigured,
@@ -22,15 +20,16 @@ import {
   supabase,
 } from '../lib/supabase';
 import { isNetworkErrorMsg, NETWORK_ERROR_USER_MESSAGE } from '../lib/authHelpers';
-import { getDevOAuthBridgeBaseUrl } from '../lib/authOAuth';
+import { siteContentValue } from 'cavitour-shared/siteContent';
+import { useSiteContent } from '../lib/useSiteContent';
 
-const TURQUOISE = '#54C0CC';
-const MUTED = '#7A7878';
-const LINE = 'rgba(122, 120, 120, 0.45)';
+const MUTED = '#737373';
+const BORDER = '#E5E5E5';
+const CREAM = '#F1F7F6';
+const TEAL = '#1B8A70';
+const INK = '#16352E';
 
 function getPasswordResetRedirectUrl(): string {
-  const bridge = getDevOAuthBridgeBaseUrl();
-  if (bridge) return `${bridge}/reset-password`;
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
     return `${window.location.origin}/reset-password`;
   }
@@ -40,6 +39,11 @@ function getPasswordResetRedirectUrl(): string {
 const ForgotPasswordScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const cms = useSiteContent();
+  const heading = siteContentValue(cms, 'auth.reset.heading') || 'Forgot password';
+  const helper =
+    siteContentValue(cms, 'auth.reset.helper') ||
+    'Enter your email and we will send you a link to choose a new password.';
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -86,88 +90,79 @@ const ForgotPasswordScreen: React.FC = () => {
         style={styles.flex}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
       >
-        <View style={[styles.column, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-          <View style={[styles.hero, { marginTop: -insets.top, paddingTop: insets.top + 8 }]}>
-            <View style={styles.decoTurquoise} pointerEvents="none" />
-            <View style={styles.decoTealBlob} pointerEvents="none" />
-          </View>
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingTop: insets.top + 20, paddingBottom: Math.max(insets.bottom, 24) },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.form}>
+            <View style={styles.brandWrap}>
+              <LogoWordmark />
+            </View>
+            <Text style={styles.title}>{heading}</Text>
+            <Text style={styles.subtitle}>{helper}</Text>
 
-          <View style={styles.sheet}>
-            <ScrollView
-              style={styles.sheetScroll}
-              contentContainerStyle={styles.sheetScrollContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              bounces={false}
-            >
-              <TouchableOpacity
-                style={styles.backRow}
-                accessibilityRole="button"
-                accessibilityLabel="Back to login"
-                onPress={() => navigation.goBack()}
-              >
-                <JamIcon ionicon="chevron-left" size={22} color={Colors.primary} />
-                <Text style={styles.backText}>Back to Login</Text>
-              </TouchableOpacity>
-
-              <View style={styles.head}>
-                <Text style={styles.title}>Forgot password</Text>
-                <Text style={styles.subtitle}>
-                  We&apos;ll email you a link to set a new password. Open it on this device to continue in
-                  the app.
+            {sent ? (
+              <View>
+                <Text style={styles.sentText}>
+                  Check your inbox (and spam). Open the reset link — it should open the Set new password
+                  page so you can choose a new password.
                 </Text>
+                <TouchableOpacity
+                  onPress={() => navigation.goBack()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back to login"
+                  style={styles.footerRow}
+                >
+                  <Text style={styles.footerLink}>Back to login</Text>
+                </TouchableOpacity>
               </View>
+            ) : (
+              <>
+                <Text style={styles.fieldLabel}>Email</Text>
+                <TextInput
+                  style={styles.pillInput}
+                  placeholder="you@example.com"
+                  placeholderTextColor={MUTED}
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  accessibilityLabel="Email"
+                />
 
-              {sent ? (
-                <View style={styles.sentBox}>
-                  <Text style={styles.sentText}>
-                    Check your email. Tap the link to open the app and choose a new password.
+                {formError ? (
+                  <Text style={styles.errorText} accessibilityRole="alert">
+                    {formError}
                   </Text>
-                  <TouchableOpacity onPress={() => navigation.goBack()} accessibilityRole="button">
-                    <Text style={styles.linkText}>Back to login</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <>
-                  <View style={styles.fieldsBlock}>
-                    <View style={styles.pill}>
-                      <Ionicons name="mail-outline" size={19} color={MUTED} style={styles.pillIcon} />
-                      <TextInput
-                        style={styles.pillInput}
-                        placeholder="Email"
-                        placeholderTextColor={MUTED}
-                        value={email}
-                        onChangeText={setEmail}
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                        accessibilityLabel="Email"
-                      />
-                    </View>
-                  </View>
+                ) : null}
 
-                  {formError ? (
-                    <Text style={styles.errorText} accessibilityRole="alert">
-                      {formError}
-                    </Text>
-                  ) : null}
+                <Button
+                  title={loading ? 'Sending…' : 'Send reset link'}
+                  onPress={handleSend}
+                  loading={loading}
+                  disabled={loading}
+                  accessibilityLabel="Send password reset email"
+                  style={styles.primaryBtn}
+                  textStyle={styles.primaryBtnText}
+                />
 
-                  <View style={styles.primaryBtnWrap}>
-                    <Button
-                      title="Send reset link"
-                      onPress={handleSend}
-                      loading={loading}
-                      disabled={loading}
-                      accessibilityLabel="Send password reset email"
-                      style={styles.primaryBtn}
-                      textStyle={styles.primaryBtnText}
-                    />
-                  </View>
-                </>
-              )}
-            </ScrollView>
+                <TouchableOpacity
+                  onPress={() => navigation.goBack()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back to login"
+                  style={styles.footerRow}
+                >
+                  <Text style={styles.footerLink}>Back to login</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </View>
   );
@@ -176,151 +171,97 @@ const ForgotPasswordScreen: React.FC = () => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: Colors.white,
+    backgroundColor: CREAM,
   },
   flex: {
     flex: 1,
-    backgroundColor: Colors.white,
   },
-  column: {
-    flex: 1,
-    backgroundColor: Colors.white,
-    overflow: 'visible',
-  },
-  hero: {
-    flex: 1,
-    backgroundColor: Colors.accent,
-    paddingHorizontal: 24,
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: 'center',
-    overflow: 'hidden',
+    paddingHorizontal: 24,
   },
-  decoTurquoise: {
-    position: 'absolute',
-    width: 160,
-    height: 110,
-    borderRadius: 56,
-    backgroundColor: TURQUOISE,
-    opacity: 0.95,
-    top: 4,
-    left: -48,
-    transform: [{ rotate: '-18deg' }],
+  form: {
+    width: '100%',
   },
-  decoTealBlob: {
-    position: 'absolute',
-    width: 220,
-    height: 320,
-    borderRadius: 110,
-    backgroundColor: Colors.primary,
-    top: 24,
-    right: -72,
-  },
-  sheet: {
-    flex: 3,
-    backgroundColor: Colors.white,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    marginTop: -20,
-    paddingHorizontal: 22,
-    paddingTop: 8,
-    minHeight: 0,
-  },
-  sheetScroll: { flex: 1 },
-  sheetScrollContent: { paddingBottom: 16 },
-  backRow: {
-    flexDirection: 'row',
+  brandWrap: {
     alignItems: 'center',
-    gap: 4,
-    paddingTop: 10,
-    paddingBottom: 8,
-    alignSelf: 'flex-start',
-  },
-  backText: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 15,
-    color: Colors.primary,
-  },
-  head: {
-    paddingTop: 8,
-    paddingBottom: 22,
+    marginBottom: 20,
   },
   title: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 24,
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 22,
     lineHeight: 30,
-    color: Colors.primary,
+    color: INK,
+    textAlign: 'center',
+    width: '100%',
   },
   subtitle: {
+    marginTop: 8,
+    marginBottom: 24,
     fontFamily: 'Poppins_400Regular',
     fontSize: 14,
+    lineHeight: 22,
     color: MUTED,
-    marginTop: 10,
-    lineHeight: 20,
+    textAlign: 'center',
+    width: '100%',
   },
-  fieldsBlock: {
-    marginBottom: 4,
-  },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: LINE,
-    borderRadius: 999,
-    paddingVertical: 2,
-    paddingHorizontal: 14,
-    minHeight: 46,
-    backgroundColor: Colors.white,
-  },
-  pillIcon: {
-    marginRight: 10,
+  fieldLabel: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 14,
+    lineHeight: 18,
+    color: MUTED,
+    marginBottom: 8,
   },
   pillInput: {
-    flex: 1,
+    height: 44,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: BORDER,
+    paddingHorizontal: 16,
     fontFamily: 'Poppins_400Regular',
-    fontSize: 15,
-    color: Colors.text.primary,
-    paddingVertical: 10,
+    fontSize: 14,
+    color: INK,
+    backgroundColor: '#FFFFFF',
   },
   errorText: {
-    fontSize: 12,
-    color: '#c62828',
+    fontSize: 13,
+    color: '#DC2626',
     fontFamily: 'Poppins_400Regular',
-    marginBottom: 8,
-    marginTop: 8,
-  },
-  primaryBtnWrap: {
-    marginTop: 14,
-    marginBottom: 24,
-  },
-  primaryBtn: {
-    width: '100%',
-    maxWidth: 400,
-    alignSelf: 'center',
-    height: 48,
-    minHeight: 48,
-    borderRadius: 999,
-    paddingVertical: 0,
-    backgroundColor: Colors.accent,
-  },
-  primaryBtnText: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 16,
-    textTransform: 'none',
-    letterSpacing: 0.2,
-  },
-  sentBox: {
-    paddingVertical: 8,
+    marginTop: 12,
+    lineHeight: 18,
   },
   sentText: {
     fontFamily: 'Poppins_400Regular',
-    fontSize: 15,
-    color: MUTED,
+    fontSize: 14,
     lineHeight: 22,
-    marginBottom: 16,
+    color: '#404040',
+    textAlign: 'center',
   },
-  linkText: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 15,
-    color: Colors.primary,
+  primaryBtn: {
+    width: '100%',
+    marginTop: 18,
+    height: 44,
+    minHeight: 44,
+    borderRadius: 999,
+    paddingVertical: 0,
+    backgroundColor: TEAL,
+  },
+  primaryBtnText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    textTransform: 'none',
+    letterSpacing: 0,
+  },
+  footerRow: {
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  footerLink: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: TEAL,
+    textAlign: 'center',
   },
 });
 

@@ -4,20 +4,16 @@ import { collectGalleryImages, formatTimeForInput, parseTimeInput } from './staA
 export type StaHighlight = 'none' | 'red' | 'yellow';
 
 const STA_SELECT =
-  'id, sheet_name, row_no, ta_name, type_code, ta_category, ntdp_category, year_est, region, prov_huc, city_mun, barangay, address, google_maps_link, latitude, longitude, highlight, is_listed, description, picture, gallery_urls, opening_hours, closing_hours, phone, email, website';
+  'id, sheet_name, ta_name, type_code, ta_category, ntdp_category, city_mun, barangay, address, google_maps_link, latitude, longitude, highlight, is_listed, description, picture, gallery_urls, opening_hours, closing_hours, phone, email, website';
 
 /** Row shape for admin CRUD (matches public.sta_v3_cavite_2025). */
 export type StaV3AdminRow = {
   id: string;
   sheet_name: string;
-  row_no: number | null;
   ta_name: string;
   type_code: string | null;
   ta_category: string | null;
   ntdp_category: string | null;
-  year_est: number | null;
-  region: string | null;
-  prov_huc: string | null;
   city_mun: string | null;
   barangay: string | null;
   address: string | null;

@@ -29,13 +29,13 @@ interface SavedList {
   updated_at?: string;
 }
 
-const GREEN = '#7EA00E';
+const GREEN = '#10A37F';
 const WHITE = '#FFFFFF';
 const TITLE = '#241D13';
 const MUTED = '#7A7878';
 const CTA_DARK = '#213502';
-const TEAL = '#1F4F59';
-const PAGE_BG = '#F4F6EC';
+const TEAL = '#1B8A70';
+const PAGE_BG = '#F1F7F6';
 const INPUT_BG = '#FFFFFF';
 const PLACEHOLDER = '#B3AAAA';
 
@@ -78,6 +78,7 @@ const SavedListScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [hubTab, setHubTab] = useState<'Saved' | 'Itineraries'>('Saved');
 
   const loadLists = async (isRefresh = false) => {
     try {
@@ -178,32 +179,45 @@ const SavedListScreen: React.FC = () => {
           icon_name: list.icon_name,
           type: list.type,
         },
+        focusKind: hubTab === 'Itineraries' ? 'itinerary' : 'establishment',
       } as never
     );
   };
 
-  const renderGreenHeader = () => (
-    <View style={[styles.greenHeader, { paddingTop: insets.top + 8 }]}>
-      <View style={styles.headerRow}>
+  const renderPageHeader = () => (
+    <View style={[styles.pageHeader, { paddingTop: insets.top + 8 }]}>
+      <View style={styles.titleRow}>
         <TouchableOpacity
-          style={styles.headerIconBtn}
+          style={styles.backBtn}
           onPress={() => navigation.goBack()}
           accessibilityRole="button"
-          accessibilityLabel="Go back"
+          accessibilityLabel="Back"
+          hitSlop={10}
         >
-          <JamIcon ionicon="chevron-left" size={26} color={WHITE} />
+          <JamIcon ionicon="chevron-left" size={22} color={TITLE} />
         </TouchableOpacity>
-        <View style={styles.headerTitleBlock}>
-          <Text style={styles.headerTitle} numberOfLines={1} pointerEvents="none">
-            Saved lists
-          </Text>
-          {!loading && lists.length > 0 ? (
-            <Text style={styles.headerSubtitle} pointerEvents="none">
-              {lists.length} list{lists.length === 1 ? '' : 's'} · {totalSaves} save{totalSaves === 1 ? '' : 's'}
-            </Text>
-          ) : null}
-        </View>
-        <View style={styles.headerIconBtn} />
+        <Text style={styles.headerTitle}>Saved</Text>
+      </View>
+      <Text style={styles.headerSubtitle}>
+        {!loading && lists.length > 0
+          ? `${lists.length} list${lists.length === 1 ? '' : 's'} · ${totalSaves} save${totalSaves === 1 ? '' : 's'}`
+          : 'Places and itineraries you keep for later.'}
+      </Text>
+      <View style={styles.seg}>
+        {(['Saved', 'Itineraries'] as const).map((tab) => {
+          const on = hubTab === tab;
+          return (
+            <TouchableOpacity
+              key={tab}
+              style={[styles.segBtn, on && styles.segBtnOn]}
+              onPress={() => setHubTab(tab)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: on }}
+            >
+              <Text style={[styles.segText, on && styles.segTextOn]}>{tab}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
     </View>
   );
@@ -228,7 +242,7 @@ const SavedListScreen: React.FC = () => {
               {item.name}
             </Text>
             <View style={styles.metaRow}>
-              <Text style={styles.privacyPill}>{item.type === 'private' ? 'Private' : 'Shared'}</Text>
+              <Text style={styles.privacyPill}>{item.type === 'private' ? 'Private' : 'Public'}</Text>
               <Text style={styles.dot}>·</Text>
               <Text style={styles.listSubtitle}>
                 {item.place_count} item{item.place_count === 1 ? '' : 's'}
@@ -264,7 +278,7 @@ const SavedListScreen: React.FC = () => {
   if (loading) {
     return (
       <View style={styles.root}>
-        {renderGreenHeader()}
+        {renderPageHeader()}
         <View style={styles.loadingBody}>
           <ActivityIndicator size="large" color={GREEN} />
           <Text style={styles.loadingText}>Loading your lists…</Text>
@@ -275,7 +289,7 @@ const SavedListScreen: React.FC = () => {
 
   return (
     <View style={styles.root}>
-      {renderGreenHeader()}
+      {renderPageHeader()}
 
       <View style={styles.body}>
         <TouchableOpacity
@@ -285,7 +299,7 @@ const SavedListScreen: React.FC = () => {
           accessibilityLabel="Create new list"
           accessibilityRole="button"
         >
-          <JamIcon ionicon="add-outline" size={22} color={WHITE} />
+          <JamIcon ionicon="plus" size={22} color={WHITE} />
           <Text style={styles.addListButtonText}>New list</Text>
         </TouchableOpacity>
 
@@ -316,7 +330,9 @@ const SavedListScreen: React.FC = () => {
             </View>
             <Text style={styles.emptyTitle}>Nothing saved yet</Text>
             <Text style={styles.emptySubtitle}>
-              Create a list for weekend cafés, day trips, or favorite spots — then add places from anywhere in the app.
+              {hubTab === 'Itineraries'
+                ? 'Save a curated route from an itinerary page to see it here.'
+                : 'Browse places and tap save to add them to a list.'}
             </Text>
             <TouchableOpacity
               style={styles.emptyCta}
@@ -333,7 +349,7 @@ const SavedListScreen: React.FC = () => {
             keyExtractor={(item) => item.id}
             contentContainerStyle={[
               styles.listContent,
-              { paddingBottom: Math.max(insets.bottom, 20) + 24 },
+              { paddingBottom: Math.max(insets.bottom, 20) + 32 },
             ]}
             showsVerticalScrollIndicator={false}
             refreshControl={
@@ -361,41 +377,59 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: PAGE_BG,
   },
-  greenHeader: {
-    backgroundColor: GREEN,
-    paddingBottom: 14,
-    borderBottomLeftRadius: 22,
-    borderBottomRightRadius: 22,
+  pageHeader: {
+    paddingHorizontal: 20,
+    paddingBottom: 12,
   },
-  headerRow: {
+  titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
+    gap: 4,
   },
-  headerIconBtn: {
-    width: 44,
-    height: 44,
+  backBtn: {
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  headerTitleBlock: {
-    flex: 1,
-    alignItems: 'center',
+    marginLeft: -8,
   },
   headerTitle: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 20,
-    lineHeight: 24,
-    color: WHITE,
-    textAlign: 'center',
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 24,
+    lineHeight: 30,
+    color: TITLE,
   },
   headerSubtitle: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    lineHeight: 16,
-    color: 'rgba(255,255,255,0.88)',
-    marginTop: 2,
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 13,
+    lineHeight: 18,
+    color: MUTED,
+    marginTop: 4,
+  },
+  seg: {
+    marginTop: 14,
+    flexDirection: 'row',
+    backgroundColor: '#E8EEEC',
+    borderRadius: 999,
+    padding: 4,
+  },
+  segBtn: {
+    flex: 1,
+    borderRadius: 999,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  segBtnOn: {
+    backgroundColor: WHITE,
+  },
+  segText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 13,
+    color: MUTED,
+  },
+  segTextOn: {
+    color: TEAL,
+    fontFamily: 'Poppins_600SemiBold',
   },
   body: {
     flex: 1,
@@ -438,7 +472,7 @@ const styles = StyleSheet.create({
     backgroundColor: INPUT_BG,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(31, 79, 89, 0.12)',
+    borderColor: 'rgba(27, 138, 112, 0.12)',
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
@@ -460,9 +494,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginBottom: 4,
     borderWidth: 1,
-    borderColor: 'rgba(31, 79, 89, 0.08)',
+    borderColor: 'rgba(27, 138, 112, 0.08)',
     overflow: 'hidden',
-    shadowColor: '#1f4f59',
+    shadowColor: '#1B8A70',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.06,
     shadowRadius: 10,
@@ -554,7 +588,7 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: 'rgba(31, 79, 89, 0.08)',
+    backgroundColor: 'rgba(27, 138, 112, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,

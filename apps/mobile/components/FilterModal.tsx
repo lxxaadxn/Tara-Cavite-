@@ -7,31 +7,38 @@ import {
   TouchableOpacity,
   Pressable,
   ScrollView,
-  Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { JamIcon } from './JamIcon';
 import { FilterCategoryIcon } from './FilterCategoryIcon';
-import {
-  WEB_CATEGORY_OPTIONS,
-  WEB_CITY_OPTIONS,
-  WEB_MUNICIPALITY_OPTIONS,
-} from '../lib/dashboardFilterOptions';
+import { WEB_CITY_OPTIONS, WEB_MUNICIPALITY_OPTIONS } from '../lib/dashboardFilterOptions';
 import type { AppliedPlaceFilters } from '../lib/dashboardPlaceFilters';
-import { placePassesAppliedFilters } from '../lib/dashboardPlaceFilters';
+import {
+  getDefaultCategoryKeywords,
+  placePassesAppliedFilters,
+  setRuntimeCategoryKeywords,
+  setRuntimeCategoryLabels,
+  setRuntimeLocationLabels,
+} from '../lib/dashboardPlaceFilters';
+import {
+  fetchAppFilterCategoryOptions,
+  keywordMapFromOptions,
+  labelMapFromOptions,
+  staticCategoryOptions,
+  type AppFilterCategoryOption,
+} from '../lib/appFilterCategories';
+import { fetchLguFilterOptions, locationLabelMapFromOptions, type LguFilterOption } from '../lib/lguFilterOptions';
+import { paletteForFilterCategory, paletteForLguKind } from 'cavitour-shared/ntdpFilterMeta';
 import type { Place } from '../data/mockData';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CATEGORY_COLS = 4;
-const CATEGORY_GAP = 10;
+const PILL_GAP = 8;
 const SHEET_H_PAD = 20;
-const CATEGORY_CARD_WIDTH =
-  (SCREEN_WIDTH - SHEET_H_PAD * 2 - CATEGORY_GAP * (CATEGORY_COLS - 1)) / CATEGORY_COLS;
 
-const OLIVE = '#7EA00E';
-const OLIVE_DARK = '#5a7a0a';
-const TITLE = '#171717';
-const MUTED = '#737373';
+const OLIVE = '#10A37F';
+const TITLE = '#16352E';
+const MUTED = '#9CA3AF';
+const BORDER = '#E5E7EB';
+const TINT = '#E4F3EE';
 
 function setsFromFilters(f: AppliedPlaceFilters | null) {
   return {
@@ -57,23 +64,60 @@ function selectionCount(categories: Set<string>, cities: Set<string>, municipali
   return categories.size + cities.size + municipalities.size;
 }
 
-function LocationPill({
+function FilterPill({
   label,
   selected,
   onPress,
+  icon,
+  palette,
+  stacked,
 }: {
   label: string;
   selected: boolean;
   onPress: () => void;
+  icon?: React.ReactNode;
+  palette?: { color: string; tint: string; selectedText: string };
+  stacked?: boolean;
 }) {
+  const color = palette?.color || OLIVE;
+  const tint = palette?.tint || TINT;
+  const selectedText = palette?.selectedText || TITLE;
+
   return (
     <TouchableOpacity
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected }}
-      style={[styles.locationPill, selected && styles.locationPillSelected]}
+      style={[
+        styles.pill,
+        stacked ? styles.pillStacked : styles.pillGridItem,
+        palette && !selected ? { borderColor: `${color}66` } : null,
+        selected ? { backgroundColor: tint, borderColor: color } : null,
+      ]}
     >
-      <Text style={[styles.locationPillText, selected && styles.locationPillTextSelected]}>{label}</Text>
+      {icon ? (
+        <View
+          style={[
+            styles.pillIconWrap,
+            { backgroundColor: selected ? 'rgba(255,255,255,0.85)' : `${color}22` },
+          ]}
+        >
+          {icon}
+        </View>
+      ) : (
+        <View style={[styles.pillDot, { backgroundColor: color }]} />
+      )}
+      <Text
+        style={[styles.pillText, selected && { color: selectedText }]}
+        numberOfLines={stacked ? 2 : 1}
+      >
+        {label}
+      </Text>
+      {selected ? (
+        <JamIcon ionicon="checkmark" size={16} color={color} />
+      ) : (
+        <View style={styles.pillCheckSpacer} />
+      )}
     </TouchableOpacity>
   );
 }
@@ -101,6 +145,34 @@ export function FilterModal({
   const [categories, setCategories] = useState(() => new Set<string>());
   const [cities, setCities] = useState(() => new Set<string>());
   const [municipalities, setMunicipalities] = useState(() => new Set<string>());
+  const [categoryOptions, setCategoryOptions] = useState<AppFilterCategoryOption[]>(() =>
+    staticCategoryOptions()
+  );
+  const [cityOptions, setCityOptions] = useState<LguFilterOption[]>(() =>
+    WEB_CITY_OPTIONS.map((o) => ({ key: o.label, label: o.label }))
+  );
+  const [municipalityOptions, setMunicipalityOptions] = useState<LguFilterOption[]>(() =>
+    WEB_MUNICIPALITY_OPTIONS.map((o) => ({ key: o.label, label: o.label }))
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchAppFilterCategoryOptions().then((opts) => {
+      if (cancelled) return;
+      setCategoryOptions(opts);
+      setRuntimeCategoryKeywords(keywordMapFromOptions(opts, getDefaultCategoryKeywords()));
+      setRuntimeCategoryLabels(labelMapFromOptions(opts));
+    });
+    void fetchLguFilterOptions().then(({ cities: cityOpts, municipalities: munOpts }) => {
+      if (cancelled) return;
+      setCityOptions(cityOpts);
+      setMunicipalityOptions(munOpts);
+      setRuntimeLocationLabels(locationLabelMapFromOptions(cityOpts, munOpts));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!visible) return;
@@ -143,10 +215,10 @@ export function FilterModal({
   const nounPlural = `${noun}${noun.endsWith('s') ? '' : 's'}`;
   const applyLabel =
     previewCount != null
-      ? `Show ${previewCount} ${previewCount === 1 ? noun : nounPlural}`
+      ? `Find ${previewCount} results`
       : activeSelectionCount > 0
-        ? 'Apply filters'
-        : `Show all ${nounPlural}`;
+        ? 'Find results'
+        : `Find all ${nounPlural}`;
 
   const handleApply = () => {
     onApply?.(pending);
@@ -161,27 +233,18 @@ export function FilterModal({
           <View style={styles.handle} accessibilityElementsHidden />
 
           <View style={styles.header}>
-            <View style={styles.headerText}>
-              <Text style={styles.title}>Filters</Text>
-              <Text style={styles.subtitle}>
-                {activeSelectionCount > 0 ? `${activeSelectionCount} selected` : 'Refine your search'}
-              </Text>
+            <View style={styles.headerTitleRow}>
+              <JamIcon ionicon="filter" size={18} color={OLIVE} />
+              <Text style={styles.title}>Filter</Text>
             </View>
-            <View style={styles.headerActions}>
-              {activeSelectionCount > 0 ? (
-                <TouchableOpacity onPress={clearAll} style={styles.resetBtn} accessibilityRole="button">
-                  <Text style={styles.resetBtnText}>Reset</Text>
-                </TouchableOpacity>
-              ) : null}
-              <TouchableOpacity
-                onPress={onClose}
-                style={styles.closeBtn}
-                accessibilityRole="button"
-                accessibilityLabel="Close"
-              >
-                <JamIcon ionicon="close-outline" size={22} color={MUTED} />
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.closeBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+            >
+              <JamIcon ionicon="chevron-up" size={18} color={MUTED} />
+            </TouchableOpacity>
           </View>
 
           <ScrollView
@@ -192,23 +255,30 @@ export function FilterModal({
           >
             {hideCategories ? null : (
               <View style={styles.section}>
-                <Text style={styles.sectionLabel}>CATEGORY</Text>
-                <View style={styles.categoryGrid}>
-                  {WEB_CATEGORY_OPTIONS.map((opt) => {
+                <View style={styles.sectionLabelRow}>
+                  <View style={[styles.sectionDot, { backgroundColor: OLIVE }]} />
+                  <Text style={[styles.sectionLabel, { color: OLIVE }]}>Category</Text>
+                </View>
+                <View style={styles.pillGrid}>
+                  {categoryOptions.map((opt) => {
                     const selected = categories.has(opt.key);
+                    const palette = paletteForFilterCategory(opt);
                     return (
-                      <TouchableOpacity
+                      <FilterPill
                         key={opt.key}
+                        label={opt.shortLabel || opt.label}
+                        selected={selected}
+                        palette={palette}
                         onPress={() => toggleSet(setCategories, opt.key)}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected }}
-                        style={[styles.categoryCard, selected && styles.categoryCardSelected]}
-                      >
-                        <FilterCategoryIcon name={opt.icon} selected={selected} />
-                        <Text style={[styles.categoryLabel, selected && styles.categoryLabelSelected]}>
-                          {opt.shortLabel}
-                        </Text>
-                      </TouchableOpacity>
+                        icon={
+                          <FilterCategoryIcon
+                            name={opt.icon}
+                            selected={selected}
+                            size={20}
+                            color={palette.color}
+                          />
+                        }
+                      />
                     );
                   })}
                 </View>
@@ -216,39 +286,63 @@ export function FilterModal({
             )}
 
             <View style={[styles.section, hideCategories ? undefined : styles.sectionSpaced]}>
-              <Text style={styles.locationGroupLabel}>Cities</Text>
-              <View style={styles.pillRow}>
-                {WEB_CITY_OPTIONS.map((opt) => (
-                  <LocationPill
-                    key={opt.key}
-                    label={opt.label}
-                    selected={cities.has(opt.key)}
-                    onPress={() => toggleSet(setCities, opt.key)}
-                  />
-                ))}
-              </View>
-
-              <Text style={[styles.locationGroupLabel, styles.municipalitiesLabel]}>Municipalities</Text>
-              <View style={styles.pillRow}>
-                {WEB_MUNICIPALITY_OPTIONS.map((opt) => (
-                  <LocationPill
-                    key={opt.key}
-                    label={opt.label}
-                    selected={municipalities.has(opt.key)}
-                    onPress={() => toggleSet(setMunicipalities, opt.key)}
-                  />
-                ))}
+              <View style={styles.lguColumns}>
+                <View style={styles.lguCol}>
+                  <View style={styles.sectionLabelRow}>
+                    <View style={[styles.sectionDot, { backgroundColor: paletteForLguKind('city').color }]} />
+                    <Text style={[styles.sectionLabel, { color: paletteForLguKind('city').color }]}>Cities</Text>
+                  </View>
+                  <View style={styles.stackedPills}>
+                    {cityOptions.map((opt) => (
+                      <FilterPill
+                        key={opt.key}
+                        stacked
+                        label={opt.label}
+                        selected={cities.has(opt.key)}
+                        palette={paletteForLguKind('city')}
+                        onPress={() => toggleSet(setCities, opt.key)}
+                      />
+                    ))}
+                  </View>
+                </View>
+                <View style={styles.lguCol}>
+                  <View style={styles.sectionLabelRow}>
+                    <View style={[styles.sectionDot, { backgroundColor: paletteForLguKind('municipality').color }]} />
+                    <Text
+                      style={[styles.sectionLabel, { color: paletteForLguKind('municipality').color }]}
+                      numberOfLines={1}
+                    >
+                      Municipalities
+                    </Text>
+                  </View>
+                  <View style={styles.stackedPills}>
+                    {municipalityOptions.map((opt) => (
+                      <FilterPill
+                        key={opt.key}
+                        stacked
+                        label={opt.label}
+                        selected={municipalities.has(opt.key)}
+                        palette={paletteForLguKind('municipality')}
+                        onPress={() => toggleSet(setMunicipalities, opt.key)}
+                      />
+                    ))}
+                  </View>
+                </View>
               </View>
             </View>
           </ScrollView>
 
           <View style={styles.footer}>
+            <TouchableOpacity onPress={clearAll} style={styles.resetBtn} accessibilityRole="button">
+              <Text style={styles.resetBtnText}>Reset</Text>
+            </TouchableOpacity>
             <TouchableOpacity
               style={styles.applyBtn}
               onPress={handleApply}
               accessibilityRole="button"
               accessibilityLabel={applyLabel}
             >
+              <JamIcon ionicon="search-outline" size={16} color="#fff" />
               <Text style={styles.applyBtnText}>{applyLabel}</Text>
             </TouchableOpacity>
           </View>
@@ -270,9 +364,11 @@ const styles = StyleSheet.create({
   sheet: {
     maxHeight: '92%',
     backgroundColor: '#fff',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: BORDER,
   },
   handle: {
     alignSelf: 'center',
@@ -284,42 +380,26 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 4,
+    paddingHorizontal: SHEET_H_PAD,
+    paddingTop: 12,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: BORDER,
     gap: 12,
   },
-  headerText: {
-    flex: 1,
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     minWidth: 0,
+    flex: 1,
   },
   title: {
     fontFamily: 'Poppins_600SemiBold',
-    fontSize: 18,
+    fontSize: 17,
     color: TITLE,
-  },
-  subtitle: {
-    marginTop: 2,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    color: MUTED,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  resetBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  resetBtnText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-    color: OLIVE,
   },
   closeBtn: {
     width: 36,
@@ -332,92 +412,132 @@ const styles = StyleSheet.create({
     maxHeight: 480,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingHorizontal: SHEET_H_PAD,
+    paddingVertical: 16,
   },
   section: {},
   sectionSpaced: {
-    marginTop: 24,
+    marginTop: 20,
+  },
+  sectionLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  sectionDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   sectionLabel: {
-    marginBottom: 12,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 11,
-    letterSpacing: 1.4,
-    color: '#a3a3a3',
-  },
-  categoryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  categoryCard: {
-    width: CATEGORY_CARD_WIDTH,
-    minHeight: 92,
-    borderRadius: 16,
-    backgroundColor: '#f0f0ee',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 14,
-  },
-  categoryCardSelected: {
-    backgroundColor: '#eef4df',
-    borderWidth: 2,
-    borderColor: 'rgba(126, 160, 14, 0.5)',
-  },
-  categoryLabel: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-    textAlign: 'center',
-    color: '#404040',
-  },
-  categoryLabelSelected: {
-    color: OLIVE_DARK,
-  },
-  locationGroupLabel: {
-    marginBottom: 8,
     fontFamily: 'Inter_500Medium',
-    fontSize: 12,
+    fontSize: 13,
     color: MUTED,
   },
   municipalitiesLabel: {
-    marginTop: 16,
+    marginTop: 20,
   },
-  pillRow: {
+  pillGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    gap: PILL_GAP,
+  },
+  lguColumns: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  lguCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  stackedPills: {
     gap: 8,
   },
-  locationPill: {
+  pill: {
+    minHeight: 44,
     borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    backgroundColor: '#f5f5f5',
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    gap: 6,
   },
-  locationPillSelected: {
-    backgroundColor: OLIVE,
+  pillGridItem: {
+    width: '47%',
+    flexGrow: 1,
+    maxWidth: '48.5%',
   },
-  locationPillText: {
+  pillStacked: {
+    alignSelf: 'stretch',
+  },
+  pillSelected: {
+    backgroundColor: TINT,
+    borderColor: OLIVE,
+  },
+  pillIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pillDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  pillIconWrapSelected: {
+    backgroundColor: 'rgba(255,255,255,0.8)',
+  },
+  pillText: {
+    flex: 1,
     fontFamily: 'Inter_500Medium',
     fontSize: 13,
-    color: '#404040',
+    color: '#4B5563',
   },
-  locationPillTextSelected: {
-    color: '#fff',
+  pillTextSelected: {
+    color: TITLE,
+  },
+  pillCheckSpacer: {
+    width: 16,
+    height: 16,
   },
   footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#f0f0f0',
-    paddingHorizontal: 20,
+    borderTopColor: BORDER,
+    paddingHorizontal: SHEET_H_PAD,
     paddingTop: 16,
   },
+  resetBtn: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  resetBtnText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: '#6B7280',
+  },
   applyBtn: {
-    borderRadius: 16,
+    flex: 1,
+    borderRadius: 999,
     backgroundColor: OLIVE,
     paddingVertical: 14,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
   applyBtnText: {
     fontFamily: 'Inter_600SemiBold',

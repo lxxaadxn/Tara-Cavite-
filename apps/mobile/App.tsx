@@ -8,16 +8,17 @@ import {
   Inter_500Medium,
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
-import { Pacifico_400Regular } from '@expo-google-fonts/pacifico';
+import { BebasNeue_400Regular } from '@expo-google-fonts/bebas-neue';
 import {
   Poppins_400Regular,
   Poppins_500Medium,
+  Poppins_600SemiBold,
   Poppins_700Bold,
 } from '@expo-google-fonts/poppins';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Linking from 'expo-linking';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Image, Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View, Alert } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createNavigationContainerRef } from '@react-navigation/native';
 
@@ -31,6 +32,8 @@ import { applyOAuthCallbackFromUrl, isOAuthCallbackUrl } from './lib/authOAuth';
 import { applyPasswordRecoveryFromUrl, isPasswordRecoveryUrl } from './lib/authRecoveryDeepLink';
 import { isStoredSessionInvalidError } from './lib/authHelpers';
 import { isSupabaseConfigured, supabase, clearBrokenAuthSession } from './lib/supabase';
+import { TRAVELER_ACCOUNT_DISABLED_MESSAGE } from 'cavitour-shared/accountStatus';
+import { rejectDisabledTraveler } from './lib/rejectDisabledTraveler';
 import {
   consumePendingCheckinCode,
   isCheckinUrl,
@@ -38,7 +41,7 @@ import {
 } from './lib/checkinDeepLink';
 import { confirmCheckinFromCode } from './lib/confirmCheckin';
 
-// Keep native splash (Tara, Cavite! logo) visible until app is ready
+// Keep native splash (brand mark) visible until fonts are ready
 SplashScreen.preventAutoHideAsync();
 
 // Screens
@@ -63,12 +66,19 @@ import ResetPasswordScreen from './screens/ResetPasswordScreen';
 import SignInScreen from './screens/SignInScreen';
 import SignUpScreen from './screens/SignUpScreen';
 import UserDetailsScreen from './screens/UserDetailsScreen';
+import TravelHistoryScreen from './screens/TravelHistoryScreen';
+import PrivacyScreen from './screens/PrivacyScreen';
+import TermsScreen from './screens/TermsScreen';
 import NewListScreen from './screens/NewListScreen';
 import CreateItineraryScreen from './screens/CreateItineraryScreen';
 import CategoriesScreen from './screens/CategoriesScreen';
 import ItineraryDetailScreen from './screens/ItineraryDetailScreen';
 import FullRouteMapScreen from './screens/FullRouteMapScreen';
 import { LocationPermissionModal, markMobileLocationPromptPending, clearMobileLocationPromptDismissed } from './components/LocationPermissionModal';
+import { LogoWordmark } from './components/LogoWordmark';
+import { CheckinScannerModal } from './components/CheckinScannerModal';
+import { ScanTabButton } from './components/ScanTabButton';
+import AnnouncementsScreen from './screens/AnnouncementsScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -87,6 +97,7 @@ const AuthStack = () => (
   >
     <Stack.Screen name="SignIn" component={SignInScreen} />
     <Stack.Screen name="SignUp" component={SignUpScreen} />
+    <Stack.Screen name="Terms" component={TermsScreen} />
     <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
     <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
   </Stack.Navigator>
@@ -149,6 +160,8 @@ const ProfileStack = () => (
     <Stack.Screen name="UserDetails" component={UserDetailsScreen} />
     <Stack.Screen name="Preferences" component={PreferencesScreen} />
     <Stack.Screen name="History" component={HistoryScreen} />
+    <Stack.Screen name="TravelHistory" component={TravelHistoryScreen} />
+    <Stack.Screen name="Privacy" component={PrivacyScreen} />
     <Stack.Screen name="SavedList" component={SavedListScreen} />
     <Stack.Screen name="SavedListDetail" component={SavedListDetailScreen} />
     <Stack.Screen name="NewList" component={NewListScreen} />
@@ -177,17 +190,57 @@ const MapStack = () => (
   </Stack.Navigator>
 );
 
-// Main Tabs Navigator (Figma: white pill bar, green active / teal inactive icons)
+const AnnouncementsStack = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="AnnouncementsMain" component={AnnouncementsScreen} />
+  </Stack.Navigator>
+);
+
+function ScanPlaceholder() {
+  return <View style={{ flex: 1, backgroundColor: Colors.background }} />;
+}
+
+const HIDE_TAB_ROUTES = new Set([
+  'Notifications',
+  'Directions',
+  'FullRouteMap',
+  'AboutEstablishment',
+  'PlaceDetail',
+  'NewList',
+  'CreateItinerary',
+  'SavedList',
+  'SavedListDetail',
+  'ItineraryDetail',
+  'UserDetails',
+  'TravelHistory',
+  'Privacy',
+]);
+
+function shouldHideTabBar(route: object, fallback: string) {
+  const focused = getFocusedRouteNameFromRoute(route) ?? fallback;
+  return HIDE_TAB_ROUTES.has(focused);
+}
+
+function tabIconName(routeName: string) {
+  if (routeName === 'Dashboard') return 'home-outline';
+  if (routeName === 'Itineraries') return 'document-text-outline';
+  if (routeName === 'Map') return 'map-outline';
+  if (routeName === 'Announcements') return 'notifications-outline';
+  return 'circle';
+}
+
+// Main Tabs: Home · Itineraries · Scan · Map · Announcements (Saved lives on Profile; Profile is header-only)
 function MainTabs() {
   const insets = useSafeAreaInsets();
+  const [scanOpen, setScanOpen] = useState(false);
   const bottomPad = Math.max(insets.bottom, 10);
   const mainTabBarStyle = {
     position: 'absolute' as const,
-    left: 16,
-    right: 16,
+    left: 8,
+    right: 8,
     bottom: bottomPad,
-    height: 64 + Math.min(insets.bottom, 8),
-    paddingTop: 8,
+    height: 72 + Math.min(insets.bottom, 8),
+    paddingTop: 10,
     paddingBottom: Math.min(insets.bottom, 12) || 8,
     borderRadius: 30,
     backgroundColor: Colors.white,
@@ -196,113 +249,94 @@ function MainTabs() {
     borderColor: 'rgba(122, 120, 120, 0.5)',
     elevation: 0,
     shadowOpacity: 0,
+    overflow: 'visible' as const,
   };
 
+  const tabOpts = (fallback: string) =>
+    ({ route }: { route: object }) => ({
+      tabBarStyle: shouldHideTabBar(route, fallback) ? { display: 'none' as const } : mainTabBarStyle,
+    });
+
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ color, size }) => {
-          const ionicon =
-            route.name === 'Dashboard'
-              ? 'home-outline'
-              : route.name === 'Itineraries'
-                ? 'document-text-outline'
-                : route.name === 'Map'
-                  ? 'map-outline'
-                  : 'person-outline';
-          return <JamIcon ionicon={ionicon} size={size} color={color} />;
-        },
-        tabBarActiveTintColor: Colors.accent,
-        tabBarInactiveTintColor: Colors.primary,
-        headerShown: false,
-        tabBarShowLabel: true,
-        tabBarLabelStyle: {
-          fontSize: 10,
-          fontFamily: 'Poppins_500Medium',
-          marginBottom: 2,
-        },
-        tabBarStyle: mainTabBarStyle,
-        tabBarItemStyle: {
-          height: 44,
-        },
-      })}
-    >
-      <Tab.Screen
-        name="Dashboard"
-        component={DashboardStack}
-        options={({ route }) => {
-          const focused = getFocusedRouteNameFromRoute(route) ?? 'HomeMain';
-          const hideTab =
-            focused === 'Notifications' ||
-            focused === 'Directions' ||
-            focused === 'FullRouteMap' ||
-            focused === 'AboutEstablishment' ||
-            focused === 'PlaceDetail';
-          return {
-            tabBarLabel: 'Home',
-            tabBarStyle: hideTab ? { display: 'none' } : mainTabBarStyle,
-          };
-        }}
-      />
-      <Tab.Screen
-        name="Itineraries"
-        component={ItinerariesStack}
-        options={({ route }) => {
-          const focused = getFocusedRouteNameFromRoute(route) ?? 'ItinerariesMain';
-          const hideTab =
-            focused === 'Notifications' ||
-            focused === 'PlaceDetail' ||
-            focused === 'AboutEstablishment' ||
-            focused === 'Directions' ||
-            focused === 'FullRouteMap' ||
-            focused === 'NewList' ||
-            focused === 'CreateItinerary';
-          return {
-            tabBarLabel: 'Itineraries',
-            tabBarStyle: hideTab ? { display: 'none' } : mainTabBarStyle,
-          };
-        }}
-      />
-      <Tab.Screen
-        name="Map"
-        component={MapStack}
-        options={({ route }) => {
-          const focused = getFocusedRouteNameFromRoute(route) ?? 'MapMain';
-          const hideTab =
-            focused === 'Notifications' ||
-            focused === 'PlaceDetail' ||
-            focused === 'AboutEstablishment' ||
-            focused === 'Directions' ||
-            focused === 'FullRouteMap';
-          return {
-            tabBarLabel: 'Map',
-            tabBarStyle: hideTab ? { display: 'none' } : mainTabBarStyle,
-          };
-        }}
-      />
-      <Tab.Screen
-        name="Profile"
-        component={ProfileStack}
-        options={{
-          tabBarLabel: 'Profile',
-          tabBarStyle: { display: 'none' },
-        }}
-      />
-    </Tab.Navigator>
+    <View style={{ flex: 1 }}>
+      <Tab.Navigator
+        screenOptions={({ route }) => ({
+          tabBarIcon: ({ color, size }) => (
+            <JamIcon ionicon={tabIconName(route.name)} size={Math.min(size, 22)} color={color} />
+          ),
+          tabBarActiveTintColor: Colors.accent,
+          tabBarInactiveTintColor: Colors.primary,
+          headerShown: false,
+          tabBarShowLabel: true,
+          tabBarLabelStyle: {
+            fontSize: 9,
+            fontFamily: 'Poppins_500Medium',
+            marginBottom: 0,
+          },
+          tabBarStyle: mainTabBarStyle,
+          tabBarItemStyle: {
+            height: 48,
+          },
+        })}
+      >
+        <Tab.Screen
+          name="Dashboard"
+          component={DashboardStack}
+          options={(args) => ({ ...tabOpts('HomeMain')(args), tabBarLabel: 'Home' })}
+        />
+        <Tab.Screen
+          name="Itineraries"
+          component={ItinerariesStack}
+          options={(args) => ({ ...tabOpts('ItinerariesMain')(args), tabBarLabel: 'Itineraries' })}
+        />
+        <Tab.Screen
+          name="Scan"
+          component={ScanPlaceholder}
+          options={{
+            tabBarLabel: () => null,
+            tabBarIcon: () => null,
+            tabBarButton: (props) => <ScanTabButton {...props} />,
+          }}
+          listeners={{
+            tabPress: (e) => {
+              e.preventDefault();
+              setScanOpen(true);
+            },
+          }}
+        />
+        <Tab.Screen
+          name="Map"
+          component={MapStack}
+          options={(args) => ({ ...tabOpts('MapMain')(args), tabBarLabel: 'Map' })}
+        />
+        <Tab.Screen
+          name="Announcements"
+          component={AnnouncementsStack}
+          options={(args) => ({ ...tabOpts('AnnouncementsMain')(args), tabBarLabel: 'Announcements' })}
+        />
+        <Tab.Screen
+          name="Profile"
+          component={ProfileStack}
+          options={(args) => ({
+            ...tabOpts('ProfileMain')(args),
+            tabBarButton: () => null,
+            tabBarItemStyle: { width: 0, height: 0, display: 'none' as const },
+          })}
+        />
+      </Tab.Navigator>
+      <CheckinScannerModal visible={scanOpen} onClose={() => setScanOpen(false)} />
+    </View>
   );
 }
 
-// Pre-navigation load: match landing (white + logo) until fonts and storage are ready
+// Session hydrate: cream + mark + wordmark (never the old CaviTour splash art)
 const bundlingPageStyle = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.background,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  logo: {
-    width: 220,
-    height: 60,
+    paddingHorizontal: 24,
   },
 });
 
@@ -310,11 +344,12 @@ export default function App() {
   const [fontsLoaded] = useFonts({
     Poppins_400Regular,
     Poppins_500Medium,
+    Poppins_600SemiBold,
     Poppins_700Bold,
+    BebasNeue_400Regular,
     Inter_400Regular,
     Inter_500Medium,
     Inter_700Bold,
-    Pacifico_400Regular,
   });
   const [authHydrated, setAuthHydrated] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -496,6 +531,14 @@ export default function App() {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
         if (session) {
+          const allowed = await rejectDisabledTraveler(session);
+          if (!allowed) {
+            await AsyncStorage.setItem('isAuthenticated', 'false');
+            setIsAuthenticated(false);
+            setSessionUserId(null);
+            Alert.alert('Account deactivated', TRAVELER_ACCOUNT_DISABLED_MESSAGE);
+            return;
+          }
           didClearAuthRef.current = false;
           await AsyncStorage.setItem('isAuthenticated', 'true');
           setIsAuthenticated(true);
@@ -529,21 +572,36 @@ export default function App() {
 
     updateAuthFromSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
         setBlockMainForRecovery(true);
         navigateToRecoveryScreen();
       }
       const isSignedIn = !!session;
-      await AsyncStorage.setItem('isAuthenticated', isSignedIn ? 'true' : 'false');
       setIsAuthenticated(isSignedIn);
       setSessionUserId(session?.user?.id ?? null);
+      void AsyncStorage.setItem('isAuthenticated', isSignedIn ? 'true' : 'false');
       if (event === 'SIGNED_IN' && session?.user?.id) {
-        await markMobileLocationPromptPending();
+        void markMobileLocationPromptPending();
       }
       if (event === 'SIGNED_OUT') {
-        await clearMobileLocationPromptDismissed();
+        void clearMobileLocationPromptDismissed();
         setUnauthedStackKey((k) => k + 1);
+      }
+      // Never await Supabase calls inside this callback — it can deadlock email login.
+      if (session) {
+        const signedInEvent = event;
+        setTimeout(() => {
+          void rejectDisabledTraveler(session).then((allowed) => {
+            if (allowed) return;
+            void AsyncStorage.setItem('isAuthenticated', 'false');
+            setIsAuthenticated(false);
+            setSessionUserId(null);
+            if (signedInEvent === 'SIGNED_IN') {
+              Alert.alert('Account deactivated', TRAVELER_ACCOUNT_DISABLED_MESSAGE);
+            }
+          });
+        }, 0);
       }
     });
 
@@ -617,11 +675,7 @@ export default function App() {
     return (
       <SafeAreaProvider>
         <View style={bundlingPageStyle.container}>
-          <Image
-            source={require('./assets/images/cavitour-logo.png')}
-            style={bundlingPageStyle.logo}
-            resizeMode="contain"
-          />
+          <LogoWordmark markSize={48} wordFontSize={36} />
         </View>
       </SafeAreaProvider>
     );

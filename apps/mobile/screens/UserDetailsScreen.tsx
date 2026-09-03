@@ -10,13 +10,12 @@ import {
   Image,
   ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BirthdayPickerModal } from '../components/BirthdayPickerModal';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
-import * as Linking from 'expo-linking';
 import { JamIcon } from '../components/JamIcon';
 import { Header } from '../components/Header';
-import { getDevOAuthBridgeBaseUrl } from '../lib/authOAuth';
 import { deleteUserAvatarFiles } from '../lib/avatarStorage';
 import {
   hasCustomAvatarFromSources,
@@ -30,18 +29,38 @@ import {
 } from 'cavitour-shared/changePassword';
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
+import {
+  dateOnly,
+  displayBirthday,
+  emitAvatarUpdated,
+  fetchProfileRow,
+  saveProfileIdentity,
+} from '../lib/travelerProfile';
+import {
+  FILTER_OPTION_LABEL_BY_KEY,
+  WEB_CATEGORY_OPTIONS,
+  WEB_CITY_OPTIONS,
+  WEB_MUNICIPALITY_OPTIONS,
+} from '../lib/dashboardFilterOptions';
 
-const TEAL = '#1f4f59';
+const MAX_ACCESSIBILITY_NOTES = 500;
+const LOCATION_OPTIONS = [...WEB_CITY_OPTIONS, ...WEB_MUNICIPALITY_OPTIONS];
+const KNOWN_CATEGORY_KEYS = new Set(WEB_CATEGORY_OPTIONS.map((o) => o.key));
+const KNOWN_LGU_KEYS = new Set(LOCATION_OPTIONS.map((o) => o.key));
+
+function asStringList(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((v) => String(v ?? '').trim()).filter(Boolean);
+}
+
+function toggleKey(list: string[], key: string): string[] {
+  return list.includes(key) ? list.filter((k) => k !== key) : [...list, key];
+}
+const TEAL = '#1B8A70';
 const MUTED = '#737373';
 const TITLE = '#171717';
 const BORDER = '#e5e5e5';
 const PAGE_BG = '#f4f7f9';
-
-function getEmailChangeRedirectUrl(): string {
-  const bridge = getDevOAuthBridgeBaseUrl();
-  if (bridge) return `${bridge}/profile`;
-  return Linking.createURL('auth/callback');
-}
 
 function userHasRemovableAvatar(user: User | null, profileRow: { avatar_url?: string | null } | null): boolean {
   return hasCustomAvatarFromSources(profileRow, user?.user_metadata ?? {});
@@ -49,9 +68,20 @@ function userHasRemovableAvatar(user: User | null, profileRow: { avatar_url?: st
 
 const UserDetailsScreen: React.FC = () => {
   const navigation = useNavigation();
+  const route = useRoute();
+  const scrollRef = React.useRef<ScrollView>(null);
+  const focusPassword = Boolean((route.params as { focusPassword?: boolean } | undefined)?.focusPassword);
   const [user, setUser] = useState<User | null>(null);
+  const insets = useSafeAreaInsets();
   const [nickname, setNickname] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [city, setCity] = useState('');
+  const [birthday, setBirthday] = useState('');
+  const [birthdayPickerOpen, setBirthdayPickerOpen] = useState(false);
+  const [favoriteCategories, setFavoriteCategories] = useState<string[]>([]);
+  const [preferredLgus, setPreferredLgus] = useState<string[]>([]);
+  const [accessibilityNotes, setAccessibilityNotes] = useState('');
   const [avatarUri, setAvatarUri] = useState('');
   const [hasCustomPhoto, setHasCustomPhoto] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -70,27 +100,54 @@ const UserDetailsScreen: React.FC = () => {
       setLoading(false);
       return;
     }
-    const { data: row } = await supabase
+    let row: Record<string, unknown> | null = null;
+    const full = await supabase
       .from('user_profiles')
-      .select('username, avatar_url')
+      .select('username, avatar_url, city, phone, birthday, favorite_categories, preferred_lgus, accessibility_notes')
       .eq('id', u.id)
       .maybeSingle();
+    if (full.error && /favorite_categories|preferred_lgus|accessibility_notes|birthday|phone|column/i.test(String(full.error.message ?? ''))) {
+      const retry = await supabase
+        .from('user_profiles')
+        .select('username, avatar_url, city, favorite_categories, preferred_lgus, accessibility_notes')
+        .eq('id', u.id)
+        .maybeSingle();
+      row = (retry.data as Record<string, unknown> | null) ?? null;
+    } else {
+      row = (full.data as Record<string, unknown> | null) ?? null;
+    }
+    const identityRow = await fetchProfileRow(supabase, u.id);
+    const merged = { ...(identityRow ?? {}), ...(row ?? {}) };
     const meta = u.user_metadata ?? {};
     const nick =
-      row?.username ||
+      String(merged.username ?? '') ||
       (meta.nickname as string) ||
       (meta.username as string) ||
       (u.email ? u.email.split('@')[0] : '');
     setNickname(nick);
     setEmail(u.email || '');
-    setAvatarUri(resolveAvatarFromSources(row, meta));
-    setHasCustomPhoto(hasCustomAvatarFromSources(row, meta));
+    setPhone(String(merged.phone || meta.phone || '').trim());
+    setCity(String(merged.city || meta.city || '').trim());
+    setBirthday(dateOnly(merged.birthday));
+    setFavoriteCategories(asStringList(merged.favorite_categories));
+    setPreferredLgus(asStringList(merged.preferred_lgus));
+    setAccessibilityNotes(String(merged.accessibility_notes ?? '').trim());
+    setAvatarUri(resolveAvatarFromSources(merged as { avatar_url?: string | null }, meta));
+    setHasCustomPhoto(hasCustomAvatarFromSources(merged as { avatar_url?: string | null }, meta));
     setLoading(false);
   }, []);
 
   useEffect(() => {
     void loadProfile();
   }, [loadProfile]);
+
+  useEffect(() => {
+    if (loading || !focusPassword) return;
+    const timer = setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [loading, focusPassword]);
 
   const usernameForRow = (u: User) => {
     const trimmed = nickname.trim();
@@ -107,56 +164,52 @@ const UserDetailsScreen: React.FC = () => {
     if (!user) return;
     const nick = nickname.trim();
     const emailTrim = email.trim().toLowerCase();
-    const currentEmail = String(user.email ?? '')
-      .trim()
-      .toLowerCase();
-
-    if (!nick) {
-      Alert.alert('Edit profile', 'Please enter a nickname.');
-      return;
-    }
-    if (!emailTrim) {
-      Alert.alert('Edit profile', 'Please enter an email address.');
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim)) {
-      Alert.alert('Edit profile', 'Please enter a valid email address.');
-      return;
-    }
 
     setSaving(true);
     try {
-      let emailChangePending = false;
-      if (emailTrim !== currentEmail) {
-        const { error: emailErr } = await supabase.auth.updateUser(
-          { email: emailTrim },
-          { emailRedirectTo: getEmailChangeRedirectUrl() }
-        );
-        if (emailErr) {
-          const msg = emailErr.message || '';
-          if (/already registered|already been registered|user already registered/i.test(msg)) {
-            throw new Error('That email is already used by another account. Try a different address.');
-          }
-          if (/reauthentication|re-auth|same as the old/i.test(msg)) {
-            throw new Error(
-              'Email could not be changed right now. Sign out, sign in again, then try updating your email.'
-            );
-          }
-          throw emailErr;
-        }
-        emailChangePending = true;
-      }
+      const identity = await saveProfileIdentity(supabase, {
+        nickname: nick,
+        email: emailTrim,
+        phone,
+        city,
+        birthday,
+      });
+      const emailChangePending = identity.emailChangePending;
 
-      await supabase.from('user_profiles').upsert(
-        {
-          id: user.id,
-          username: nick,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'id' }
-      );
+      const payload = {
+        id: user.id,
+        username: nick,
+        city: city.trim() || null,
+        phone: phone.trim() || null,
+        birthday: dateOnly(birthday) || null,
+        favorite_categories: favoriteCategories.filter((k) => KNOWN_CATEGORY_KEYS.has(k)),
+        preferred_lgus: preferredLgus.filter((k) => KNOWN_LGU_KEYS.has(k)),
+        accessibility_notes: accessibilityNotes.trim().slice(0, MAX_ACCESSIBILITY_NOTES) || null,
+        updated_at: new Date().toISOString(),
+      };
+      let { error: upsertErr } = await supabase.from('user_profiles').upsert(payload, { onConflict: 'id' });
+      if (
+        upsertErr &&
+        /favorite_categories|preferred_lgus|accessibility_notes|birthday|column|schema cache/i.test(
+          String(upsertErr.message ?? '')
+        )
+      ) {
+        const retry = await supabase.from('user_profiles').upsert(
+          {
+            id: user.id,
+            username: nick,
+            city: payload.city,
+            phone: payload.phone,
+            birthday: payload.birthday,
+            updated_at: payload.updated_at,
+          },
+          { onConflict: 'id' }
+        );
+        upsertErr = retry.error;
+      }
+      if (upsertErr) throw upsertErr;
       await supabase.auth.updateUser({
-        data: { ...user.user_metadata, username: nick, nickname: nick },
+        data: { ...user.user_metadata, username: nick, nickname: nick, city: city.trim() },
       });
 
       if (emailChangePending) {
@@ -250,6 +303,7 @@ const UserDetailsScreen: React.FC = () => {
       if (metaErr) throw metaErr;
 
       await supabase.auth.refreshSession();
+      emitAvatarUpdated();
       await loadProfile();
     } catch (e) {
       Alert.alert('Upload failed', e instanceof Error ? e.message : 'Could not update profile picture.');
@@ -324,6 +378,7 @@ const UserDetailsScreen: React.FC = () => {
       if (metaErr) throw metaErr;
 
       await supabase.auth.refreshSession();
+      emitAvatarUpdated();
       await loadProfile();
     } catch (e) {
       Alert.alert('Edit profile', e instanceof Error ? e.message : 'Could not remove profile photo.');
@@ -425,6 +480,7 @@ const UserDetailsScreen: React.FC = () => {
         </View>
       ) : (
         <ScrollView
+          ref={scrollRef}
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
@@ -489,6 +545,99 @@ const UserDetailsScreen: React.FC = () => {
             <Text style={styles.hint}>
               Google and email accounts can change address here. If you change email, confirm the link we send to the
               new inbox.
+            </Text>
+
+            <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>Phone</Text>
+            <TextInput
+              style={styles.input}
+              value={phone}
+              onChangeText={setPhone}
+              placeholder="Mobile number"
+              placeholderTextColor={MUTED}
+              keyboardType="phone-pad"
+              editable={!busy}
+              accessibilityLabel="Phone"
+            />
+
+            <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>City</Text>
+            <TextInput
+              style={styles.input}
+              value={city}
+              onChangeText={setCity}
+              placeholder="City or municipality"
+              placeholderTextColor={MUTED}
+              autoCapitalize="words"
+              editable={!busy}
+              accessibilityLabel="City"
+            />
+
+            <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>Birthday</Text>
+            <TouchableOpacity
+              style={styles.input}
+              onPress={() => setBirthdayPickerOpen(true)}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel="Birthday"
+            >
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, color: birthday ? TITLE : MUTED }}>
+                {displayBirthday(birthday) || 'Select date'}
+              </Text>
+            </TouchableOpacity>
+
+            <Text style={[styles.sectionTitle, styles.interestsTitle]}>Travel interests</Text>
+            <Text style={styles.chipGroupLabel}>Favorite categories</Text>
+            <View style={styles.chipWrap}>
+              {WEB_CATEGORY_OPTIONS.map((opt) => {
+                const selected = favoriteCategories.includes(opt.key);
+                return (
+                  <TouchableOpacity
+                    key={opt.key}
+                    style={[styles.choiceChip, selected && styles.choiceChipOn]}
+                    onPress={() => setFavoriteCategories((prev) => toggleKey(prev, opt.key))}
+                    disabled={busy}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                  >
+                    <Text style={[styles.choiceChipText, selected && styles.choiceChipTextOn]}>
+                      {opt.shortLabel || opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <Text style={styles.chipGroupLabel}>Preferred LGUs</Text>
+            <View style={styles.chipWrap}>
+              {LOCATION_OPTIONS.map((opt) => {
+                const selected = preferredLgus.includes(opt.key);
+                return (
+                  <TouchableOpacity
+                    key={opt.key}
+                    style={[styles.choiceChip, selected && styles.choiceChipOn]}
+                    onPress={() => setPreferredLgus((prev) => toggleKey(prev, opt.key))}
+                    disabled={busy}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                  >
+                    <Text style={[styles.choiceChipText, selected && styles.choiceChipTextOn]}>
+                      {FILTER_OPTION_LABEL_BY_KEY[opt.key] || opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <Text style={styles.chipGroupLabel}>Accessibility notes</Text>
+            <TextInput
+              style={styles.notesInput}
+              value={accessibilityNotes}
+              onChangeText={(v) => setAccessibilityNotes(v.slice(0, MAX_ACCESSIBILITY_NOTES))}
+              placeholder="Wheelchair access, rest stops, or other needs we should keep in mind."
+              placeholderTextColor={MUTED}
+              multiline
+              editable={!busy}
+              accessibilityLabel="Accessibility notes"
+            />
+            <Text style={styles.hint}>
+              {accessibilityNotes.length}/{MAX_ACCESSIBILITY_NOTES}
             </Text>
 
             <View style={styles.passwordSection}>
@@ -606,6 +755,19 @@ const UserDetailsScreen: React.FC = () => {
           </View>
         </ScrollView>
       )}
+      <BirthdayPickerModal
+        visible={birthdayPickerOpen}
+        initialDate={birthday ? new Date(`${birthday}T12:00:00`) : new Date(2000, 0, 1)}
+        onClose={() => setBirthdayPickerOpen(false)}
+        onConfirm={(date) => {
+          const y = date.getFullYear();
+          const m = String(date.getMonth() + 1).padStart(2, '0');
+          const d = String(date.getDate()).padStart(2, '0');
+          setBirthday(`${y}-${m}-${d}`);
+          setBirthdayPickerOpen(false);
+        }}
+        bottomInset={insets.bottom}
+      />
     </SafeAreaView>
   );
 };
@@ -708,7 +870,57 @@ const styles = StyleSheet.create({
     marginTop: 20,
     paddingTop: 16,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: BORDER,
+  },
+  interestsTitle: {
+    marginTop: 20,
+  },
+  chipGroupLabel: {
+    marginTop: 12,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: '#525252',
+  },
+  chipWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  choiceChip: {
+    width: '47%',
+    flexGrow: 1,
+    maxWidth: '48.5%',
+    borderRadius: 12,
+    backgroundColor: '#F1F7F6',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  choiceChipOn: {
+    backgroundColor: TEAL,
+  },
+  choiceChipText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: '#404040',
+    textAlign: 'center',
+  },
+  choiceChipTextOn: {
+    color: '#fff',
+  },
+  notesInput: {
+    marginTop: 6,
+    minHeight: 88,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    color: TITLE,
+    textAlignVertical: 'top',
   },
   sectionTitle: {
     fontFamily: 'Inter_600SemiBold',

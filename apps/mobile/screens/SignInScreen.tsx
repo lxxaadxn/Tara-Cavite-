@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Modal,
   View,
   Text,
@@ -16,9 +17,8 @@ import { useNavigation } from '@react-navigation/native';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons } from '@expo/vector-icons';
 import { GoogleLogoMark } from '../components/GoogleLogoMark';
-import { GoogleConsentModal } from '../components/GoogleConsentModal';
+import { LogoWordmark } from '../components/LogoWordmark';
 import { Colors } from '../constants/theme';
 import { Button } from '../components/Button';
 import {
@@ -26,14 +26,21 @@ import {
   SUPABASE_ENV_MISSING_MESSAGE,
   supabase,
 } from '../lib/supabase';
-import { withAuthRetry, isNetworkErrorMsg, NETWORK_ERROR_USER_MESSAGE } from '../lib/authHelpers';
+import { isNetworkErrorMsg, NETWORK_ERROR_USER_MESSAGE, withAuthRetry } from '../lib/authHelpers';
 import { signInWithGoogleMobile } from '../lib/googleAuth';
 import { getAdminReservedEmailMessage, isAdminReservedEmail } from '../lib/adminReservedEmail';
 import { markMobileLocationPromptPending } from '../components/LocationPermissionModal';
+import { TRAVELER_ACCOUNT_DISABLED_MESSAGE } from 'cavitour-shared/accountStatus';
+import { siteContentValue } from 'cavitour-shared/siteContent';
+import { rejectDisabledTraveler } from '../lib/rejectDisabledTraveler';
+import { useSiteContent } from '../lib/useSiteContent';
 
-const MUTED = '#6B7280';
-const BORDER = 'rgba(17, 24, 39, 0.1)';
-const FIELD_BG = '#F9FAFB';
+const MUTED = '#737373';
+const BORDER = '#E5E5E5';
+const CREAM = '#F1F7F6';
+const TEAL = '#1B8A70';
+const INK = '#16352E';
+const REMEMBER_EMAIL_KEY = 'cavitour.remember_email';
 
 function toFriendlyLoginError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error ?? '');
@@ -50,10 +57,13 @@ function toFriendlyLoginError(error: unknown): string {
 const SignInScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const cms = useSiteContent();
+  const loginWelcome = 'Welcome back! Enter your details to continue exploring';
+  const loginBanner = siteContentValue(cms, 'auth.login.banner_url');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [remember, setRemember] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [showGoogleConsent, setShowGoogleConsent] = useState(false);
   const [googleAuthInProgress, setGoogleAuthInProgress] = useState(false);
   const [googlePhase, setGooglePhase] = useState<'starting' | 'google' | 'finishing' | 'done'>(
     'starting'
@@ -71,6 +81,15 @@ const SignInScreen: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    void AsyncStorage.getItem(REMEMBER_EMAIL_KEY).then((saved) => {
+      if (saved) {
+        setEmail(saved);
+        setRemember(true);
+      }
+    });
+  }, []);
+
   const handleResendConfirmation = async () => {
     setFormError(null);
     setInfoMessage(null);
@@ -82,13 +101,11 @@ const SignInScreen: React.FC = () => {
     setResendLoading(true);
     try {
       const emailRedirectTo = Linking.createURL('auth/callback');
-      const { error } = await withAuthRetry(() =>
-        supabase.auth.resend({
-          type: 'signup',
-          email: trimmedEmail,
-          options: { emailRedirectTo },
-        })
-      );
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: trimmedEmail,
+        options: { emailRedirectTo },
+      });
       if (error) throw error;
       setInfoMessage('Confirmation email sent. Check your inbox (and spam).');
     } catch (error: unknown) {
@@ -121,12 +138,34 @@ const SignInScreen: React.FC = () => {
     }
     setLoading(true);
     try {
-      const { error } = await withAuthRetry(() =>
-        supabase.auth.signInWithPassword({ email: trimmedEmail, password })
+      const session = await withAuthRetry(
+        async () => {
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email: trimmedEmail,
+            password,
+          });
+          if (error) throw error;
+          if (data.session) return data.session;
+          const { data: again } = await supabase.auth.getSession();
+          if (again.session) return again.session;
+          throw new Error('Signed in but session was not ready. Please try again.');
+        },
+        { retries: 3, delayMs: 400 }
       );
-      if (error) throw error;
-      await AsyncStorage.setItem('isAuthenticated', 'true');
-      await markMobileLocationPromptPending();
+      const allowed = await rejectDisabledTraveler(session);
+      if (!allowed) {
+        await AsyncStorage.setItem('isAuthenticated', 'false');
+        setFormError(TRAVELER_ACCOUNT_DISABLED_MESSAGE);
+        return;
+      }
+      const rememberTask = remember
+        ? AsyncStorage.setItem(REMEMBER_EMAIL_KEY, trimmedEmail)
+        : AsyncStorage.removeItem(REMEMBER_EMAIL_KEY);
+      void Promise.all([
+        AsyncStorage.setItem('isAuthenticated', 'true'),
+        rememberTask,
+        markMobileLocationPromptPending(),
+      ]);
     } catch (error: unknown) {
       const message = isNetworkErrorMsg(error)
         ? NETWORK_ERROR_USER_MESSAGE
@@ -147,8 +186,6 @@ const SignInScreen: React.FC = () => {
       await signInWithGoogleMobile({
         onPhase: (phase) => {
           setGooglePhase(phase);
-          // Hide overlay while Google sheet is up (prevents blank/hung sheet on iOS).
-          // Show again for "Finishing sign-in…".
           if (phase === 'google') {
             setGoogleAuthInProgress(false);
           } else if (phase === 'finishing' || phase === 'starting') {
@@ -157,19 +194,33 @@ const SignInScreen: React.FC = () => {
         },
       });
       setGooglePhase('done');
-      setGoogleAuthInProgress(true);
-      await AsyncStorage.setItem('isAuthenticated', 'true');
-      await markMobileLocationPromptPending();
+      setGoogleAuthInProgress(false);
+      const { data } = await supabase.auth.getSession();
+      const allowed = await rejectDisabledTraveler(data.session);
+      if (!allowed) {
+        await AsyncStorage.setItem('isAuthenticated', 'false');
+        setFormError(TRAVELER_ACCOUNT_DISABLED_MESSAGE);
+        return;
+      }
+      void Promise.all([
+        AsyncStorage.setItem('isAuthenticated', 'true'),
+        markMobileLocationPromptPending(),
+      ]);
       setFormError(null);
-      await new Promise((r) => setTimeout(r, 400));
     } catch (error: unknown) {
       const { data } = await supabase.auth.getSession();
       if (data.session) {
-        setGoogleAuthInProgress(true);
-        await AsyncStorage.setItem('isAuthenticated', 'true');
-        await markMobileLocationPromptPending();
+        const allowed = await rejectDisabledTraveler(data.session);
+        if (!allowed) {
+          await AsyncStorage.setItem('isAuthenticated', 'false');
+          setFormError(TRAVELER_ACCOUNT_DISABLED_MESSAGE);
+          return;
+        }
+        void Promise.all([
+          AsyncStorage.setItem('isAuthenticated', 'true'),
+          markMobileLocationPromptPending(),
+        ]);
         setFormError(null);
-        await new Promise((r) => setTimeout(r, 400));
         return;
       }
       const message =
@@ -188,21 +239,20 @@ const SignInScreen: React.FC = () => {
       setFormError(SUPABASE_ENV_MISSING_MESSAGE);
       return;
     }
-    setShowGoogleConsent(true);
+    void runGoogleSignIn();
+  };
+
+  const goForgot = () => {
+    const parent = navigation.getParent();
+    if (parent) {
+      parent.navigate('Auth' as never, { screen: 'ForgotPassword' } as never);
+    } else {
+      navigation.navigate('ForgotPassword' as never);
+    }
   };
 
   return (
     <View style={styles.root}>
-      <GoogleConsentModal
-        visible={showGoogleConsent}
-        mode="sign-in"
-        onCancel={() => setShowGoogleConsent(false)}
-        onContinue={() => {
-          setShowGoogleConsent(false);
-          void runGoogleSignIn();
-        }}
-      />
-
       <Modal visible={googleAuthInProgress} transparent animationType="fade" statusBarTranslucent>
         <View style={styles.authOverlay}>
           <View style={styles.authCard}>
@@ -230,73 +280,66 @@ const SignInScreen: React.FC = () => {
         <ScrollView
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingTop: insets.top + 16, paddingBottom: Math.max(insets.bottom, 24) },
+            { paddingTop: insets.top + 20, paddingBottom: Math.max(insets.bottom, 24) },
           ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.brandBlock}>
-            <Text style={styles.brandMark}>Tara, Cavite!</Text>
-            <Text style={styles.brandTagline}>Mabuhay — explore Cavite with ease.</Text>
-          </View>
+          <View style={styles.form}>
+            {loginBanner ? (
+              <Image source={{ uri: loginBanner }} style={styles.loginBanner} resizeMode="cover" />
+            ) : null}
 
-          <View style={styles.card}>
-            <Text style={styles.title}>Sign in</Text>
-            <Text style={styles.subtitle}>Use your email or Google account.</Text>
+            <View style={styles.brandWrap}>
+              <LogoWordmark />
+            </View>
+            <Text style={styles.title}>Login to your account</Text>
+            <Text style={styles.subtitle}>{loginWelcome}</Text>
 
-            <View style={styles.fieldsBlock}>
-              <Text style={styles.fieldLabel}>Email</Text>
-              <View style={styles.field}>
-                <Ionicons name="mail-outline" size={18} color={MUTED} style={styles.fieldIcon} />
-                <TextInput
-                  style={styles.fieldInput}
-                  placeholder="you@example.com"
-                  placeholderTextColor={MUTED}
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  accessibilityLabel="Email"
-                />
-              </View>
+            <Text style={styles.fieldLabel}>Email</Text>
+            <TextInput
+              style={styles.pillInput}
+              placeholder="Enter your email"
+              placeholderTextColor={MUTED}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              accessibilityLabel="Email"
+            />
 
-              <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>Password</Text>
-              <View style={styles.field}>
-                <Ionicons name="lock-closed-outline" size={18} color={MUTED} style={styles.fieldIcon} />
-                <TextInput
-                  style={styles.fieldInput}
-                  placeholder="Your password"
-                  placeholderTextColor={MUTED}
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry
-                  accessibilityLabel="Password"
-                />
-              </View>
+            <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>Password</Text>
+            <TextInput
+              style={styles.pillInput}
+              placeholder="Enter your password"
+              placeholderTextColor={MUTED}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoComplete="password"
+              textContentType="password"
+              returnKeyType="go"
+              onSubmitEditing={() => void handleSignIn()}
+              accessibilityLabel="Password"
+            />
+
+            <View style={styles.rowBetween}>
+              <TouchableOpacity
+                style={styles.rememberRow}
+                onPress={() => setRemember((v) => !v)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: remember }}
+              >
+                <View style={[styles.checkbox, remember && styles.checkboxOn]} />
+                <Text style={styles.rememberText}>Remember login</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={goForgot} accessibilityRole="button">
+                <Text style={styles.link}>Forgot Password?</Text>
+              </TouchableOpacity>
             </View>
 
-            <TouchableOpacity
-              style={styles.forgotWrap}
-              accessibilityRole="button"
-              hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
-              onPress={() => {
-                const parent = navigation.getParent();
-                if (parent) {
-                  parent.navigate('Auth' as never, { screen: 'ForgotPassword' } as never);
-                } else {
-                  navigation.navigate('ForgotPassword' as never);
-                }
-              }}
-            >
-              <Text style={styles.forgotText}>Forgot password?</Text>
-            </TouchableOpacity>
-
-            {infoMessage ? (
-              <Text style={styles.infoText} accessibilityRole="text">
-                {infoMessage}
-              </Text>
-            ) : null}
+            {infoMessage ? <Text style={styles.infoText}>{infoMessage}</Text> : null}
             {formError ? (
               <Text style={styles.errorText} accessibilityRole="alert">
                 {formError}
@@ -307,7 +350,6 @@ const SignInScreen: React.FC = () => {
                 onPress={handleResendConfirmation}
                 disabled={resendLoading || loading}
                 accessibilityRole="button"
-                accessibilityLabel="Resend confirmation email"
               >
                 <Text style={styles.resendText}>
                   {resendLoading ? 'Sending…' : 'Resend confirmation email'}
@@ -316,18 +358,18 @@ const SignInScreen: React.FC = () => {
             ) : null}
 
             <Button
-              title="Sign in"
+              title={loading ? 'Logging in...' : 'Login'}
               onPress={handleSignIn}
               loading={loading}
               disabled={loading}
-              accessibilityLabel="Sign in to your Tara, Cavite! account"
+              accessibilityLabel="Login to your Tara, Cavite! account"
               style={styles.primaryBtn}
               textStyle={styles.primaryBtnText}
             />
 
             <View style={styles.dividerRow}>
               <View style={styles.dividerLine} />
-              <Text style={styles.dividerLabel}>or</Text>
+              <Text style={styles.dividerLabel}>Or continue with</Text>
               <View style={styles.dividerLine} />
             </View>
 
@@ -337,18 +379,18 @@ const SignInScreen: React.FC = () => {
               disabled={loading}
               activeOpacity={0.85}
               accessibilityRole="button"
-              accessibilityLabel="Continue with Google"
+              accessibilityLabel="Sign in with Google"
             >
               <GoogleLogoMark size={20} />
               <Text style={styles.googleBtnText}>Sign in with Google</Text>
             </TouchableOpacity>
-          </View>
 
-          <View style={styles.footerRow}>
-            <Text style={styles.footerMuted}>{"Don't have an account? "}</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('SignUp')} accessibilityRole="button">
-              <Text style={styles.footerLink}>Sign up</Text>
-            </TouchableOpacity>
+            <View style={styles.footerRow}>
+              <Text style={styles.footerMuted}>New here? </Text>
+              <TouchableOpacity onPress={() => navigation.navigate('SignUp')} accessibilityRole="button">
+                <Text style={styles.footerLink}>Sign up</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -359,146 +401,146 @@ const SignInScreen: React.FC = () => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: CREAM,
   },
   flex: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
+    justifyContent: 'center',
     paddingHorizontal: 24,
   },
-  brandBlock: {
-    marginBottom: 28,
+  form: {
+    width: '100%',
   },
-  brandMark: {
-    fontFamily: 'Pacifico_400Regular',
-    fontSize: 34,
-    lineHeight: 42,
-    color: Colors.accent,
-  },
-  brandTagline: {
-    marginTop: 6,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 15,
-    lineHeight: 22,
-    color: MUTED,
-  },
-  card: {
+  loginBanner: {
+    width: '100%',
+    height: 140,
+    borderRadius: 16,
+    marginBottom: 16,
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: BORDER,
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.04,
-    shadowRadius: 24,
-    elevation: 2,
+  },
+  brandWrap: {
+    alignItems: 'center',
+    marginBottom: 20,
   },
   title: {
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 22,
-    lineHeight: 28,
-    color: Colors.text.primary,
+    lineHeight: 30,
+    color: INK,
+    textAlign: 'center',
+    width: '100%',
   },
   subtitle: {
-    marginTop: 4,
-    marginBottom: 20,
-    fontFamily: 'Inter_400Regular',
+    marginTop: 8,
+    marginBottom: 24,
+    fontFamily: 'Poppins_400Regular',
     fontSize: 14,
-    lineHeight: 20,
+    lineHeight: 22,
     color: MUTED,
-  },
-  fieldsBlock: {
-    marginBottom: 4,
+    textAlign: 'center',
+    width: '100%',
   },
   fieldLabel: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 13,
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 14,
     lineHeight: 18,
-    color: Colors.text.primary,
-    marginBottom: 6,
+    color: MUTED,
+    marginBottom: 8,
   },
   fieldLabelSpaced: {
     marginTop: 14,
   },
-  field: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  pillInput: {
+    height: 44,
+    borderRadius: 999,
     borderWidth: 1,
     borderColor: BORDER,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    minHeight: 48,
-    backgroundColor: FIELD_BG,
+    paddingHorizontal: 16,
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 14,
+    color: INK,
+    backgroundColor: '#FFFFFF',
   },
-  fieldIcon: {
-    marginRight: 10,
+  rowBetween: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 14,
+    flexWrap: 'wrap',
+    rowGap: 8,
   },
-  fieldInput: {
-    flex: 1,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 15,
-    color: Colors.text.primary,
-    paddingVertical: 12,
+  rememberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  forgotWrap: {
-    alignSelf: 'flex-end',
-    marginTop: 10,
-    marginBottom: 4,
+  checkbox: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#D4D4D4',
+    backgroundColor: '#fff',
   },
-  forgotText: {
-    fontFamily: 'Inter_500Medium',
+  checkboxOn: {
+    backgroundColor: TEAL,
+    borderColor: TEAL,
+  },
+  rememberText: {
+    fontFamily: 'Poppins_400Regular',
     fontSize: 13,
-    color: Colors.accent,
+    color: MUTED,
+  },
+  link: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 13,
+    color: TEAL,
   },
   errorText: {
     fontSize: 13,
-    color: '#B91C1C',
-    fontFamily: 'Inter_400Regular',
+    color: '#DC2626',
+    fontFamily: 'Poppins_400Regular',
     marginTop: 12,
-    marginBottom: 4,
     lineHeight: 18,
   },
   infoText: {
     fontSize: 13,
     color: '#047857',
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'Poppins_400Regular',
     marginTop: 12,
-    marginBottom: 4,
     lineHeight: 18,
   },
   resendText: {
     fontSize: 13,
-    color: Colors.accent,
-    fontFamily: 'Inter_600SemiBold',
+    color: TEAL,
+    fontFamily: 'Poppins_600SemiBold',
     marginTop: 8,
     textDecorationLine: 'underline',
   },
   primaryBtn: {
     width: '100%',
-    marginTop: 20,
-    height: 50,
-    minHeight: 50,
-    borderRadius: 12,
+    marginTop: 18,
+    height: 44,
+    minHeight: 44,
+    borderRadius: 999,
     paddingVertical: 0,
-    backgroundColor: Colors.accent,
+    backgroundColor: TEAL,
   },
   primaryBtnText: {
     fontFamily: 'Poppins_600SemiBold',
-    fontSize: 16,
+    fontSize: 14,
     textTransform: 'none',
     letterSpacing: 0,
   },
   dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 22,
     marginBottom: 16,
-    gap: 12,
+    gap: 10,
   },
   dividerLine: {
     flex: 1,
@@ -506,43 +548,42 @@ const styles = StyleSheet.create({
     backgroundColor: BORDER,
   },
   dividerLabel: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    color: MUTED,
-    textTransform: 'lowercase',
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+    color: '#A3A3A3',
   },
   googleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    minHeight: 50,
-    borderRadius: 12,
+    height: 44,
+    borderRadius: 999,
     borderWidth: 1,
     borderColor: BORDER,
     backgroundColor: '#FFFFFF',
   },
   googleBtnText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 15,
-    color: Colors.text.primary,
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: '#262626',
   },
   footerRow: {
+    marginTop: 22,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 24,
     flexWrap: 'wrap',
   },
   footerMuted: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'Poppins_400Regular',
     fontSize: 14,
     color: MUTED,
   },
   footerLink: {
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: 'Poppins_600SemiBold',
     fontSize: 14,
-    color: Colors.accent,
+    color: TEAL,
   },
   authOverlay: {
     flex: 1,
@@ -572,7 +613,7 @@ const styles = StyleSheet.create({
   },
   authSubtitle: {
     marginTop: 6,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'Poppins_400Regular',
     fontSize: 13,
     color: MUTED,
     textAlign: 'center',

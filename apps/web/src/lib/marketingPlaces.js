@@ -43,6 +43,7 @@ function placeToDestinationCard(place) {
     meta: metaParts.join(' · ') || place.address?.split(',')[0]?.trim() || 'Cavite',
     categoryKey,
     categoryLabel,
+    ntdp_category: place.ntdp_category ?? null,
     city_mun: place.city_mun ?? null,
   };
 }
@@ -93,6 +94,51 @@ export function pickFeaturedDestinations(places, { limit = 8 } = {}) {
   return picks;
 }
 
+export function pickLandingDestinationCards(places, ids, { limit = 4 } = {}) {
+  const byId = new Map((places || []).map((place) => [String(place.id), place]));
+  const cards = [];
+  const used = new Set();
+
+  for (const raw of ids || []) {
+    const id = String(raw ?? '').trim();
+    const place = byId.get(id);
+    if (!id || !place || used.has(id)) continue;
+    used.add(id);
+    cards.push(placeToDestinationCard(place));
+    if (cards.length >= limit) break;
+  }
+
+  return cards;
+}
+
+export function pickLandingItineraries(published, ids, { limit = 4 } = {}) {
+  const list = Array.isArray(published) ? published : [];
+  const byKey = new Map();
+  for (const it of list) {
+    for (const key of [it?.uuid, it?.id, it?.slug, it?.publicId]) {
+      const normalized = String(key ?? '').trim();
+      if (normalized && !byKey.has(normalized)) byKey.set(normalized, it);
+    }
+  }
+
+  const needles = (ids || []).map((raw) => String(raw ?? '').trim()).filter(Boolean);
+  if (!needles.length) return list.slice(0, limit);
+
+  const ordered = [];
+  const used = new Set();
+  for (const needle of needles) {
+    const item = byKey.get(needle);
+    if (!item) continue;
+    const dedupe = String(item.uuid || item.id || needle);
+    if (used.has(dedupe)) continue;
+    used.add(dedupe);
+    ordered.push(item);
+    if (ordered.length >= limit) break;
+  }
+
+  return ordered;
+}
+
 export function buildDestinationFilters(places, maxCategories = 5) {
   const counts = new Map();
   for (const p of places) {
@@ -133,4 +179,13 @@ export function buildMarketingStats(places) {
 export function formatStatCount(n) {
   if (!Number.isFinite(n) || n <= 0) return null;
   return `${n}+`;
+}
+
+/** Anonymous RPC; returns 0 if the function is not deployed yet. */
+export async function fetchLandingActiveUserCount(client) {
+  if (!client) return 0;
+  const { data, error } = await client.rpc('landing_active_user_count');
+  if (error || data == null || data === '') return 0;
+  const n = Number(data);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
 }

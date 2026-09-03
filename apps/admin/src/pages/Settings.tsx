@@ -24,7 +24,6 @@ export function Settings() {
   return (
     <div className={styles.page}>
       <div className={styles.header}>
-        <h1>Settings</h1>
         <p>Manage your application preferences</p>
       </div>
 

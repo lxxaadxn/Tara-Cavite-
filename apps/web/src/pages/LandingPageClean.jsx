@@ -1,18 +1,21 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { fetchPublishedItineraries, subscribeItineraries } from 'cavitour-shared/itineraries';
+import { parseSiteContentIdList, SITE_CONTENT_DEFAULTS, siteContentValue } from 'cavitour-shared/siteContent';
 import { LogoWordmark } from '../components/LogoWordmark';
-import { publishedItineraries } from '../data/mockItineraries';
+import { fetchAppFilterCategoryOptions } from '../lib/appFilterCategories';
 import { buildEnrichedItinerary } from '../lib/itineraryPlaces';
 import {
   MARKETING_PLACEHOLDER_IMG,
-  buildDestinationFilters,
   buildMarketingStats,
-  fetchPlacesWithMedia,
+  fetchLandingActiveUserCount,
   formatStatCount,
-  pickFeaturedDestinations,
-  pickHeroPlace,
+  pickLandingDestinationCards,
+  pickLandingItineraries,
 } from '../lib/marketingPlaces';
+import { fetchAllPlacesFromSupabase } from '../lib/placesFromSupabase';
 import { supabase } from '../lib/supabase';
+import { useSiteContent } from '../lib/useSiteContent';
 
 const palette = {
   ink: 'var(--ct-ink)',
@@ -23,68 +26,46 @@ const palette = {
   cloud: 'var(--ct-pale-green)',
 };
 
-const NAV_LINKS = [
-  { href: '#destinations', label: 'Top Destinations' },
-  { href: '#itineraries', label: 'Itineraries' },
-  { href: '#features', label: 'Why CaviTour' },
-];
+function landingNav(cms) {
+  return [
+    { href: '#app-features', label: siteContentValue(cms, 'landing.nav.features') },
+    { href: '#destinations', label: siteContentValue(cms, 'landing.nav.destinations') },
+    { href: '#itineraries', label: siteContentValue(cms, 'landing.nav.itineraries') },
+  ];
+}
 
-const TRUST_CARDS = [
-  {
-    icon: 'guide',
-    title: 'NTDP Cavite catalog',
-    body: 'Browse officially classified tourism establishments across Cavite municipalities.',
-  },
-  {
-    icon: 'booking',
-    title: 'Saved lists & itineraries',
-    body: 'Save favorites, build day plans, and follow curated routes from the catalog.',
-  },
-  {
-    icon: 'support',
-    title: 'Maps & routes',
-    body: 'Find establishments on the map and get commute-ready driving directions.',
-  },
-];
+function landingFeatureCards(cms) {
+  return [1, 2, 3, 4].map((i) => ({
+    n: siteContentValue(cms, `landing.features.${i}.n`),
+    title: siteContentValue(cms, `landing.features.${i}.title`),
+    body: siteContentValue(cms, `landing.features.${i}.body`),
+    to: siteContentValue(cms, `landing.features.${i}.href`),
+    image: siteContentValue(cms, `landing.features.${i}.image_url`),
+  }));
+}
 
-function TrustIcon({ icon }) {
-  const common = 'h-5 w-5';
-  switch (icon) {
-    case 'booking':
-      return (
-        <svg className={common} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" />
-          <path strokeLinecap="round" strokeLinejoin="round" d="M8 8h8M8 12h8M8 16h5" />
-        </svg>
-      );
-    case 'support':
-      return (
-        <svg className={common} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M18 10a6 6 0 1 0-12 0v5a2 2 0 0 0 2 2h2l2 3 2-3h2a2 2 0 0 0 2-2v-5Z" />
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 10h.01M15 10h.01" />
-        </svg>
-      );
-    case 'guide':
-    default:
-      return (
-        <svg className={common} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="m3 7 9-4 9 4-9 4-9-4Z" />
-          <path strokeLinecap="round" strokeLinejoin="round" d="m3 17 9 4 9-4M3 12l9 4 9-4" />
-        </svg>
-      );
+function LandingCmsLink({ to, className, children }) {
+  const href = String(to || '').trim() || '/';
+  if (/^https?:\/\//i.test(href)) {
+    return (
+      <a href={href} className={className}>
+        {children}
+      </a>
+    );
   }
+  return (
+    <Link to={href} className={className}>
+      {children}
+    </Link>
+  );
 }
 
 function HeroSkeleton() {
-  return <div className="h-[440px] w-full animate-pulse rounded-3xl bg-neutral-200 md:h-[560px]" />;
-}
-
-function DestinationCardSkeleton() {
-  return <div className="h-56 animate-pulse rounded-2xl bg-neutral-200" />;
+  return <div className="landing-apex-hero-skel animate-pulse" />;
 }
 
 function ItineraryCardSkeleton() {
-  return <div className="h-[240px] animate-pulse rounded-3xl bg-neutral-200" />;
+  return <div className="h-[240px] animate-pulse rounded-3xl bg-[#e8f0ee]" />;
 }
 
 /** Adds `is-visible` to `.ct-reveal` elements as they enter the viewport. */
@@ -110,19 +91,37 @@ function useRevealOnScroll(deps = []) {
   }, deps);
 }
 
+function whySectionBody(cms) {
+  const live = String(cms?.['landing.why.body'] ?? '').trim();
+  const stale =
+    /built specifically for commute-ready/i.test(live) ||
+    /^use interactive route maps,/i.test(live);
+  if (!live || stale) return SITE_CONTENT_DEFAULTS['landing.why.body'];
+  return live;
+}
+
 /** Counts up to a numeric target once visible; keeps any non-digit suffix like "+". */
 function CountUpStat({ value, label }) {
+  const raw = String(value ?? '');
+  const hasDigits = /\d/.test(raw);
   const ref = useRef(null);
-  const target = useMemo(() => parseInt(String(value).replace(/[^\d]/g, ''), 10) || 0, [value]);
-  const suffix = useMemo(() => String(value).replace(/[\d,]/g, ''), [value]);
+  const started = useRef(false);
+  const target = useMemo(() => parseInt(raw.replace(/[^\d]/g, ''), 10) || 0, [raw]);
+  const suffix = useMemo(() => raw.replace(/[\d,]/g, ''), [raw]);
   const [display, setDisplay] = useState(0);
 
   useEffect(() => {
+    if (!hasDigits) return undefined;
+    if (started.current) {
+      setDisplay(target);
+      return undefined;
+    }
     const node = ref.current;
     if (!node) return undefined;
     const prefersReduced =
       typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     if (prefersReduced || !('IntersectionObserver' in window)) {
+      started.current = true;
       setDisplay(target);
       return undefined;
     }
@@ -131,6 +130,7 @@ function CountUpStat({ value, label }) {
       (entries) => {
         if (!entries[0].isIntersecting) return;
         io.disconnect();
+        started.current = true;
         const duration = 1000;
         const start = performance.now();
         const tick = (now) => {
@@ -147,66 +147,112 @@ function CountUpStat({ value, label }) {
       io.disconnect();
       cancelAnimationFrame(raf);
     };
-  }, [target]);
+  }, [target, hasDigits]);
 
   return (
-    <div ref={ref} className="rounded-2xl border border-neutral-200 bg-white p-4 text-center">
-      <p className="font-['Poppins',sans-serif] text-2xl font-bold md:text-3xl" style={{ color: palette.ink }}>
-        {display}
-        {suffix}
+    <div ref={ref}>
+      <p className="font-['Poppins',sans-serif] text-4xl font-bold leading-none tracking-tight md:text-5xl" style={{ color: palette.ink }}>
+        {hasDigits ? (
+          <>
+            {display}
+            {suffix}
+          </>
+        ) : (
+          raw
+        )}
       </p>
-      <p className="mt-1 text-xs text-neutral-500">{label}</p>
+      <p className="mt-2 max-w-[13rem] text-sm leading-snug text-[var(--ct-ink)]/55">{label}</p>
     </div>
   );
 }
 
 export function LandingPageClean() {
-  const navigate = useNavigate();
-  const [activeDestinationFilter, setActiveDestinationFilter] = useState('all');
+  const cms = useSiteContent();
   const [loading, setLoading] = useState(true);
-  const [destinations, setDestinations] = useState([]);
-  const [destinationFilters, setDestinationFilters] = useState([{ label: 'All', value: 'all' }]);
-  const [heroPlace, setHeroPlace] = useState(null);
+  const [catalogPlaces, setCatalogPlaces] = useState([]);
+  const [ntdpFilterOptions, setNtdpFilterOptions] = useState([]);
+  const [publishedItineraries, setPublishedItineraries] = useState([]);
   const [stats, setStats] = useState(null);
-  const [itineraries, setItineraries] = useState([]);
+  const [publishedItineraryCount, setPublishedItineraryCount] = useState(0);
+  const [activeUserCount, setActiveUserCount] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const [heroQuery, setHeroQuery] = useState('');
+  const navLinks = useMemo(() => landingNav(cms), [cms]);
+  const whyCopy = useMemo(() => whySectionBody(cms), [cms]);
+  const featureCards = useMemo(() => landingFeatureCards(cms), [cms]);
+  const heroImage = siteContentValue(cms, 'landing.hero.image_url');
+  const heroAlt = siteContentValue(cms, 'landing.hero.image_alt');
+  const placeIds = useMemo(
+    () => parseSiteContentIdList(siteContentValue(cms, 'landing.destinations.place_ids')),
+    [cms]
+  );
+  const itineraryIds = useMemo(
+    () => parseSiteContentIdList(siteContentValue(cms, 'landing.trails.itinerary_ids')),
+    [cms]
+  );
+  const destinations = useMemo(
+    () => pickLandingDestinationCards(catalogPlaces, placeIds, { limit: 4 }),
+    [catalogPlaces, placeIds]
+  );
+  const destinationCategories = useMemo(() => {
+    const chips = [];
+    const seen = new Set();
+    for (const opt of ntdpFilterOptions) {
+      const label = String(opt.label || opt.ntdpName || opt.key || '').trim();
+      const fold = label.toLowerCase();
+      if (!label || seen.has(fold)) continue;
+      seen.add(fold);
+      chips.push(label);
+    }
+    return chips;
+  }, [ntdpFilterOptions]);
+  const itineraries = useMemo(
+    () =>
+      pickLandingItineraries(publishedItineraries, itineraryIds, { limit: 4 })
+        .map((template) => buildEnrichedItinerary(template, catalogPlaces))
+        .filter(Boolean),
+    [publishedItineraries, itineraryIds, catalogPlaces]
+  );
 
   useEffect(() => {
     let cancelled = false;
 
-    async function load() {
-      setLoading(true);
-      try {
-        const places = await fetchPlacesWithMedia(supabase);
-        if (cancelled) return;
+    async function load({ silent = false } = {}) {
+      if (!silent) setLoading(true);
+      const [placesResult, publishedResult, ntdpResult] = await Promise.allSettled([
+        fetchAllPlacesFromSupabase(supabase),
+        fetchPublishedItineraries(supabase),
+        fetchAppFilterCategoryOptions(),
+      ]);
+      if (cancelled) return;
 
-        setDestinations(pickFeaturedDestinations(places, { limit: 8 }));
-        setDestinationFilters(buildDestinationFilters(places));
-        setHeroPlace(pickHeroPlace(places));
-        setStats(buildMarketingStats(places));
-        setItineraries(
-          publishedItineraries
-            .slice(0, 2)
-            .map((template) => buildEnrichedItinerary(template, places))
-            .filter(Boolean)
-        );
-      } catch {
-        if (cancelled) return;
-        setDestinations([]);
-        setDestinationFilters([{ label: 'All', value: 'all' }]);
-        setHeroPlace(null);
-        setStats(null);
-        setItineraries([]);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+      const places = placesResult.status === 'fulfilled' ? placesResult.value : [];
+      const published = publishedResult.status === 'fulfilled' ? publishedResult.value : [];
+      const ntdpOptions = ntdpResult.status === 'fulfilled' ? ntdpResult.value : [];
+
+      setCatalogPlaces(places);
+      setPublishedItineraries(published);
+      setNtdpFilterOptions(ntdpOptions);
+      setStats(places.length ? buildMarketingStats(places) : null);
+      setPublishedItineraryCount(published.length);
+      if (!silent) setLoading(false);
     }
 
     load();
+    const refreshActiveUsers = () => {
+      fetchLandingActiveUserCount(supabase).then((n) => {
+        if (!cancelled) setActiveUserCount(n);
+      });
+    };
+    refreshActiveUsers();
+    const activeUsersTimer = window.setInterval(refreshActiveUsers, 20000);
+    const unsub = subscribeItineraries(supabase, () => {
+      load({ silent: true });
+    });
     return () => {
       cancelled = true;
+      window.clearInterval(activeUsersTimer);
+      unsub();
     };
   }, []);
 
@@ -219,100 +265,60 @@ export function LandingPageClean() {
 
   useRevealOnScroll([loading, destinations.length, itineraries.length]);
 
-  const filteredDestinations = useMemo(() => {
-    if (activeDestinationFilter === 'all') return destinations;
-    return destinations.filter((d) => d.categoryKey === activeDestinationFilter);
-  }, [activeDestinationFilter, destinations]);
-
-  const heroImage =
-    heroPlace?.imageUrl?.trim() || heroPlace?.galleryUrls?.[0] || MARKETING_PLACEHOLDER_IMG;
-  const heroAlt = heroPlace?.name
-    ? `${heroPlace.name}${heroPlace.city_mun ? `, ${heroPlace.city_mun}` : ''}`
-    : 'Cavite establishment';
-
   const statItems = useMemo(() => {
-    if (!stats) return [];
     const items = [];
-    const establishments = formatStatCount(stats.establishmentCount);
-    const municipalities = formatStatCount(stats.municipalityCount);
-    if (establishments) items.push({ value: establishments, label: 'Establishments' });
-    if (municipalities) items.push({ value: municipalities, label: 'Municipalities' });
-    if (itineraries.length > 0) {
-      items.push({ value: String(itineraries.length), label: 'Curated routes' });
+    const establishments = stats ? formatStatCount(stats.establishmentCount) : '';
+    const municipalities = stats ? formatStatCount(stats.municipalityCount) : '';
+    if (establishments) {
+      items.push({ value: establishments, label: siteContentValue(cms, 'landing.why.stat_establishments') });
     }
+    if (municipalities) {
+      items.push({ value: municipalities, label: siteContentValue(cms, 'landing.why.stat_municipalities') });
+    }
+    if (publishedItineraryCount > 0) {
+      items.push({
+        value: String(publishedItineraryCount),
+        label: siteContentValue(cms, 'landing.why.stat_routes'),
+      });
+    }
+    items.push({
+      value: String(Math.max(0, activeUserCount)),
+      label: siteContentValue(cms, 'landing.why.stat_users'),
+    });
     return items;
-  }, [stats, itineraries.length]);
+  }, [cms, stats, publishedItineraryCount, activeUserCount]);
 
-  const heroChips = useMemo(
-    () => destinationFilters.filter((f) => f.value !== 'all').slice(0, 4),
-    [destinationFilters]
-  );
+  const displayDestinations = loading ? [] : destinations;
 
-  const displayDestinations = loading ? [] : filteredDestinations;
-
-  const submitHeroSearch = useCallback(
-    (e) => {
-      e.preventDefault();
-      const q = heroQuery.trim();
-      navigate(q ? `/search?q=${encodeURIComponent(q)}` : '/search');
-    },
-    [heroQuery, navigate]
-  );
+  const bento = displayDestinations.slice(0, 4);
 
   return (
-    <div
-      className="relative min-h-screen overflow-hidden font-['Inter',sans-serif] text-neutral-900"
-      style={{ backgroundColor: palette.cream }}
-    >
-      <div className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute -top-20 left-[-120px] h-[340px] w-[340px] rounded-full bg-white/45 blur-3xl" />
-        <div className="absolute top-[26%] right-[-120px] h-[380px] w-[380px] rounded-full bg-[rgba(31,79,89,0.14)] blur-3xl" />
-        <div className="absolute bottom-[-140px] left-[20%] h-[360px] w-[360px] rounded-full bg-[rgba(126,160,14,0.18)] blur-3xl" />
-      </div>
-
+    <div className="landing-apex relative min-h-screen font-['Poppins',sans-serif]">
       <header
-        className={`sticky top-0 z-50 border-b transition-all duration-300 ${
-          scrolled
-            ? 'border-white/60 bg-white/85 shadow-[0_8px_30px_rgba(16,36,58,0.08)] backdrop-blur-xl'
-            : 'border-transparent bg-white/50 backdrop-blur-md'
+        className={`sticky top-0 z-50 bg-[var(--ct-cream)]/95 transition-shadow ${
+          scrolled ? 'shadow-[0_8px_24px_rgba(22,53,46,0.08)]' : ''
         }`}
       >
-        <div className="mx-auto flex h-20 max-w-7xl items-center gap-4 px-4 sm:px-6 lg:px-8">
-          <Link to="/" className="tracking-tight transition-transform hover:scale-[1.02]">
+        <div className="landing-apex-header-bar mx-auto flex max-w-7xl items-center gap-6 px-4 sm:px-6 lg:px-8">
+          <Link to="/" className="shrink-0">
             <LogoWordmark className="text-base" />
           </Link>
-          <nav className="hidden items-center gap-6 pl-4 text-sm font-medium text-neutral-600 lg:flex">
-            {NAV_LINKS.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className="relative py-1 transition-colors after:absolute after:-bottom-0.5 after:left-0 after:h-0.5 after:w-0 after:rounded-full after:bg-[var(--ct-olive)] after:transition-all after:duration-300 hover:text-neutral-900 hover:after:w-full"
-              >
+          <nav className="ml-auto hidden items-center gap-7 text-[13px] font-medium text-[var(--ct-ink)]/70 lg:flex">
+            {navLinks.map((link) => (
+              <a key={link.href} href={link.href} className="transition hover:text-[var(--ct-ink)]">
                 {link.label}
               </a>
             ))}
-          </nav>
-          <div className="ml-auto hidden items-center justify-end md:flex">
-            <Link
-              to="/signup"
-              className="mr-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100"
-            >
-              Sign Up
-            </Link>
-            <Link
-              to="/login"
-              className="rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-              style={{ backgroundColor: palette.ink }}
-            >
+            <Link to="/login" className="landing-apex-pill !px-5 !py-2 text-[13px]">
               Log In
             </Link>
-          </div>
+          </nav>
           <button
             type="button"
             aria-label="Toggle menu"
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((v) => !v)}
-            className="ml-auto inline-flex h-11 w-11 items-center justify-center rounded-xl border border-neutral-200 bg-white/70 text-neutral-800 transition hover:bg-white md:hidden"
+            className="ml-auto inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#d7e3df] bg-white text-[var(--ct-ink)] lg:hidden"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
               {menuOpen ? (
@@ -325,31 +331,23 @@ export function LandingPageClean() {
         </div>
 
         {menuOpen ? (
-          <div className="border-t border-neutral-200/70 bg-white/95 px-4 pb-4 pt-2 backdrop-blur-xl md:hidden">
+          <div className="border-t border-[#e4eeeb] bg-white px-4 pb-4 pt-2 lg:hidden">
             <nav className="flex flex-col">
-              {NAV_LINKS.map((link) => (
+              {navLinks.map((link) => (
                 <a
                   key={link.href}
                   href={link.href}
                   onClick={() => setMenuOpen(false)}
-                  className="rounded-lg px-3 py-3 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100"
+                  className="rounded-lg px-3 py-3 text-sm font-medium text-[var(--ct-ink)]"
                 >
                   {link.label}
                 </a>
               ))}
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                <Link
-                  to="/signup"
-                  onClick={() => setMenuOpen(false)}
-                  className="rounded-xl border border-neutral-200 px-4 py-2.5 text-center text-sm font-semibold text-neutral-700"
-                >
-                  Sign Up
-                </Link>
+              <div className="mt-2">
                 <Link
                   to="/login"
                   onClick={() => setMenuOpen(false)}
-                  className="rounded-xl px-4 py-2.5 text-center text-sm font-semibold text-white"
-                  style={{ backgroundColor: palette.ink }}
+                  className="landing-apex-pill block text-center text-sm"
                 >
                   Log In
                 </Link>
@@ -359,304 +357,186 @@ export function LandingPageClean() {
         ) : null}
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6 lg:px-8">
-        <section
-          id="top"
-          className="overflow-hidden rounded-[28px] bg-white p-4 shadow-[0_18px_60px_rgba(16,36,58,0.10)] sm:p-6"
-        >
-          <div className="relative overflow-hidden rounded-3xl">
+      <section id="top" className="landing-apex-hero-shell" aria-label="Corregidor Island">
+        <div className="landing-apex-hero-card">
+          <div className="landing-apex-hero-photo">
             {loading ? (
               <HeroSkeleton />
             ) : (
-              <>
-                <img src={heroImage} alt={heroAlt} className="ct-ken-burns h-[440px] w-full object-cover md:h-[560px]" />
-                <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-transparent" />
-                <div className="absolute inset-0 flex items-end p-6 md:p-10">
-                  <div className="max-w-2xl text-white">
-                    <p className="ct-fade-rise text-xs font-semibold uppercase tracking-[0.18em] text-white/80 md:text-sm">
-                      Explore Cavite establishments
-                    </p>
-                    <h1 className="ct-fade-rise ct-delay-1 mt-3 font-['Poppins',sans-serif] text-4xl font-extrabold leading-[1.02] md:text-6xl">
-                      CAVITE TOUR
-                    </h1>
-                    <p className="ct-fade-rise ct-delay-2 mt-4 max-w-xl text-sm text-white/90 md:text-base">
-                      Search the NTDP catalog, browse maps, save lists, and follow curated routes — your Cavite
-                      travel companion in one place.
-                    </p>
-
-                    <form
-                      onSubmit={submitHeroSearch}
-                      className="ct-fade-rise ct-delay-3 mt-6 flex w-full max-w-xl items-center gap-2 rounded-2xl border border-white/20 bg-white/95 p-1.5 shadow-lg backdrop-blur"
-                    >
-                      <span className="pl-3 text-neutral-400">
-                        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                          <circle cx="11" cy="11" r="7" />
-                          <path strokeLinecap="round" d="m20 20-3-3" />
-                        </svg>
-                      </span>
-                      <input
-                        type="text"
-                        value={heroQuery}
-                        onChange={(e) => setHeroQuery(e.target.value)}
-                        placeholder="Search resorts, falls, museums…"
-                        aria-label="Search establishments"
-                        className="min-w-0 flex-1 bg-transparent px-1 py-2.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
-                      />
-                      <button
-                        type="submit"
-                        className="shrink-0 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5"
-                        style={{ backgroundColor: palette.lime }}
-                      >
-                        Search
-                      </button>
-                    </form>
-
-                    {heroChips.length > 0 ? (
-                      <div className="ct-fade-rise ct-delay-3 mt-4 flex flex-wrap gap-2">
-                        {heroChips.map((chip) => (
-                          <Link
-                            key={chip.value}
-                            to={`/search?q=${encodeURIComponent(chip.label)}`}
-                            className="rounded-full border border-white/40 bg-white/10 px-3 py-1.5 text-xs font-medium text-white backdrop-blur transition hover:bg-white/20"
-                          >
-                            {chip.label}
-                          </Link>
-                        ))}
-                      </div>
-                    ) : null}
-
-                    {heroPlace?.name ? (
-                      <p className="mt-4 text-xs font-medium text-white/75 md:text-sm">
-                        Featured: {heroPlace.name}
-                        {heroPlace.city_mun ? ` · ${heroPlace.city_mun}` : ''}
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-              </>
+              <img src={heroImage} alt={heroAlt} className="landing-apex-hero-img" />
             )}
           </div>
+          <div className="landing-apex-hero-copy">
+            <h1>{siteContentValue(cms, 'landing.hero.headline')}</h1>
+            <p>{siteContentValue(cms, 'landing.hero.subtitle')}</p>
+          </div>
+          <div className="landing-apex-hero-cutout">
+            <LandingCmsLink to={siteContentValue(cms, 'landing.hero.cta_href')} className="landing-apex-hero-cta">
+              {siteContentValue(cms, 'landing.hero.cta')}
+            </LandingCmsLink>
+          </div>
+        </div>
+      </section>
+
+      <main className="mx-auto max-w-7xl px-4 pb-20 pt-14 sm:px-6 lg:px-8">
+        <section id="features" className="ct-reveal grid items-start gap-10 lg:grid-cols-2 lg:gap-16">
+          <div>
+            <p className="font-['Poppins',sans-serif] text-xl font-bold tracking-tight text-[var(--ct-ink)] md:text-2xl">
+              {siteContentValue(cms, 'landing.why.heading')}
+            </p>
+            <p className="landing-apex-why-copy mt-4 max-w-2xl">{whyCopy}</p>
+          </div>
+          {statItems.length > 0 ? (
+            <div className="landing-apex-stats">
+              {statItems.slice(0, 4).map((item) => (
+                <CountUpStat key={item.label} value={item.value} label={item.label} />
+              ))}
+            </div>
+          ) : null}
         </section>
 
-        <section id="features" className="mt-10 grid gap-6 lg:grid-cols-[1.25fr_1fr]">
-          <div className="ct-reveal rounded-[26px] bg-white p-6 shadow-[0_14px_40px_rgba(16,36,58,0.08)] sm:p-8">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em]" style={{ color: palette.lime }}>
-              Why CaviTour
-            </p>
-            <h2 className="mt-2 font-['Poppins',sans-serif] text-3xl font-bold leading-tight md:text-4xl" style={{ color: palette.ink }}>
-              Plan Cavite trips with real catalog data
-            </h2>
-            <p className="mt-4 max-w-2xl text-base leading-relaxed text-neutral-600">
-              CaviTour connects you to verified establishments, commute-friendly maps, saved lists, and ready-made
-              day routes — built for exploring the province, not booking packages.
-            </p>
-            {statItems.length > 0 ? (
-              <div className={`mt-8 grid gap-3 sm:gap-4 ${statItems.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
-                {statItems.map((item) => (
-                  <CountUpStat key={item.label} value={item.value} label={item.label} />
-                ))}
-              </div>
-            ) : null}
-          </div>
-          <div className="space-y-4">
-            {TRUST_CARDS.map((card) => (
-              <article
-                key={card.title}
-                className="ct-reveal ct-lift rounded-2xl border border-neutral-200 bg-white p-5 shadow-[0_10px_30px_rgba(16,36,58,0.08)]"
-              >
-                <div className="flex items-start gap-4">
-                  <div className="mt-1 rounded-xl p-2.5 text-white shadow-sm" style={{ backgroundColor: palette.teal }}>
-                    <TrustIcon icon={card.icon} />
-                  </div>
-                  <div>
-                    <h3 className="font-['Poppins',sans-serif] text-lg font-semibold" style={{ color: palette.ink }}>
-                      {card.title}
-                    </h3>
-                    <p className="mt-1 text-sm text-neutral-600">{card.body}</p>
-                  </div>
+        <section id="app-features" className="ct-reveal mt-20">
+          <h2 className="mb-8 font-['Poppins',sans-serif] text-2xl font-bold tracking-tight md:text-3xl">
+            {siteContentValue(cms, 'landing.features.heading')}
+          </h2>
+          <div className="landing-apex-features">
+            {featureCards.map((card) => (
+              <LandingCmsLink key={card.title} to={card.to} className="landing-apex-feature group">
+                <div className="landing-apex-feature-photo">
+                  <img src={card.image} alt="" />
                 </div>
-              </article>
+                <h3 className="mt-3 text-[15px] font-semibold">{card.title}</h3>
+                <p className="mt-1 text-sm leading-relaxed text-[var(--ct-ink)]/50">{card.body}</p>
+              </LandingCmsLink>
             ))}
           </div>
         </section>
 
-        <section id="destinations" className="ct-reveal mt-10 rounded-[26px] bg-white p-6 shadow-[0_14px_40px_rgba(16,36,58,0.08)] sm:p-8">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.16em]" style={{ color: palette.lime }}>
-                Top Destinations
-              </p>
-              <h2 className="mt-2 font-['Poppins',sans-serif] text-3xl font-bold md:text-4xl" style={{ color: palette.ink }}>
-                From the Cavite NTDP catalog
+        <section id="destinations" className="ct-reveal mt-28 md:mt-32">
+          <div className="landing-apex-bento">
+            <div className="landing-apex-bento-intro flex flex-col justify-start pb-2">
+              <h2 className="font-['Poppins',sans-serif] text-2xl font-bold leading-tight tracking-tight md:text-[1.85rem]">
+                {siteContentValue(cms, 'landing.destinations.heading')}
               </h2>
+              <p className="mt-3 max-w-sm text-sm leading-relaxed text-[var(--ct-ink)]/55">
+                {siteContentValue(cms, 'landing.destinations.body')}
+              </p>
+              {destinationCategories.length > 0 ? (
+                <ul className="landing-apex-cats">
+                  {destinationCategories.map((label) => (
+                    <li key={label}>{label}</li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
-            <Link
-              to="/search"
-              className="group inline-flex items-center gap-1.5 text-sm font-semibold transition hover:gap-2.5"
-              style={{ color: palette.teal }}
-            >
-              View all
-              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
-              </svg>
-            </Link>
-          </div>
-          {destinationFilters.length > 1 ? (
-            <div className="mt-6 flex flex-wrap gap-2.5">
-              {destinationFilters.map((filter) => {
-                const active = activeDestinationFilter === filter.value;
-                return (
-                  <button
-                    key={filter.value}
-                    type="button"
-                    onClick={() => setActiveDestinationFilter(filter.value)}
-                    className="rounded-full px-4 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ct-olive)] focus-visible:ring-offset-2"
-                    style={
-                      active
-                        ? { backgroundColor: palette.lime, color: '#fff', boxShadow: '0 6px 18px rgba(126,160,14,0.35)' }
-                        : { backgroundColor: palette.cloud, color: palette.teal }
-                    }
-                  >
-                    {filter.label}
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {loading
-              ? Array.from({ length: 4 }, (_, i) => <DestinationCardSkeleton key={i} />)
-              : displayDestinations.map((d) => (
-                  <Link
-                    key={d.id}
-                    to={`/search?q=${encodeURIComponent(d.name)}`}
-                    className="group ct-lift block overflow-hidden rounded-2xl border border-neutral-200 bg-white"
-                  >
-                    <div className="relative h-56 overflow-hidden">
-                      <img
-                        src={d.image}
-                        alt={d.name}
-                        loading="lazy"
-                        className="h-full w-full object-cover transition duration-500 group-hover:scale-110"
-                      />
-                      {d.categoryLabel ? (
-                        <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-neutral-700 shadow-sm backdrop-blur">
-                          {d.categoryLabel}
-                        </span>
-                      ) : null}
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent p-3">
-                        <p className="font-['Poppins',sans-serif] text-lg font-semibold text-white">{d.name}</p>
-                        <p className="text-xs text-white/80">{d.meta}</p>
+              ? Array.from({ length: 4 }, (_, i) => (
+                  <div key={i} className="landing-apex-bento-tile animate-pulse bg-[#e8f0ee]" />
+                ))
+              : (
+                <>
+                  {bento[0] ? (
+                    <Link to={`/search?q=${encodeURIComponent(bento[0].name)}`} className="landing-apex-bento-tile landing-apex-bento-tall-a">
+                      <img src={bento[0].image} alt={bento[0].name} />
+                      <p className="landing-apex-bento-cap">{bento[0].name}</p>
+                    </Link>
+                  ) : null}
+                  {bento[1] ? (
+                    <Link to={`/search?q=${encodeURIComponent(bento[1].name)}`} className="landing-apex-bento-tile landing-apex-bento-mid-a">
+                      <img src={bento[1].image} alt={bento[1].name} />
+                      <p className="landing-apex-bento-cap">{bento[1].name}</p>
+                    </Link>
+                  ) : null}
+                  {bento[2] ? (
+                    <Link to={`/search?q=${encodeURIComponent(bento[2].name)}`} className="landing-apex-bento-tile landing-apex-bento-mid-b">
+                      <img src={bento[2].image} alt={bento[2].name} />
+                      <p className="landing-apex-bento-cap">{bento[2].name}</p>
+                    </Link>
+                  ) : null}
+                  {bento[3] ? (
+                    <Link to={`/search?q=${encodeURIComponent(bento[3].name)}`} className="landing-apex-bento-tile landing-apex-bento-tall-b">
+                      <img src={bento[3].image} alt={bento[3].name} />
+                      <p className="landing-apex-bento-cap">{bento[3].name}</p>
+                    </Link>
+                  ) : null}
+                </>
+              )}
+          </div>
+          {!loading && displayDestinations.length === 0 ? (
+            <p className="mt-4 text-sm text-[var(--ct-ink)]/50">
+              Establishment highlights will appear here once the catalog loads.
+            </p>
+          ) : null}
+        </section>
+
+        <section id="itineraries" className="ct-reveal mt-20">
+          <div className="mb-8">
+            <h2 className="font-['Poppins',sans-serif] text-2xl font-bold tracking-tight md:text-3xl">
+              {siteContentValue(cms, 'landing.trails.heading')}
+            </h2>
+            <p className="mt-2 max-w-md text-sm text-[var(--ct-ink)]/55">
+              {siteContentValue(cms, 'landing.trails.body')}
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {loading
+              ? Array.from({ length: 4 }, (_, i) => <ItineraryCardSkeleton key={i} />)
+              : itineraries.map((itin) => (
+                  <Link key={itin.id} to={`/itinerary/${itin.id}`} className="group relative block overflow-hidden rounded-[1.5rem]">
+                    <img
+                      src={itin.image || MARKETING_PLACEHOLDER_IMG}
+                      alt={itin.title}
+                      loading="lazy"
+                      className="h-[240px] w-full object-cover transition duration-500 group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[var(--ct-ink)]/80 via-[var(--ct-ink)]/20 to-transparent p-5">
+                      <div className="flex h-full flex-col justify-end">
+                        <h4 className="text-2xl font-bold text-white">{itin.title}</h4>
+                        <p className="mt-2 text-sm text-white/85">{itin.summary}</p>
                       </div>
                     </div>
                   </Link>
                 ))}
           </div>
-          {!loading && displayDestinations.length === 0 ? (
-            <p className="mt-4 text-sm text-neutral-500">
-              {destinations.length === 0
-                ? 'Establishment highlights will appear here once the catalog loads.'
-                : 'No destinations match this category. Try another filter.'}
+          {!loading && itineraries.length === 0 ? (
+            <p className="mt-4 text-sm text-[var(--ct-ink)]/50">
+              {publishedItineraryCount === 0
+                ? 'Published itineraries from Itinerary Management will appear here.'
+                : 'Selected landing itineraries could not be matched. Open Landing Page → Catalog and pick published routes again.'}
             </p>
           ) : null}
         </section>
-
-        <section id="itineraries" className="ct-reveal mt-10 grid gap-4 lg:grid-cols-[1.2fr_1fr_1fr]">
-          <article
-            className="rounded-3xl p-6 text-white"
-            style={{ background: `linear-gradient(135deg, ${palette.teal}, ${palette.lime})` }}
-          >
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-white/85">Itineraries</p>
-            <h3 className="mt-2 font-['Poppins',sans-serif] text-3xl font-bold">Curated day routes</h3>
-            <p className="mt-3 max-w-md text-sm text-white/90">
-              Ready-made plans linking real catalog stops — open an account to save, edit, and follow them on the map.
-            </p>
-            <Link
-              to="/itinerary"
-              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-white/20 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/30"
-            >
-              View itineraries
-              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
-              </svg>
-            </Link>
-          </article>
-          {loading
-            ? Array.from({ length: 2 }, (_, i) => <ItineraryCardSkeleton key={i} />)
-            : itineraries.map((itin) => (
-                <Link key={itin.id} to="/itinerary" className="group ct-lift relative block overflow-hidden rounded-3xl">
-                  <img
-                    src={itin.image || MARKETING_PLACEHOLDER_IMG}
-                    alt={itin.title}
-                    loading="lazy"
-                    className="h-[240px] w-full object-cover transition duration-500 group-hover:scale-110"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent p-5">
-                    <div className="flex h-full flex-col justify-end">
-                      <div className="mb-2 flex flex-wrap gap-1.5">
-                        {itin.route ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-medium text-white/90 ring-1 ring-white/25 backdrop-blur">
-                            {itin.route}
-                          </span>
-                        ) : null}
-                        {itin.stops ? (
-                          <span className="inline-flex items-center rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-medium text-white/90 ring-1 ring-white/25 backdrop-blur">
-                            {itin.stops} stops
-                          </span>
-                        ) : null}
-                      </div>
-                      <h4 className="font-['Poppins',sans-serif] text-2xl font-bold text-white">{itin.title}</h4>
-                      <p className="mt-2 text-sm text-white/90">{itin.summary}</p>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-        </section>
-
-        <section className="ct-reveal mt-10">
-          <div
-            className="overflow-hidden rounded-[28px] px-6 py-12 text-center shadow-[0_18px_50px_rgba(16,36,58,0.14)] sm:px-10 sm:py-14"
-            style={{ background: `linear-gradient(120deg, ${palette.forest}, ${palette.teal}, ${palette.lime})` }}
-          >
-            <h2 className="font-['Poppins',sans-serif] text-3xl font-extrabold text-white md:text-4xl">
-              Ready to explore Cavite?
-            </h2>
-            <p className="mx-auto mt-3 max-w-xl text-sm text-white/90 md:text-base">
-              Create a free account to save places, build itineraries, and get commute-ready routes.
-            </p>
-            <div className="mt-7 flex flex-wrap justify-center gap-3">
-              <Link
-                to="/signup"
-                className="rounded-xl bg-white px-6 py-3 text-sm font-semibold shadow-sm transition hover:-translate-y-0.5"
-                style={{ color: palette.teal }}
-              >
-                Create free account
-              </Link>
-              <Link
-                to="/search"
-                className="rounded-xl border border-white/70 px-6 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
-              >
-                Browse establishments
-              </Link>
-            </div>
-          </div>
-        </section>
       </main>
 
-      <footer className="border-t border-white/70 py-8" style={{ backgroundColor: 'rgba(255,255,255,0.9)' }}>
+      <footer className="border-t border-[#e4eeeb] bg-white py-8">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-4 text-center sm:px-6 md:flex-row md:text-left lg:px-8">
           <div>
             <LogoWordmark className="text-base" />
-            <p className="mt-1 text-xs text-neutral-500">Cavite establishment search, maps, and curated routes.</p>
+            <p className="mt-1 text-xs text-[var(--ct-ink)]/50">{siteContentValue(cms, 'landing.footer.tagline')}</p>
+            {siteContentValue(cms, 'landing.footer.contact_email') ||
+            siteContentValue(cms, 'landing.footer.contact_phone') ? (
+              <p className="mt-1 text-xs text-[var(--ct-ink)]/50">
+                {siteContentValue(cms, 'landing.footer.contact_email') ? (
+                  <a href={`mailto:${siteContentValue(cms, 'landing.footer.contact_email')}`}>
+                    {siteContentValue(cms, 'landing.footer.contact_email')}
+                  </a>
+                ) : null}
+                {siteContentValue(cms, 'landing.footer.contact_email') &&
+                siteContentValue(cms, 'landing.footer.contact_phone')
+                  ? ' · '
+                  : null}
+                {siteContentValue(cms, 'landing.footer.contact_phone') || null}
+              </p>
+            ) : null}
           </div>
-          <nav className="flex flex-wrap items-center justify-center gap-4 text-sm text-neutral-600">
-            {NAV_LINKS.map((link) => (
-              <a key={link.href} href={link.href} className="hover:text-neutral-900">
+          <nav className="flex flex-wrap items-center justify-center gap-4 text-sm text-[var(--ct-ink)]/60">
+            {navLinks.map((link) => (
+              <a key={link.href} href={link.href} className="hover:text-[var(--ct-ink)]">
                 {link.label}
               </a>
             ))}
           </nav>
-          <p className="text-xs text-neutral-500">© 2026 CaviTour. All rights reserved.</p>
+          <p className="text-xs text-[var(--ct-ink)]/45">{siteContentValue(cms, 'landing.footer.copyright')}</p>
         </div>
       </footer>
     </div>

@@ -7,6 +7,8 @@ export type FeaturedPlace = {
   name: string;
   address: string;
   image: string | null;
+  lat?: number | null;
+  lng?: number | null;
 };
 
 export type EnrichedStop = ItineraryStopContent & {
@@ -42,6 +44,8 @@ export function catalogPlaceToFeatured(place: Place | undefined): FeaturedPlace 
     name: place.name,
     address: place.address || '',
     image,
+    lat: place.latitude ?? null,
+    lng: place.longitude ?? null,
   };
 }
 
@@ -99,11 +103,70 @@ function optimizeStopsOrder(stops: ItineraryStopContent[], catalog: Place[]): It
   return [...ordered, ...tail].map((e) => e.stop);
 }
 
+function stopsHaveSchedule(stops: ItineraryStopContent[]): boolean {
+  return stops.some((stop) => String(stop?.timeWindow || '').trim());
+}
+
+export function itineraryPriceBadge(
+  itinerary: PublishedItinerary | EnrichedItinerary | null | undefined
+): string | null {
+  const n = itinerary?.priceTier;
+  const symbols = n === 1 ? '$' : n === 3 ? '$$$' : n === 2 ? '$$' : '';
+  const label = itinerary?.priceTierLabel;
+  if (label && symbols) return `${label} · ${symbols}`;
+  return label || symbols || null;
+}
+
+export function itineraryStopsDurationLine(
+  itinerary: PublishedItinerary | EnrichedItinerary | null | undefined
+): string {
+  const n = itinerary?.stopList?.length || itinerary?.stops;
+  const parts: string[] = [];
+  if (n) parts.push(`${n} ${n === 1 ? 'stop' : 'stops'}`);
+  if (itinerary?.durationLabel) parts.push(itinerary.durationLabel);
+  return parts.join(' · ');
+}
+
+export function stopVenueName(stop: ItineraryStopContent | EnrichedStop | null | undefined): string {
+  const fromPlace = (stop as EnrichedStop | undefined)?.place?.name;
+  return String(fromPlace || stop?.venueName || '').trim();
+}
+
+export function stopMapsQuery(stop: ItineraryStopContent | EnrichedStop | null | undefined): string {
+  const enriched = stop as EnrichedStop | undefined;
+  return [enriched?.place?.name, enriched?.place?.address, stop?.venueName, stop?.name]
+    .filter(Boolean)
+    .join(', ');
+}
+
+export function stopMapPoint(
+  stop: ItineraryStopContent | EnrichedStop | null | undefined,
+  index = 0
+) {
+  const enriched = stop as EnrichedStop | undefined;
+  const lat = Number(enriched?.place?.lat ?? stop?.venueLat);
+  const lng = Number(enriched?.place?.lng ?? stop?.venueLng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return {
+    id: enriched?.place?.id || `stop-${index}`,
+    name: stopVenueName(stop) || stop?.name || 'Stop',
+    lat,
+    lng,
+  };
+}
+
+export function itineraryMapPlaces(stops: (ItineraryStopContent | EnrichedStop)[] | undefined) {
+  return (stops || [])
+    .map((stop, index) => stopMapPoint(stop, index))
+    .filter((point): point is NonNullable<ReturnType<typeof stopMapPoint>> => point != null);
+}
+
 export function buildEnrichedItinerary(
   template: PublishedItinerary,
   catalog: Place[]
 ): EnrichedItinerary {
-  const orderedStops = optimizeStopsOrder(template.stopList || [], catalog);
+  const rawStops = template.stopList || [];
+  const orderedStops = stopsHaveSchedule(rawStops) ? rawStops : optimizeStopsOrder(rawStops, catalog);
   const stopList: EnrichedStop[] = orderedStops.map((stop) => {
     const catalogPlace = resolveEstablishment(stop.establishment, catalog);
     return {
@@ -120,4 +183,35 @@ export function buildEnrichedItinerary(
     stops: stopList.length,
     image: heroFromCatalog || template.image,
   };
+}
+
+/** Unique photo URLs for list-card carousels: template hero, then stop photos. */
+export function itineraryGalleryUrls(
+  itinerary: PublishedItinerary | EnrichedItinerary | null | undefined
+): string[] {
+  const urls: string[] = [];
+  const seen = new Set<string>();
+  const add = (value: unknown) => {
+    const src = String(value || '').trim();
+    if (!src || seen.has(src)) return;
+    seen.add(src);
+    urls.push(src);
+  };
+  add(itinerary?.image);
+  const stops = (itinerary as EnrichedItinerary | undefined)?.stopList;
+  if (stops) {
+    for (const stop of stops) {
+      add(stop?.place?.image);
+    }
+  }
+  return urls;
+}
+
+export function itineraryCardChips(
+  itinerary: PublishedItinerary | EnrichedItinerary | null | undefined
+): string[] {
+  const chips = [...(itinerary?.tags || [])].filter(Boolean) as string[];
+  const n = itinerary?.stopList?.length || itinerary?.stops;
+  if (n) chips.push(`${n} ${n === 1 ? 'stop' : 'stops'}`);
+  return chips;
 }

@@ -1,9 +1,9 @@
 import L from 'leaflet';
 
-export const CAVITOUR_PIN_GREEN = '#7EA00E';
+export const CAVITOUR_PIN_GREEN = '#1B8A70';
 
 /** Filled green dot for the user's GPS position (“you”). */
-export const CAVITOUR_USER_DOT_GREEN = '#7EA00E';
+export const CAVITOUR_USER_DOT_GREEN = '#1B8A70';
 
 const MARKER_SHADOW = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png';
 

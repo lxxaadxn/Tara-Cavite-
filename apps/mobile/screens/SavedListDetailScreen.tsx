@@ -10,25 +10,32 @@ import {
   FlatList,
   Modal,
   Pressable,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { JamIcon } from '../components/JamIcon';
 import { CONTENT_PIPELINE } from 'cavitour-shared';
-import { Place, mockItineraries, type ItineraryCard } from '../data/mockData';
+import { Place, type ItineraryCard } from '../data/mockData';
 import { supabase } from '../lib/supabase';
+import { placeImageSource } from '../lib/placeImageSource';
+import { fetchPublishedItineraries, matchItinerary } from 'cavitour-shared/itineraries';
 
-const GREEN = '#7EA00E';
-const TEAL = '#1F4F59';
+const GREEN = '#10A37F';
+const TEAL = '#1B8A70';
 const WHITE = '#FFFFFF';
 const TITLE = '#241D13';
 const MUTED = '#7A7878';
-const PAGE_BG = '#F5F5F6';
+const PAGE_BG = '#F1F7F6';
 const PLACEHOLDER_INPUT = '#B3AAAA';
 const H_PAD = 16;
+const PLACEHOLDER_IMG = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80';
+const INK = '#16352E';
 
 const SAVED_PLACES_SELECT =
   'establishment_public_id, ta_name, address, type, hours, latitude, longitude, picture, description, ntdp_category, city_mun';
+
+type SavedKind = 'establishment' | 'itinerary';
 
 export type SavedListDetailParams = {
   listId: string;
@@ -39,9 +46,8 @@ export type SavedListDetailParams = {
     icon_name: string;
     type: 'private' | 'shared';
   };
+  focusKind?: SavedKind;
 };
-
-type SavedKind = 'establishment' | 'itinerary';
 
 type SavedRow = {
   kind: SavedKind;
@@ -53,14 +59,19 @@ type SavedRow = {
 
 type TypeFilter = 'all' | SavedKind;
 
-function rowIconForKind(kind: SavedKind) {
-  const color = TEAL;
-  switch (kind) {
-    case 'establishment':
-      return <JamIcon ionicon="business" size={24} color={color} />;
-    default:
-      return <JamIcon ionicon="map-outline" size={24} color={color} />;
+function rowImage(item: SavedRow) {
+  if (item.kind === 'establishment') {
+    return placeImageSource(item.place?.image) ?? { uri: PLACEHOLDER_IMG };
   }
+  const uri = String(item.itinerary?.image ?? '').trim();
+  return uri ? { uri } : { uri: PLACEHOLDER_IMG };
+}
+
+function rowSubtitle(item: SavedRow) {
+  if (item.kind === 'establishment') {
+    return item.place?.address || item.place?.city_mun || 'Cavite, Philippines';
+  }
+  return item.itinerary?.subtitle || 'Itinerary';
 }
 
 const FILTER_OPTIONS: { key: TypeFilter; label: string }[] = [
@@ -73,12 +84,12 @@ export default function SavedListDetailScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const route = useRoute();
-  const { listId, list } = route.params as SavedListDetailParams;
+  const { listId, list, focusKind } = route.params as SavedListDetailParams;
 
   const [loading, setLoading] = useState(true);
   const [allRows, setAllRows] = useState<SavedRow[]>([]);
   const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>(focusKind ?? 'establishment');
   const [filterModalVisible, setFilterModalVisible] = useState(false);
 
   const load = useCallback(async () => {
@@ -142,9 +153,16 @@ export default function SavedListDetailScreen() {
       }
 
       if (!itinErr) {
-        const iRefs = new Set((itinLinks ?? []).map((r) => (r as { itinerary_ref: string }).itinerary_ref));
-        for (const c of mockItineraries) {
-          if (iRefs.has(c.id)) {
+        const iRefs = [...new Set((itinLinks ?? []).map((r) => String((r as { itinerary_ref: string }).itinerary_ref ?? '').trim()).filter(Boolean))];
+        let published: Awaited<ReturnType<typeof fetchPublishedItineraries>> = [];
+        try {
+          published = await fetchPublishedItineraries(supabase);
+        } catch {
+          published = [];
+        }
+        for (const ref of iRefs) {
+          const c = matchItinerary(published, ref) as ItineraryCard | null;
+          if (c) {
             rows.push({ kind: 'itinerary', key: `i-${c.id}`, title: c.title, itinerary: c });
           }
         }
@@ -206,12 +224,19 @@ export default function SavedListDetailScreen() {
     FILTER_OPTIONS.find((o) => o.key === typeFilter)?.label ?? 'All saves';
 
   const renderItem = ({ item }: { item: SavedRow }) => (
-    <TouchableOpacity style={styles.card} onPress={() => openRow(item)} activeOpacity={0.82} accessibilityRole="button">
-      <View style={styles.cardIconWrap}>{rowIconForKind(item.kind)}</View>
-      <Text style={styles.cardTitle} numberOfLines={2}>
-        {item.title}
-      </Text>
-      <JamIcon ionicon="chevron-forward" size={18} color={MUTED} />
+    <TouchableOpacity style={styles.card} onPress={() => openRow(item)} activeOpacity={0.85} accessibilityRole="button">
+      <Image source={rowImage(item)} style={styles.cardImage} />
+      <View style={styles.cardBody}>
+        <Text style={styles.cardTitle} numberOfLines={1}>
+          {item.title}
+        </Text>
+        <View style={styles.metaRow}>
+          <JamIcon name="map-marker" size={14} color="#39A98F" />
+          <Text style={styles.cardMeta} numberOfLines={1}>
+            {rowSubtitle(item)}
+          </Text>
+        </View>
+      </View>
     </TouchableOpacity>
   );
 
@@ -239,6 +264,21 @@ export default function SavedListDetailScreen() {
           </Pressable>
           <View style={styles.headerIconBtn} />
         </View>
+      </View>
+
+      <View style={styles.seg}>
+        <TouchableOpacity
+          style={[styles.segBtn, typeFilter === 'establishment' && styles.segBtnOn]}
+          onPress={() => setTypeFilter('establishment')}
+        >
+          <Text style={[styles.segText, typeFilter === 'establishment' && styles.segTextOn]}>Saved</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.segBtn, typeFilter === 'itinerary' && styles.segBtnOn]}
+          onPress={() => setTypeFilter('itinerary')}
+        >
+          <Text style={[styles.segText, typeFilter === 'itinerary' && styles.segTextOn]}>Itineraries</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.searchRow}>
@@ -272,6 +312,8 @@ export default function SavedListDetailScreen() {
           data={filteredRows}
           keyExtractor={(item) => item.key}
           renderItem={renderItem}
+          numColumns={2}
+          columnWrapperStyle={styles.cardRow}
           contentContainerStyle={[
             styles.listContent,
             { paddingBottom: Math.max(insets.bottom, 24) + 24 },
@@ -356,6 +398,32 @@ const styles = StyleSheet.create({
     color: WHITE,
     textAlign: 'center',
   },
+  seg: {
+    marginHorizontal: H_PAD,
+    marginTop: 10,
+    flexDirection: 'row',
+    backgroundColor: '#E8EEEC',
+    borderRadius: 999,
+    padding: 4,
+  },
+  segBtn: {
+    flex: 1,
+    borderRadius: 999,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  segBtnOn: {
+    backgroundColor: WHITE,
+  },
+  segText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 13,
+    color: MUTED,
+  },
+  segTextOn: {
+    color: TEAL,
+    fontFamily: 'Poppins_600SemiBold',
+  },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -411,35 +479,52 @@ const styles = StyleSheet.create({
     paddingHorizontal: H_PAD,
     paddingTop: 4,
   },
+  cardRow: {
+    gap: 10,
+    marginBottom: 10,
+  },
   card: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flex: 1,
+    maxWidth: '48.5%',
     backgroundColor: WHITE,
     borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginBottom: 12,
-    gap: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(122, 120, 120, 0.12)',
+    borderColor: 'rgba(22, 53, 46, 0.08)',
+    shadowColor: '#16352E',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 2,
   },
-  cardIconWrap: {
-    width: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+  cardImage: {
+    width: '100%',
+    height: 132,
+    backgroundColor: '#E8EEEA',
+  },
+  cardBody: {
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 12,
   },
   cardTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 13,
+    lineHeight: 18,
+    color: INK,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 4,
+    marginTop: 6,
+  },
+  cardMeta: {
     flex: 1,
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 16,
-    lineHeight: 22,
-    color: TITLE,
-    minWidth: 0,
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 11,
+    lineHeight: 16,
+    color: MUTED,
   },
   emptyText: {
     fontFamily: 'Poppins_500Medium',

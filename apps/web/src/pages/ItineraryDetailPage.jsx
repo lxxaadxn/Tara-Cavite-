@@ -1,17 +1,27 @@
-﻿import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+﻿import { useEffect, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AppHeader } from '../components/AppHeader';
+import { PlacesLeafletMap } from '../components/PlacesLeafletMap';
 import { SaveSuccessToast } from '../components/SaveSuccessToast';
 import { SaveToListModal } from '../components/SaveToListModal';
-import { publishedItineraries } from '../data/mockItineraries';
-import { buildEnrichedItinerary } from '../lib/itineraryPlaces';
+import { fetchItineraryByIdOrSlug, subscribeItineraries } from 'cavitour-shared/itineraries';
+import {
+  buildEnrichedItinerary,
+  itineraryMapPlaces,
+  itineraryPriceBadge,
+  itineraryStopsDurationLine,
+  stopMapPoint,
+  stopMapsQuery,
+  stopVenueName,
+} from '../lib/itineraryPlaces';
+import { googleMapsItineraryUrl, googleMapsPlaceUrl } from '../lib/osmUrls';
 import { fetchAllPlacesFromSupabase, logPlacesFetchError } from '../lib/placesFromSupabase';
 import { readItinerarySavedLists, saveItineraryToList, saveItineraryToListId } from '../lib/savedPlaces';
 import { supabase } from '../lib/supabase';
 import { useSaveSuccessToast } from '../lib/useSaveSuccessToast';
 
-const HEADER_GREEN = '#7EA00E';
-const TEAL = '#1F4F59';
+const HEADER_GREEN = '#10A37F';
+const TEAL = '#1B8A70';
 
 function formatRouteLine(route, subtitle) {
   const raw = route || subtitle || '';
@@ -39,7 +49,7 @@ function IconBookmark(props) {
 function IconCheck(props) {
   return (
     <svg
-      className="text-[#7EA00E]"
+      className="text-[#10A37F]"
       viewBox="0 0 24 24"
       width="16"
       height="16"
@@ -54,23 +64,50 @@ function IconCheck(props) {
   );
 }
 
-function IconPin(props) {
-  return (
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" className="text-[#1f4f59]/50" aria-hidden {...props}>
-      <path d="M12 21s7-4.35 7-11a7 7 0 10-14 0c0 6.65 7 11 7 11z" strokeLinejoin="round" />
-      <circle cx="12" cy="10" r="2.2" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-
 export function ItineraryDetailPage() {
   const { id } = useParams();
-  const template = publishedItineraries.find((itinerary) => itinerary.id === id);
+  const navigate = useNavigate();
+  const [template, setTemplate] = useState(null);
+  const [loadState, setLoadState] = useState('loading');
   const [enriched, setEnriched] = useState(null);
   const [saveOpen, setSaveOpen] = useState(false);
   const [listNameDraft, setListNameDraft] = useState('');
   const [existingLists, setExistingLists] = useState([]);
   const { showSaveSuccess, toastProps } = useSaveSuccessToast();
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadState('loading');
+    setTemplate(null);
+    setEnriched(null);
+    const load = () =>
+      fetchItineraryByIdOrSlug(supabase, id, { publishedOnly: true })
+        .then((row) => {
+          if (cancelled) return;
+          setTemplate(row);
+          setLoadState(row ? 'ready' : 'missing');
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setTemplate(null);
+            setLoadState('missing');
+          }
+        });
+    load();
+    const unsub = subscribeItineraries(supabase, () => {
+      fetchItineraryByIdOrSlug(supabase, id, { publishedOnly: true })
+        .then((row) => {
+          if (cancelled) return;
+          setTemplate(row);
+          setLoadState(row ? 'ready' : 'missing');
+        })
+        .catch(() => {});
+    });
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, [id]);
 
   useEffect(() => {
     if (!template) return undefined;
@@ -134,18 +171,20 @@ export function ItineraryDetailPage() {
     }
   };
 
-  const linkedPlaces = useMemo(
-    () =>
-      (detail?.stopList || [])
-        .map((stop) => stop.place)
-        .filter((place) => place?.id)
-        .filter((place, index, list) => list.findIndex((x) => x.id === place.id) === index),
-    [detail]
-  );
+  if (loadState === 'loading' || (!template && loadState !== 'missing')) {
+    return (
+      <div className="min-h-screen bg-[#f0f2ec] font-['Poppins',sans-serif] text-neutral-900">
+        <AppHeader />
+        <main className="mx-auto flex max-w-[1440px] flex-col items-center px-4 py-20 text-center sm:px-8">
+          <p className="text-sm text-neutral-600">Loading itinerary…</p>
+        </main>
+      </div>
+    );
+  }
 
   if (!template) {
     return (
-      <div className="min-h-screen bg-[#f0f2ec] font-['Inter',sans-serif] text-neutral-900">
+      <div className="min-h-screen bg-[#f0f2ec] font-['Poppins',sans-serif] text-neutral-900">
         <AppHeader />
         <main className="mx-auto flex max-w-[1440px] flex-col items-center px-4 py-20 text-center sm:px-8">
           <h2 className="font-['Poppins',sans-serif] text-2xl font-bold text-neutral-900">Not found</h2>
@@ -163,10 +202,13 @@ export function ItineraryDetailPage() {
   }
 
   const stops = detail.stopList || [];
-  const stopTotal = stops.length > 0 ? stops.length : detail?.stops;
+  const mapPlaces = itineraryMapPlaces(stops);
+  const startItineraryUrl = googleMapsItineraryUrl(mapPlaces);
+  const metaLine = itineraryStopsDurationLine(detail);
+  const priceBadge = itineraryPriceBadge(detail);
 
   return (
-    <div className="min-h-screen bg-[#f0f2ec] font-['Inter',sans-serif] text-neutral-900">
+    <div className="min-h-screen bg-[#f0f2ec] font-['Poppins',sans-serif] text-neutral-900">
       <AppHeader />
 
       <main className="mx-auto w-full max-w-[1440px] px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6">
@@ -183,7 +225,7 @@ export function ItineraryDetailPage() {
             <button
               type="button"
               onClick={openSave}
-              className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-white shadow-[0_6px_20px_rgba(31,79,89,0.25)] transition hover:shadow-[0_8px_24px_rgba(31,79,89,0.32)]"
+              className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-white shadow-[0_6px_20px_rgba(27, 138, 112,0.25)] transition hover:shadow-[0_8px_24px_rgba(27, 138, 112,0.32)]"
               style={{ backgroundColor: TEAL }}
             >
               <IconBookmark className="opacity-90" />
@@ -193,13 +235,13 @@ export function ItineraryDetailPage() {
         </div>
 
         {/* Split hero — image + copy side by side on large screens */}
-        <section className="overflow-hidden rounded-3xl border border-[#dfe8d3] bg-white shadow-[0_8px_32px_rgba(31,79,89,0.08)]">
+        <section className="overflow-hidden rounded-3xl bg-white shadow-[0_8px_32px_rgba(27,138,112,0.08)]">
           <div className="grid min-h-0 lg:grid-cols-[minmax(260px,1fr)_minmax(0,1.15fr)]">
             <div className="relative aspect-[16/10] min-h-[200px] lg:aspect-auto lg:min-h-[300px]">
               <img src={detail.image} alt="" className="absolute inset-0 h-full w-full object-cover" />
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 to-transparent lg:bg-gradient-to-r lg:from-transparent lg:to-black/20" aria-hidden />
             </div>
-            <div className="flex flex-col justify-center bg-gradient-to-br from-[#fbfcf7] via-[#f7faef] to-[#e8efd8] p-6 sm:p-8 lg:p-10 xl:p-12">
+            <div className="flex flex-col justify-center bg-gradient-to-br from-[#F1F7F6] via-[#F1F7F6] to-[#AACBC4] p-6 sm:p-8 lg:p-10 xl:p-12">
               {!!detail.tags?.length && (
                 <div className="mb-3 flex flex-wrap gap-2">
                   {detail.tags.map((tag) => (
@@ -219,19 +261,19 @@ export function ItineraryDetailPage() {
                 {formatRouteLine(detail.route, detail.subtitle)}
               </p>
               <div className="mt-5 flex flex-wrap gap-2">
-                {!!stopTotal && (
-                  <span className="rounded-full bg-[#1f4f59] px-3 py-1.5 text-xs font-semibold text-white">
-                    {stopTotal} {stopTotal === 1 ? 'stop' : 'stops'}
-                  </span>
-                )}
-                {!!detail.durationLabel && (
-                  <span className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700">
-                    {detail.durationLabel}
+                {!!metaLine && (
+                  <span className="rounded-full bg-[#1B8A70] px-3 py-1.5 text-xs font-semibold text-white">
+                    {metaLine}
                   </span>
                 )}
                 {!!detail.bestTime && (
                   <span className="rounded-full border border-neutral-200 bg-white/90 px-3 py-1.5 text-xs font-medium text-neutral-600">
                     {detail.bestTime}
+                  </span>
+                )}
+                {!!priceBadge && (
+                  <span className="rounded-full bg-[var(--ct-pale-green)] px-3 py-1.5 text-xs font-semibold text-[#10A37F]">
+                    {priceBadge}
                   </span>
                 )}
               </div>
@@ -240,17 +282,16 @@ export function ItineraryDetailPage() {
         </section>
 
         <div className="mt-6 grid gap-6 lg:mt-8 lg:grid-cols-12 lg:gap-8">
-          {/* Main column: route timeline */}
           <div className="order-2 lg:order-1 lg:col-span-8">
             {!!stops.length && (
-              <section className="rounded-3xl border border-[rgba(31,79,89,0.1)] bg-white p-5 shadow-sm sm:p-6 lg:p-8">
+              <section className="rounded-3xl bg-white p-5 shadow-sm sm:p-6 lg:p-8">
                 <div className="mb-6 border-b border-neutral-100 pb-4">
                   <h2 className="font-['Poppins',sans-serif] text-xl font-bold text-neutral-900 sm:text-2xl">Route & stops</h2>
                   <p className="mt-1 text-sm text-neutral-500">Follow in order — each stop builds on the last.</p>
                 </div>
                 <div className="relative">
                   <div
-                    className="absolute left-[13px] top-4 bottom-4 w-px bg-gradient-to-b from-[#cfe8a8] via-[#7ea00e]/40 to-[#dfe8d3] sm:left-[15px]"
+                    className="absolute left-[13px] top-4 bottom-4 w-px bg-gradient-to-b from-[#AACBC4] via-[#10A37F]/40 to-[#AACBC4] sm:left-[15px]"
                     aria-hidden
                   />
                   <ol className="relative space-y-0">
@@ -266,39 +307,75 @@ export function ItineraryDetailPage() {
                             </span>
                           </div>
                           <div className="min-w-0 flex-1 pt-0.5">
-                            <h3 className="font-['Poppins',sans-serif] text-lg font-semibold text-neutral-900">{stop.name}</h3>
-                            <p className="mt-1.5 text-sm leading-relaxed text-neutral-600">{stop.description}</p>
-                            {!!stop.place?.id && (
-                              <Link
-                                to={`/place/${stop.place.id}`}
-                                className="mt-3 flex items-center gap-3 rounded-2xl border border-neutral-200 bg-neutral-50/80 p-3 transition hover:border-[#cfe0b0] hover:bg-[#fbfcf7]"
-                              >
-                                {stop.place.image ? (
-                                  <img
-                                    src={stop.place.image}
-                                    alt=""
-                                    className="h-14 w-14 shrink-0 rounded-xl object-cover sm:h-16 sm:w-16"
-                                  />
-                                ) : (
-                                  <div
-                                    className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl sm:h-16 sm:w-16"
-                                    style={{ backgroundColor: 'rgba(31,79,89,0.08)' }}
-                                    aria-hidden
-                                  >
-                                    <IconPin />
-                                  </div>
-                                )}
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: HEADER_GREEN }}>
-                                    Featured spot
-                                  </p>
-                                  <p className="line-clamp-2 font-medium text-neutral-900">{stop.place.name}</p>
-                                  {!!stop.place.address && (
-                                    <p className="mt-0.5 line-clamp-2 text-xs text-neutral-500">{stop.place.address}</p>
-                                  )}
-                                </div>
-                              </Link>
+                            <h3 className="font-['Poppins',sans-serif] text-lg font-semibold text-neutral-900">
+                              {stop.name}
+                              {stopVenueName(stop) ? (
+                                <span className="font-medium text-neutral-600"> — {stopVenueName(stop)}</span>
+                              ) : null}
+                            </h3>
+                            {(stop.timeWindow || stop.durationHint) && (
+                              <p className="mt-1.5 text-sm font-medium text-neutral-600">
+                                {[stop.timeWindow, stop.durationHint].filter(Boolean).join(' · ')}
+                              </p>
                             )}
+                            {(stop.costType || stop.expectTag) && (
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {stop.costType ? (
+                                  <span className="rounded-full bg-[var(--ct-pale-green)] px-2.5 py-0.5 text-[11px] font-medium text-[#10A37F]">
+                                    {stop.costType}
+                                  </span>
+                                ) : null}
+                                {stop.expectTag ? (
+                                  <span className="rounded-full bg-[var(--ct-pale-green)] px-2.5 py-0.5 text-[11px] font-medium text-[#10A37F]">
+                                    {stop.expectTag}
+                                  </span>
+                                ) : null}
+                              </div>
+                            )}
+                            {!!stop.highlights?.length ? (
+                              <ul className="mt-3 space-y-1.5">
+                                {stop.highlights.map((item) => (
+                                  <li key={item} className="flex gap-2 text-sm leading-snug text-neutral-700">
+                                    <span className="mt-0.5 shrink-0">
+                                      <IconCheck />
+                                    </span>
+                                    <span>{item}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="mt-1.5 text-sm leading-relaxed text-neutral-600">{stop.description}</p>
+                            )}
+                            {(() => {
+                              const point = stopMapPoint(stop, index);
+                              const mapsUrl = googleMapsPlaceUrl(
+                                point?.lat,
+                                point?.lng,
+                                stopMapsQuery(stop)
+                              );
+                              return (
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  {mapsUrl ? (
+                                    <a
+                                      href={mapsUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center justify-center rounded-full bg-[#10A37F] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#168F7A]"
+                                    >
+                                      Open in Google Maps
+                                    </a>
+                                  ) : null}
+                                  {stop.place?.id ? (
+                                    <Link
+                                      to={`/place/${stop.place.id}`}
+                                      className="inline-flex items-center justify-center rounded-full border border-[#AACBC4] bg-white px-4 py-2 text-xs font-semibold text-[#1B8A70] transition hover:bg-[#F1F7F6]"
+                                    >
+                                      View in app
+                                    </Link>
+                                  ) : null}
+                                </div>
+                              );
+                            })()}
                           </div>
                         </div>
                       </li>
@@ -309,60 +386,35 @@ export function ItineraryDetailPage() {
             )}
           </div>
 
-          {/* Sidebar: overview, tips, places */}
-          <aside className="order-1 space-y-4 lg:order-2 lg:col-span-4 lg:space-y-5 lg:self-start xl:sticky xl:top-24">
-            {!!detail.summary && (
-              <section className="rounded-3xl border border-[rgba(31,79,89,0.1)] bg-white p-5 shadow-sm sm:p-6">
-                <h2 className="font-['Poppins',sans-serif] text-lg font-bold text-neutral-900">Overview</h2>
-                <p className="mt-3 text-sm leading-relaxed text-neutral-600">{detail.summary}</p>
-                {!!detail.highlights?.length && (
-                  <ul className="mt-5 space-y-3 border-t border-neutral-100 pt-5">
-                    {detail.highlights.map((highlight) => (
-                      <li key={highlight} className="flex gap-3 text-sm leading-snug text-neutral-800">
-                        <span className="mt-0.5 shrink-0">
-                          <IconCheck />
-                        </span>
-                        <span>{highlight}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
+          <aside className="order-1 lg:order-2 lg:col-span-4 lg:self-start xl:sticky xl:top-24">
+            {mapPlaces.length ? (
+              <div className="relative min-h-[480px] overflow-hidden rounded-3xl bg-white shadow-sm">
+                <PlacesLeafletMap
+                  places={mapPlaces}
+                  userLocation={null}
+                  onMarkerClick={(place) => {
+                    if (place?.id && !String(place.id).startsWith('stop-')) {
+                      navigate(`/place/${place.id}`);
+                    }
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="flex min-h-[240px] items-center justify-center rounded-3xl bg-white px-6 py-10 text-center shadow-sm">
+                <p className="text-sm text-neutral-500">Map loads when locations are available</p>
+              </div>
             )}
-
-            {!!detail.tips?.length && (
-              <section className="rounded-3xl border border-[rgba(31,79,89,0.1)] bg-white p-5 shadow-sm sm:p-6">
-                <h2 className="font-['Poppins',sans-serif] text-lg font-bold text-neutral-900">Tips</h2>
-                <ul className="mt-4 space-y-2.5">
-                  {detail.tips.map((tip) => (
-                    <li key={tip} className="flex gap-2.5 text-sm leading-relaxed text-neutral-700">
-                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: HEADER_GREEN }} aria-hidden />
-                      <span>{tip}</span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
-
-            {!!linkedPlaces.length && (
-              <section className="rounded-3xl border border-[rgba(31,79,89,0.1)] bg-white p-5 shadow-sm sm:p-6">
-                <h2 className="font-['Poppins',sans-serif] text-lg font-bold text-neutral-900">Places on this route</h2>
-                <p className="mt-1 text-xs text-neutral-500">Quick list of named stops with addresses.</p>
-                <ul className="mt-4 divide-y divide-neutral-100">
-                  {linkedPlaces.map((place) => (
-                    <li key={place.id} className="flex items-start gap-3 py-3 first:pt-0">
-                      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#7ea00e]/70" aria-hidden />
-                      <div className="min-w-0 flex-1">
-                        <Link to={`/place/${place.id}`} className="text-sm font-semibold text-neutral-900 hover:text-[#1f4f59]">
-                          {place.name}
-                        </Link>
-                        {!!place.address && <p className="mt-0.5 text-xs text-neutral-500">{place.address}</p>}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
+            {startItineraryUrl ? (
+              <a
+                href={startItineraryUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 inline-flex w-full items-center justify-center rounded-full px-4 py-3 text-sm font-bold text-white shadow-[0_6px_20px_rgba(27,138,112,0.25)] transition hover:opacity-95 hover:shadow-[0_8px_24px_rgba(27,138,112,0.32)]"
+                style={{ backgroundColor: TEAL }}
+              >
+                Start itinerary
+              </a>
+            ) : null}
           </aside>
         </div>
       </main>

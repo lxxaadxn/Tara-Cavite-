@@ -4,7 +4,7 @@ import { Colors } from '../constants/Colors';
 /** Space to reserve below scroll content when the floating tab bar is visible. */
 export function getFloatingTabBarScrollPadding(bottomInset: number): number {
   const bottomPad = Math.max(bottomInset, 10);
-  const barHeight = 64 + Math.min(bottomInset, 8);
+  const barHeight = 72 + Math.min(bottomInset, 8);
   return bottomPad + barHeight + 16;
 }
 

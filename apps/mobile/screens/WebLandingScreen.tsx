@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Theme } from '../constants/theme';
+import { LogoWordmark } from '../components/LogoWordmark';
 
 const WebLandingScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -10,11 +11,7 @@ const WebLandingScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Image
-          source={require('../assets/images/cavitour-logo.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
+        <LogoWordmark markSize={32} wordFontSize={24} />
         <View style={styles.headerButtons}>
           <TouchableOpacity onPress={() => navigation.navigate('SignIn')} style={styles.logInButton}>
             <Text style={styles.logInText}>Log In</Text>
@@ -51,7 +48,7 @@ const WebLandingScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -59,10 +56,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Theme.spacing.lg,
     paddingVertical: Theme.spacing.md,
-  },
-  logo: {
-    height: 36,
-    width: 140,
+    gap: 12,
   },
   headerButtons: {
     flexDirection: 'row',

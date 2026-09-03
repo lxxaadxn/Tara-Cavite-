@@ -1,6 +1,6 @@
 /**
- * Curated itineraries — featured stops reference rows in `public.places` by UUID.
- * Keep in sync with apps/web/src/data/mockItineraries.js
+ * Published itinerary types. Live catalog is Supabase `itineraries` (see cavitour-shared/itineraries).
+ * The array below is an unused offline fallback, kept in sync with apps/web/src/data/mockItineraries.js.
  */
 export type ItineraryStopEstablishmentRef = {
   placeId: string;
@@ -10,6 +10,14 @@ export interface ItineraryStopContent {
   name: string;
   description: string;
   leg?: string;
+  timeWindow?: string;
+  durationHint?: string;
+  costType?: string;
+  expectTag?: string;
+  venueName?: string;
+  venueLat?: number;
+  venueLng?: number;
+  highlights?: string[];
   establishment?: ItineraryStopEstablishmentRef;
 }
 
@@ -21,6 +29,8 @@ export interface PublishedItinerary {
   image: string;
   stops?: number;
   durationLabel?: string;
+  priceTier?: 1 | 2 | 3;
+  priceTierLabel?: string;
   tags?: string[];
   summary?: string;
   highlights?: string[];
@@ -37,37 +47,82 @@ export const publishedItineraries: PublishedItinerary[] = [
     route: 'Silang - Tagaytay',
     image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&q=80',
     durationLabel: '1 day',
+    priceTier: 2,
+    priceTierLabel: 'Moderate',
     tags: ['Views', 'Food'],
     summary:
       'Upland farms, outlet shopping, and ridge viewpoints — a full Silang-to-Tagaytay day using verified Cavite establishments.',
     highlights: [
       'Starts in Silang cafés and farms, ends at Tagaytay lookouts',
-      'Stops ordered for minimal backtracking',
+      'Stops ordered for a one-way ridge day',
       'Every featured spot opens in Search',
     ],
     stopList: [
       {
         name: 'Farm & café morning',
         description: 'Begin with gardens and local roasts before heading upland.',
+        timeWindow: '08:00 AM – 10:00 AM',
+        durationHint: '~2 hrs',
+        costType: 'Pay per Order',
+        expectTag: 'Sip & Snack',
+        highlights: [
+          'Order a signature brew and sit facing the greenhouse',
+          'Walk the herb garden before the ridge climb',
+        ],
+        venueName: 'Gourmet Farms, Inc.',
+        venueLat: 14.223624,
+        venueLng: 120.9741497,
         establishment: { placeId: '93e95b24-12e1-4bb6-a69e-100fbd9137e1' },
       },
       {
         name: 'Designer outlet break',
         description: 'Walkable retail village — good for snacks and souvenirs.',
+        timeWindow: '10:30 AM – 12:30 PM',
+        durationHint: '~2 hrs',
+        costType: 'Pay per Order',
+        expectTag: 'Souvenir Shopping',
+        highlights: [
+          'Browse walkable retail lanes for souvenirs',
+          'Grab a light snack before the lookout stretch',
+        ],
+        venueName: 'Acienda Designer Outlet',
+        venueLat: 14.1836088,
+        venueLng: 120.9611198,
         establishment: { placeId: '9e65d893-01c9-4200-9dc0-505392aca8bc' },
       },
       {
         name: 'Ridge picnic stop',
         description: 'Classic Tagaytay green space with Taal-facing views.',
+        timeWindow: '01:00 PM – 03:00 PM',
+        durationHint: '~2 hrs',
+        costType: 'Free Entry',
+        expectTag: 'Sip & Snack',
+        highlights: [
+          'Pick a Taal-facing lawn for a picnic pause',
+          'Stay for clearer afternoon views on weekdays',
+        ],
+        venueName: 'Tagaytay Picnic Grove',
+        venueLat: 14.0992606,
+        venueLng: 120.9391818,
         establishment: { placeId: 'a22975da-b031-4baa-9353-d9dbabe980a2' },
       },
       {
         name: 'Skyline finale',
         description: 'End at the high lookout while light is still clear.',
+        timeWindow: '03:30 PM – 05:00 PM',
+        durationHint: '~1.5 hrs',
+        costType: 'Entrance Fee Required',
+        highlights: [
+          'Arrive before late haze for the skyline view',
+          'Bring a light jacket for the breeze after 4 PM',
+        ],
+        venueName: "People's Park in the Sky",
+        venueLat: 14.1458,
+        venueLng: 121.0264,
         establishment: { placeId: '693db4c7-29af-4571-8fe7-4f40a2bf2f4d' },
       },
     ],
-    tips: ['Light jacket after 4 PM', 'Cash for trikes', 'Long weekends have heavier traffic'],
+    tips: ['Light jacket after 4 PM', 'Cash preferred for local vendors', 'Peak traffic on weekends'],
     bestTime: 'Weekday mornings · clearer Dec–May',
   },
   {
@@ -77,6 +132,8 @@ export const publishedItineraries: PublishedItinerary[] = [
     route: 'Imus - Bacoor - Noveleta',
     image: 'https://images.unsplash.com/photo-1523906834658-6e24ef2386f9?w=800&h=600&fit=crop&q=80',
     durationLabel: 'Full day',
+    priceTier: 1,
+    priceTierLabel: 'Budget-friendly',
     tags: ['Culture', 'History'],
     summary:
       'Flag heritage in Imus, ancestral houses toward the bay, and Noveleta’s tribunal — all linked to catalogued sites.',
@@ -89,21 +146,61 @@ export const publishedItineraries: PublishedItinerary[] = [
       {
         name: 'National flag shrine',
         description: 'Start at the historic declaration site in Imus.',
+        timeWindow: '08:00 AM – 09:30 AM',
+        durationHint: '~1.5 hrs',
+        costType: 'Free Entry',
+        highlights: [
+          'Read the declaration markers before crowds build',
+          'Photograph the grounds while light is still soft',
+        ],
+        venueName: 'Imus Historical Landmark',
+        venueLat: 14.4297798,
+        venueLng: 120.9360565,
         establishment: { placeId: '6b95f300-1cd6-4097-ba75-371a75041aca' },
       },
       {
         name: 'Imus cathedral',
         description: 'Short hop to the plaza and cathedral district.',
+        timeWindow: '09:45 AM – 11:00 AM',
+        durationHint: '~1.25 hrs',
+        costType: 'Free Entry',
+        highlights: [
+          'Walk the plaza and cathedral facade',
+          'Step inside if mass or visiting hours allow',
+        ],
+        venueName: 'Imus Cathedral',
+        venueLat: 14.4297798,
+        venueLng: 120.9360565,
         establishment: { placeId: '9194ec49-4a06-418b-b6b9-582c96737e25' },
       },
       {
         name: 'Ancestral corridor',
         description: 'Heritage house stop before reaching the coast.',
+        timeWindow: '11:30 AM – 01:30 PM',
+        durationHint: '~2 hrs',
+        costType: 'Entrance Fee Required',
+        highlights: [
+          'Tour the ancestral house interiors if open',
+          'Note architectural details along the corridor',
+        ],
+        venueName: 'Cuenca Ancestral House',
+        venueLat: 14.4596033,
+        venueLng: 120.9598169,
         establishment: { placeId: '490c7feb-ecd4-4391-94ae-58486b908d10' },
       },
       {
         name: 'Noveleta tribunal',
         description: 'Wrap with a preserved civic landmark by the shore.',
+        timeWindow: '02:00 PM – 03:30 PM',
+        durationHint: '~1.5 hrs',
+        costType: 'Free Entry',
+        highlights: [
+          'See the preserved civic landmark up close',
+          'Finish with a short walk toward the shore',
+        ],
+        venueName: 'Tribunal House of Noveleta',
+        venueLat: 14.4278394,
+        venueLng: 120.8808454,
         establishment: { placeId: '3d882e76-90b2-42ad-923c-e5056446cdbf' },
       },
     ],
@@ -117,6 +214,8 @@ export const publishedItineraries: PublishedItinerary[] = [
     route: 'Tanza - Bacoor',
     image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&q=80',
     durationLabel: '1 day',
+    priceTier: 2,
+    priceTierLabel: 'Moderate',
     tags: ['Beach', 'Seafood'],
     summary:
       'Plaza heritage, hacienda grounds, fish port, and mangroves — a relaxed coastal day from Tanza toward Manila Bay.',
@@ -125,21 +224,62 @@ export const publishedItineraries: PublishedItinerary[] = [
       {
         name: 'Town plaza',
         description: 'Meet the route at Tanza’s central plaza.',
+        timeWindow: '09:00 AM – 10:30 AM',
+        durationHint: '~1.5 hrs',
+        costType: 'Free Entry',
+        highlights: [
+          'Start at the central plaza for orientation photos',
+          'Note heritage markers before the hacienda hop',
+        ],
+        venueName: 'Plaza de San Agustin',
+        venueLat: 14.400675,
+        venueLng: 120.8572845,
         establishment: { placeId: '5b044510-baec-4acb-80f9-0945e7fc7865' },
       },
       {
         name: 'Hacienda grounds',
         description: 'Stroll heritage grounds before heading to the coast.',
+        timeWindow: '10:45 AM – 12:15 PM',
+        durationHint: '~1.5 hrs',
+        costType: 'Entrance Fee Required',
+        highlights: [
+          'Stroll the heritage grounds at an easy pace',
+          'Look for shade before the port heat',
+        ],
+        venueName: 'Casa Hacienda de Tanza',
+        venueLat: 14.400675,
+        venueLng: 120.8572845,
         establishment: { placeId: '5fbb3395-a820-478b-a72b-d3ca6cd0adb5' },
       },
       {
         name: 'Fish port',
         description: 'Fresh catch and harbor views at Julugan.',
+        timeWindow: '12:30 PM – 02:30 PM',
+        durationHint: '~2 hrs',
+        costType: 'Pay per Order',
+        expectTag: 'Full Meal',
+        highlights: [
+          'Try a seafood plate while watching harbor traffic',
+          'Ask vendors what came in that morning',
+        ],
+        venueName: 'Julugan Fish Port',
+        venueLat: 14.400675,
+        venueLng: 120.8572845,
         establishment: { placeId: '606dfa63-4830-4fd7-9a8f-36c98a8b92d6' },
       },
       {
         name: 'Mangrove walk',
         description: 'Close with coastal greenery along the bay.',
+        timeWindow: '03:00 PM – 05:00 PM',
+        durationHint: '~2 hrs',
+        costType: 'Free Entry',
+        highlights: [
+          'Walk the boardwalk toward late-day light',
+          'Watch the bay as the breeze picks up',
+        ],
+        venueName: 'Bacoor Mangrove Eco-Park',
+        venueLat: 14.4596033,
+        venueLng: 120.9598169,
         establishment: { placeId: 'b672165c-2baf-4992-bf29-a19bd8c3cd76' },
       },
     ],
@@ -153,6 +293,8 @@ export const publishedItineraries: PublishedItinerary[] = [
     route: 'Silang - Amadeo - General Trias - Dasmariñas',
     image: 'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=600&q=80',
     durationLabel: 'Half day',
+    priceTier: 2,
+    priceTierLabel: 'Moderate',
     tags: ['Gardens', 'Cafe'],
     summary:
       'Coffee country and cafés from Silang through Amadeo and General Trias, ending at a Dasmariñas museum stop.',
@@ -161,21 +303,63 @@ export const publishedItineraries: PublishedItinerary[] = [
       {
         name: 'Silang farms',
         description: 'Morning stop at upland gardens and farm retail.',
+        timeWindow: '07:30 AM – 09:00 AM',
+        durationHint: '~1.5 hrs',
+        costType: 'Pay per Order',
+        expectTag: 'Sip & Snack',
+        highlights: [
+          'Walk the farm retail lanes while it is still cool',
+          'Pick a garden path before the café stretch',
+        ],
+        venueName: 'Gourmet Farms, Inc.',
+        venueLat: 14.223624,
+        venueLng: 120.9741497,
         establishment: { placeId: '93e95b24-12e1-4bb6-a69e-100fbd9137e1' },
       },
       {
         name: 'Coffee heritage',
         description: 'Amadeo mural and coffee culture pause.',
+        timeWindow: '09:15 AM – 10:15 AM',
+        durationHint: '~1 hr',
+        costType: 'Free Entry',
+        highlights: [
+          'Stop at the coffee mural for a culture pause',
+          'Ask locals where the day’s roast is pouring',
+        ],
+        venueName: 'Amadeo Coffee Mural',
+        venueLat: 14.1704,
+        venueLng: 120.9236,
         establishment: { placeId: '9316cff4-5bdd-4a20-a45c-2d96b67476ef' },
       },
       {
         name: 'Café break',
         description: 'Sit-down café before the final city leg.',
+        timeWindow: '10:30 AM – 11:30 AM',
+        durationHint: '~1 hr',
+        costType: 'Pay per Order',
+        expectTag: 'Sip & Snack',
+        highlights: [
+          'Sit down for a café plate before the city leg',
+          'Use this as the last long pause of the half day',
+        ],
+        venueName: 'Felize Cafe',
+        venueLat: 14.363722,
+        venueLng: 120.9058041,
         establishment: { placeId: '7fbde5ad-390a-41cf-becd-17d5fbfce07b' },
       },
       {
         name: 'Museum close',
         description: 'End with indoor exhibits in Dasmariñas.',
+        timeWindow: '11:45 AM – 12:45 PM',
+        durationHint: '~1 hr',
+        costType: 'Entrance Fee Required',
+        highlights: [
+          'Finish with indoor exhibits out of midday sun',
+          'Confirm visiting hours before you roll in',
+        ],
+        venueName: 'Museo De La Salle',
+        venueLat: 14.3209977,
+        venueLng: 120.9610387,
         establishment: { placeId: 'e9cc0be2-b7c3-4c68-81a3-79455a689a92' },
       },
     ],

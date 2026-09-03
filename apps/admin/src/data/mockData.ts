@@ -226,36 +226,6 @@ export const processedLogs: ProcessedLog[] = [
   { id: 'l12', reference: 'WAPP-2026-0081', business: 'Tanza Seaside Eats', lgu: 'Tanza', reviewedBy: 'Maria Santos', processedDate: '4 days ago', status: 'approved' },
 ];
 
-export type PanelNotification = { id: string; text: string; time: string; kind: 'add' | 'signup' | 'remove' | 'edit' };
-
-export const panelNotifications: PanelNotification[] = [
-  { id: 'n1', text: 'Remove an Establishment', time: 'Just now', kind: 'remove' },
-  { id: 'n2', text: 'New Business Signup', time: '59 minutes ago', kind: 'signup' },
-  { id: 'n3', text: 'Remove reports', time: '12 hours ago', kind: 'remove' },
-  { id: 'n4', text: 'Andi Lane edited Featured Destinations', time: 'Today, 11:59 AM', kind: 'edit' },
-];
-
-export type PanelActivity = { id: string; text: string; time: string; initials: string };
-
-export const panelActivities: PanelActivity[] = [
-  { id: 'a1', text: 'Changed the UI.', time: 'Just now', initials: 'CU' },
-  { id: 'a2', text: 'Released a new version.', time: '59 minutes ago', initials: 'RV' },
-  { id: 'a3', text: 'Submitted Requirements.', time: '12 hours ago', initials: 'SR' },
-  { id: 'a4', text: 'Modified A data in Attractions.', time: 'Today, 11:59 AM', initials: 'MT' },
-  { id: 'a5', text: 'Deleted a entry in Itineraries.', time: 'Feb 2, 2026', initials: 'DI' },
-];
-
-export type PanelContact = { id: string; name: string; initials: string };
-
-export const panelContacts: PanelContact[] = [
-  { id: 'c1', name: 'Natali Craig', initials: 'NC' },
-  { id: 'c2', name: 'Drew Cano', initials: 'DC' },
-  { id: 'c3', name: 'Andi Lane', initials: 'AL' },
-  { id: 'c4', name: 'Koray Okumus', initials: 'KO' },
-  { id: 'c5', name: 'Kate Morrison', initials: 'KM' },
-  { id: 'c6', name: 'Melody Macy', initials: 'MM' },
-];
-
 export type ItineraryRow = {
   id: string;
   title: string;
@@ -460,25 +430,6 @@ export const contentHighlights: ContentHighlight[] = [
     destination: 'Bacoor Bayside',
     status: 'draft',
   },
-];
-
-/** Content → Filters (system filter chips). */
-export type ContentFilter = {
-  id: string;
-  label: string;
-  key: string;
-  kind: 'ntdp' | 'city' | 'type';
-  enabled: boolean;
-  sortOrder: number;
-};
-
-export const contentFilters: ContentFilter[] = [
-  { id: 'f1', label: 'Resorts', key: 'resort', kind: 'ntdp', enabled: true, sortOrder: 1 },
-  { id: 'f2', label: 'Cafés', key: 'cafe', kind: 'ntdp', enabled: true, sortOrder: 2 },
-  { id: 'f3', label: 'Museums', key: 'museum', kind: 'ntdp', enabled: true, sortOrder: 3 },
-  { id: 'f4', label: 'Tagaytay', key: 'tagaytay', kind: 'city', enabled: true, sortOrder: 4 },
-  { id: 'f5', label: 'Silang', key: 'silang', kind: 'city', enabled: true, sortOrder: 5 },
-  { id: 'f6', label: 'Nature farm', key: 'nature_farm', kind: 'type', enabled: false, sortOrder: 6 },
 ];
 
 /** Content → Establishment demo rows. */

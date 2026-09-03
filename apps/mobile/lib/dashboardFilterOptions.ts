@@ -16,7 +16,6 @@ export const WEB_CITY_OPTIONS = [
   { key: 'city-carmona', label: 'Carmona City' },
   { key: 'city-cavite', label: 'Cavite City' },
   { key: 'city-dasma', label: 'Dasmariñas City' },
-  { key: 'city-gma', label: 'General Mariano Alvarez' },
   { key: 'city-trias', label: 'General Trias City' },
   { key: 'city-imus', label: 'Imus City' },
   { key: 'city-tagaytay', label: 'Tagaytay City' },

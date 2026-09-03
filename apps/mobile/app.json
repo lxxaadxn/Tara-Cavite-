@@ -32,12 +32,12 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/cavitour-logo.png",
-          "imageWidth": 220,
+          "image": "./assets/images/android-icon-foreground.png",
+          "imageWidth": 180,
           "resizeMode": "contain",
-          "backgroundColor": "#FFFFFF",
+          "backgroundColor": "#F1F7F6",
           "dark": {
-            "backgroundColor": "#FFFFFF"
+            "backgroundColor": "#F1F7F6"
           }
         }
       ],

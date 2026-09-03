@@ -11,8 +11,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { JamIcon } from '../components/JamIcon';
 
-const GREEN = '#7EA00E';
-const TEAL = '#1F4F59';
+const GREEN = '#10A37F';
+const TEAL = '#1B8A70';
 const WHITE = '#FFFFFF';
 const SECTION_LABEL = '#7A7878';
 const TITLE = '#000000';

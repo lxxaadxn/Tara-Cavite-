@@ -112,7 +112,7 @@ Writes:
 5. `supabase/migrations/20260808121000_v_sta_v3_cavite_2025_catalog_maps.sql`
 6. `supabase/migrations/20260808130000_sta_v3_cavite_2025_admin_write.sql` (authenticated INSERT/UPDATE/DELETE for admin Tourist Attractions CRUD)
 7. `supabase/migrations/20260808140000_v_sta_v3_cavite_2025_catalog_lookup_by_label.sql` (catalog joins lookups by STA label)
-8. `supabase/migrations/20260809120000_collapse_tourist_attractions_into_sta.sql` — hours/contact/about/media on STA; remount reviews/saved-list FKs to STA `id`; catalog view STA-only; **drops `tourist_attractions`**
+8. `supabase/migrations/20260809120000_collapse_tourist_attractions_into_sta.sql` — hours/contact/about/media on STA; remount reviews/saved-list FKs to STA `id`; catalog view STA-only; **drops `tourist_attractions`**. Adds `sheet_name` if the live table lacks it (safe to re-run after a partial apply). Or paste [`supabase/FINISH_STA_COLLAPSE.sql`](../supabase/FINISH_STA_COLLAPSE.sql) once in the SQL Editor.
 9. Optional: `supabase/cleanup_excel_lookup_dupes.sql` if Excel-only city/TA labels were inserted earlier
 
 ```sql
@@ -120,8 +120,13 @@ SELECT count(*) FILTER (WHERE is_listed) AS listed,
        count(*) FILTER (WHERE NOT is_listed) AS hidden,
        count(*) AS total
 FROM public.sta_v3_cavite_2025;
+
+-- Public apps need listed rows with coordinates:
+SELECT count(*) FILTER (WHERE is_published AND latitude IS NOT NULL) AS listed_with_coords
+FROM public.v_sta_v3_cavite_2025_catalog;
 ```
 
+If admin shows `column sta_v3_cavite_2025.sheet_name does not exist`, run `FINISH_STA_COLLAPSE.sql` (or the collapse migration) — it creates `sheet_name` and rebuilds the catalog view.
 Admin **Tourism → Tourist Attractions** edits **`sta_v3_cavite_2025`** only (hours, contact, about, photos, listing fields). Public id is STA `id` (`establishment_public_id` in the catalog view). Older `Copy of STA-…` workbook is historical only.
 
 ## F) Apps (catalog = STA view + images)

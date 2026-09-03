@@ -14,19 +14,23 @@ type IconName =
 export function FilterCategoryIcon({
   name,
   selected = false,
+  size = 36,
+  color,
 }: {
-  name: IconName;
+  name: IconName | string;
   selected?: boolean;
+  size?: number;
+  color?: string;
 }) {
-  const stroke = selected ? '#7EA00E' : '#9ca3af';
+  const stroke = color || (selected ? '#10A37F' : '#9ca3af');
   const props = {
-    width: 36,
-    height: 36,
+    width: size,
+    height: size,
     viewBox: '0 0 24 24',
     fill: 'none' as const,
   };
 
-  switch (name) {
+  switch (name as IconName) {
     case 'nature':
       return (
         <Svg {...props}>
@@ -88,6 +92,16 @@ export function FilterCategoryIcon({
         </Svg>
       );
     default:
-      return null;
+      return (
+        <Svg {...props}>
+          <Path
+            d="M12 3c-2 4-5.5 5-5.5 9.5a5.5 5.5 0 1011 0C18.5 8 14 7 12 3z"
+            stroke={stroke}
+            strokeWidth={1.15}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </Svg>
+      );
   }
 }

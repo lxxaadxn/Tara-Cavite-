@@ -51,6 +51,15 @@
   flex-shrink: 0;
 }
 
+.avatarImg {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: rgba(107, 142, 35, 0.16);
+}
+
 .profileMeta {
   display: flex;
   flex-direction: column;

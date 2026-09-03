@@ -27,8 +27,8 @@ interface RouteParams {
   };
 }
 
-const GREEN = '#7EA00E';
-const TEAL = '#1F4F59';
+const GREEN = '#10A37F';
+const TEAL = '#1B8A70';
 const WHITE = '#FFFFFF';
 const TITLE = '#241D13';
 const MUTED = '#7A7878';

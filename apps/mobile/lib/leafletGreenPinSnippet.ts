@@ -1,5 +1,5 @@
-export const CAVITOUR_PIN_GREEN = '#7EA00E';
-export const CAVITOUR_USER_DOT_GREEN = '#7EA00E';
+export const CAVITOUR_PIN_GREEN = '#1B8A70';
+export const CAVITOUR_USER_DOT_GREEN = '#1B8A70';
 
 export const LEAFLET_GREEN_PIN_SNIPPET = `
       var CAVITOUR_PIN_GREEN = '${CAVITOUR_PIN_GREEN}';

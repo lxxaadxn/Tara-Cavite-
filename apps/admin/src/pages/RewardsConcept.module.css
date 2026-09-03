@@ -6,7 +6,7 @@
 }
 
 .hero {
-  background: linear-gradient(135deg, rgba(107, 142, 35, 0.14), rgba(31, 79, 89, 0.1));
+  background: linear-gradient(135deg, rgba(107, 142, 35, 0.14), rgba(27, 138, 112, 0.1));
   border-radius: var(--radius);
   padding: 28px;
   border: 1px solid rgba(107, 142, 35, 0.18);

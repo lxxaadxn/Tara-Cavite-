@@ -15,6 +15,11 @@ export function useToast() {
   return ctx;
 }
 
+export function useToastSoft() {
+  const ctx = useContext(ToastContext);
+  return ctx ?? ((() => {}) as (msg: string, type?: 'success' | 'error' | 'info') => void);
+}
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 

@@ -17,10 +17,14 @@ export default defineConfig({
     },
   },
   server: {
-    host: true,
+    host: 'localhost',
     port: 5173,
     // Keep 5173 so mobile Google OAuth bridge URLs (and Supabase Redirect URLs) stay valid.
     strictPort: true,
+    watch: {
+      // OneDrive locks newly written binaries; watching them throws EBUSY and kills Vite.
+      ignored: ['**/public/landing/**'],
+    },
     fs: {
       allow: [path.resolve(__dirname, '..'), path.resolve(__dirname, '../..')],
     },

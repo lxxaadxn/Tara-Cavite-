@@ -1,0 +1,30 @@
+.wordmark {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 30px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.onGreen .tara {
+  color: #fff;
+}
+
+.onGreen .cavite {
+  color: #aacbc4;
+}
+
+.onLight .tara {
+  color: #10a37f;
+}
+
+.onLight .cavite {
+  color: #1b8a70;
+}
+
+@media (max-width: 900px) {
+  .wordmark {
+    font-size: 24px;
+  }
+}

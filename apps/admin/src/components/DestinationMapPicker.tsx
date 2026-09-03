@@ -54,9 +54,12 @@ export function DestinationMapPicker({ lat, lng, onPick }: Props) {
 
     mapRef.current = map;
     markerRef.current = marker;
+    requestAnimationFrame(() => map.invalidateSize());
+    const sizeTimer = window.setTimeout(() => map.invalidateSize(), 120);
 
     // Mount once per instance; parent remounts via `key` when the dialog opens with new context.
     return () => {
+      window.clearTimeout(sizeTimer);
       map.remove();
       mapRef.current = null;
       markerRef.current = null;
@@ -77,7 +80,7 @@ export function DestinationMapPicker({ lat, lng, onPick }: Props) {
 
   return (
     <div className={styles.wrap}>
-      <p className={styles.hint}>Click the map or drag the pin to set coordinates.</p>
+      <p className={styles.hint}>OpenStreetMap preview. Click the map or drag the pin to set coordinates.</p>
       <div ref={elRef} className={styles.map} />
     </div>
   );

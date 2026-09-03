@@ -5,9 +5,12 @@ import {
   urlHasOAuthParams,
   waitForSupabaseSession,
 } from '../lib/oauthCallback';
+import { supabase } from '../lib/supabase';
 import { isAdminReservedEmail } from '../lib/adminReservedEmail';
-import { ADMIN_APP_HOME_PATH } from '../lib/adminPortalPath';
 import { markLocationPromptPending } from '../lib/promptLocationOnLogin';
+import { TRAVELER_ACCOUNT_DISABLED_MESSAGE } from 'cavitour-shared/accountStatus';
+import { rejectDisabledTraveler } from '../lib/rejectDisabledTraveler';
+import { resolveAccountHome } from '../lib/accountHome';
 
 function safeNextPath(raw) {
   const next = String(raw ?? '').trim();
@@ -46,7 +49,9 @@ export function OAuthCallbackPage() {
         setStatusMessage(authError);
         window.setTimeout(() => {
           if (active) {
-            navigate('/login', { replace: true, state: { googleError: authError } });
+            const next = safeNextPath(searchParams.get('next'));
+            const loginPath = '/login';
+            navigate(loginPath, { replace: true, state: { googleError: authError } });
           }
         }, 2200);
         return;
@@ -66,11 +71,8 @@ export function OAuthCallbackPage() {
       if (!active) return;
 
       const email = session?.user?.email?.trim().toLowerCase() ?? '';
-      const destination = !session
-        ? '/login'
-        : email && isAdminReservedEmail(email)
-          ? ADMIN_APP_HOME_PATH
-          : nextPath ?? '/search';
+      const wantsAdmin = Boolean(nextPath?.startsWith('/admin'));
+      const isAdmin = Boolean(email && isAdminReservedEmail(email));
 
       if (!session) {
         setStatusMessage('Sign in did not complete. Try again.');
@@ -80,8 +82,42 @@ export function OAuthCallbackPage() {
         return;
       }
 
-      markLocationPromptPending(session.user?.id);
-      navigate(destination, { replace: true });
+      if (wantsAdmin && !isAdmin) {
+        await supabase.auth.signOut();
+        const msg = 'Only the admin Google account can access the admin app.';
+        setStatusMessage(msg);
+        window.setTimeout(() => {
+          if (active) navigate('/login', { replace: true, state: { googleError: msg } });
+        }, 2200);
+        return;
+      }
+
+      if (!isAdmin) {
+        const allowed = await rejectDisabledTraveler(session);
+        if (!allowed) {
+          setStatusMessage(TRAVELER_ACCOUNT_DISABLED_MESSAGE);
+          window.setTimeout(() => {
+            if (active) {
+              navigate('/login', { replace: true, state: { accountDisabled: true } });
+            }
+          }, 2200);
+          return;
+        }
+      }
+
+      const home = await resolveAccountHome(supabase, session, nextPath);
+      if (home.blocked) {
+        await supabase.auth.signOut();
+        setStatusMessage(home.message || TRAVELER_ACCOUNT_DISABLED_MESSAGE);
+        window.setTimeout(() => {
+          if (active) navigate('/login', { replace: true, state: { accountDisabled: true } });
+        }, 2200);
+        return;
+      }
+      if (!String(home.path).startsWith('/establishment') && !isAdmin) {
+        markLocationPromptPending(session.user?.id);
+      }
+      navigate(home.path, { replace: true });
     };
 
     void finish();
@@ -92,7 +128,7 @@ export function OAuthCallbackPage() {
   }, [navigate, searchParams]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--ct-cream)] px-4 font-['Inter',sans-serif]">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--ct-cream)] px-4 font-['Poppins',sans-serif]">
       <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-[0_24px_60px_rgba(0,0,0,0.18)]">
         <div className="mx-auto mb-3 h-9 w-9 animate-spin rounded-full border-2 border-neutral-300 border-t-[var(--ct-teal)]" />
         <p className="text-base font-semibold text-neutral-900">Authenticating with Google</p>

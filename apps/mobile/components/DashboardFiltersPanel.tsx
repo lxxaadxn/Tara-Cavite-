@@ -6,7 +6,7 @@ export { FILTER_OPTION_LABEL_BY_KEY } from '../lib/dashboardFilterOptions';
 const CHEVRON = '#213502';
 const BORDER = 'rgba(122, 120, 120, 0.5)';
 const TRACK_OFF_BORDER = '#636366';
-const ACCENT = '#7EA00E';
+const ACCENT = '#10A37F';
 
 type FilterOption = { key: string; label: string };
 
@@ -391,7 +391,7 @@ const styles = StyleSheet.create({
   },
   switchTrackOn: {
     borderColor: ACCENT,
-    backgroundColor: 'rgba(126, 160, 14, 0.15)',
+    backgroundColor: 'rgba(16, 163, 127, 0.15)',
   },
   switchThumb: {
     width: THUMB,

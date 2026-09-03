@@ -25,7 +25,7 @@ const MONTHS = [
   'December',
 ];
 
-const TEAL = '#1F4F59';
+const TEAL = '#1B8A70';
 const ROW_TEXT = '#241D13';
 const BORDER = 'rgba(122, 120, 120, 0.45)';
 
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
     marginVertical: 2,
   },
   cellActive: {
-    backgroundColor: 'rgba(126, 160, 14, 0.2)',
+    backgroundColor: 'rgba(16, 163, 127, 0.2)',
   },
   cellText: {
     fontFamily: 'Poppins_500Medium',

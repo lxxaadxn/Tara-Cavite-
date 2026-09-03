@@ -1,4 +1,64 @@
 -- Collapse tourist_attractions enrichment into sta_v3_cavite_2025, remount FKs, drop TA.
+-- Safe to re-run after a partial apply (e.g. failed on missing sheet_name).
+
+-- ---------------------------------------------------------------------------
+-- 0) Ensure base STA columns exist (live DBs may lack sheet_name / maps fields)
+-- ---------------------------------------------------------------------------
+ALTER TABLE public.sta_v3_cavite_2025
+  ADD COLUMN IF NOT EXISTS sheet_name TEXT,
+  ADD COLUMN IF NOT EXISTS row_no INTEGER,
+  ADD COLUMN IF NOT EXISTS ta_name TEXT,
+  ADD COLUMN IF NOT EXISTS type_code TEXT,
+  ADD COLUMN IF NOT EXISTS ta_category TEXT,
+  ADD COLUMN IF NOT EXISTS ntdp_category TEXT,
+  ADD COLUMN IF NOT EXISTS year_est INTEGER,
+  ADD COLUMN IF NOT EXISTS region TEXT,
+  ADD COLUMN IF NOT EXISTS prov_huc TEXT,
+  ADD COLUMN IF NOT EXISTS city_mun TEXT,
+  ADD COLUMN IF NOT EXISTS barangay TEXT,
+  ADD COLUMN IF NOT EXISTS address TEXT,
+  ADD COLUMN IF NOT EXISTS google_maps_link TEXT,
+  ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS highlight TEXT,
+  ADD COLUMN IF NOT EXISTS is_listed BOOLEAN;
+
+UPDATE public.sta_v3_cavite_2025
+SET sheet_name = COALESCE(NULLIF(trim(sheet_name), ''), NULLIF(trim(city_mun), ''), 'Unknown')
+WHERE sheet_name IS NULL OR trim(sheet_name) = '';
+
+ALTER TABLE public.sta_v3_cavite_2025
+  ALTER COLUMN sheet_name SET DEFAULT 'Unknown';
+
+ALTER TABLE public.sta_v3_cavite_2025
+  ALTER COLUMN sheet_name SET NOT NULL;
+
+UPDATE public.sta_v3_cavite_2025
+SET highlight = 'none'
+WHERE highlight IS NULL;
+
+UPDATE public.sta_v3_cavite_2025
+SET is_listed = FALSE
+WHERE is_listed IS NULL;
+
+ALTER TABLE public.sta_v3_cavite_2025
+  ALTER COLUMN highlight SET DEFAULT 'none';
+
+ALTER TABLE public.sta_v3_cavite_2025
+  ALTER COLUMN is_listed SET DEFAULT FALSE;
+
+ALTER TABLE public.sta_v3_cavite_2025
+  ALTER COLUMN highlight SET NOT NULL;
+
+ALTER TABLE public.sta_v3_cavite_2025
+  ALTER COLUMN is_listed SET NOT NULL;
+
+ALTER TABLE public.sta_v3_cavite_2025
+  DROP CONSTRAINT IF EXISTS sta_v3_cavite_2025_highlight_check;
+
+ALTER TABLE public.sta_v3_cavite_2025
+  ADD CONSTRAINT sta_v3_cavite_2025_highlight_check
+  CHECK (highlight IN ('none', 'red', 'yellow'));
 
 -- ---------------------------------------------------------------------------
 -- 1) STA columns for hours, contact, about, media
@@ -14,32 +74,40 @@ ALTER TABLE public.sta_v3_cavite_2025
   ADD COLUMN IF NOT EXISTS website TEXT;
 
 -- ---------------------------------------------------------------------------
--- 2) Backfill from tourist_attractions by name (best effort)
+-- 2) Backfill from tourist_attractions by name (best effort; skip if TA already gone)
 -- ---------------------------------------------------------------------------
-UPDATE public.sta_v3_cavite_2025 s
-SET
-  opening_hours = COALESCE(s.opening_hours, ta.opening_hours),
-  closing_hours = COALESCE(s.closing_hours, ta.closing_hours),
-  description = COALESCE(NULLIF(trim(s.description), ''), NULLIF(trim(ta.description), '')),
-  picture = COALESCE(NULLIF(trim(s.picture), ''), NULLIF(trim(ta.picture), '')),
-  gallery_urls = CASE
-    WHEN COALESCE(cardinality(s.gallery_urls), 0) > 0 THEN s.gallery_urls
-    ELSE COALESCE(ta.gallery_urls, '{}'::TEXT[])
-  END,
-  phone = COALESCE(
-    NULLIF(trim(s.phone), ''),
-    NULLIF(trim(COALESCE(to_jsonb(ta)->>'phone', '')), '')
-  ),
-  email = COALESCE(
-    NULLIF(trim(s.email), ''),
-    NULLIF(trim(COALESCE(to_jsonb(ta)->>'email', '')), '')
-  ),
-  website = COALESCE(
-    NULLIF(trim(s.website), ''),
-    NULLIF(trim(COALESCE(to_jsonb(ta)->>'website', '')), '')
-  )
-FROM public.tourist_attractions ta
-WHERE lower(trim(ta.ta_name)) = lower(trim(s.ta_name));
+DO $$
+BEGIN
+  IF to_regclass('public.tourist_attractions') IS NULL THEN
+    RAISE NOTICE 'tourist_attractions already dropped — skipping backfill';
+    RETURN;
+  END IF;
+
+  UPDATE public.sta_v3_cavite_2025 s
+  SET
+    opening_hours = COALESCE(s.opening_hours, ta.opening_hours),
+    closing_hours = COALESCE(s.closing_hours, ta.closing_hours),
+    description = COALESCE(NULLIF(trim(s.description), ''), NULLIF(trim(ta.description), '')),
+    picture = COALESCE(NULLIF(trim(s.picture), ''), NULLIF(trim(ta.picture), '')),
+    gallery_urls = CASE
+      WHEN COALESCE(cardinality(s.gallery_urls), 0) > 0 THEN s.gallery_urls
+      ELSE COALESCE(ta.gallery_urls, '{}'::TEXT[])
+    END,
+    phone = COALESCE(
+      NULLIF(trim(s.phone), ''),
+      NULLIF(trim(COALESCE(to_jsonb(ta)->>'phone', '')), '')
+    ),
+    email = COALESCE(
+      NULLIF(trim(s.email), ''),
+      NULLIF(trim(COALESCE(to_jsonb(ta)->>'email', '')), '')
+    ),
+    website = COALESCE(
+      NULLIF(trim(s.website), ''),
+      NULLIF(trim(COALESCE(to_jsonb(ta)->>'website', '')), '')
+    )
+  FROM public.tourist_attractions ta
+  WHERE lower(trim(ta.ta_name)) = lower(trim(s.ta_name));
+END $$;
 
 -- ---------------------------------------------------------------------------
 -- 3) Remap place_reviews / saved_list_items → STA id
@@ -50,26 +118,32 @@ ALTER TABLE public.place_reviews
 ALTER TABLE public.saved_list_items
   DROP CONSTRAINT IF EXISTS saved_list_items_place_id_fkey;
 
--- Map TA public id → STA id via name
-CREATE TEMP TABLE _ta_to_sta AS
-SELECT
-  ta.establishment_public_id AS old_id,
-  s.id AS new_id
-FROM public.tourist_attractions ta
-JOIN public.sta_v3_cavite_2025 s
-  ON lower(trim(s.ta_name)) = lower(trim(ta.ta_name));
+DROP TABLE IF EXISTS _ta_to_sta;
 
-UPDATE public.place_reviews pr
-SET place_id = m.new_id
-FROM _ta_to_sta m
-WHERE pr.place_id = m.old_id;
+DO $$
+BEGIN
+  IF to_regclass('public.tourist_attractions') IS NOT NULL THEN
+    CREATE TEMP TABLE _ta_to_sta AS
+    SELECT
+      ta.establishment_public_id AS old_id,
+      s.id AS new_id
+    FROM public.tourist_attractions ta
+    JOIN public.sta_v3_cavite_2025 s
+      ON lower(trim(s.ta_name)) = lower(trim(ta.ta_name));
 
-UPDATE public.saved_list_items sli
-SET place_id = m.new_id
-FROM _ta_to_sta m
-WHERE sli.place_id = m.old_id;
+    UPDATE public.place_reviews pr
+    SET place_id = m.new_id
+    FROM _ta_to_sta m
+    WHERE pr.place_id = m.old_id;
 
--- Drop reviews/saves that still point at unmapped TA ids
+    UPDATE public.saved_list_items sli
+    SET place_id = m.new_id
+    FROM _ta_to_sta m
+    WHERE sli.place_id = m.old_id;
+  END IF;
+END $$;
+
+-- Drop reviews/saves that still point at unmapped ids
 DELETE FROM public.place_reviews pr
 WHERE NOT EXISTS (
   SELECT 1 FROM public.sta_v3_cavite_2025 s WHERE s.id = pr.place_id
@@ -81,9 +155,13 @@ WHERE NOT EXISTS (
 );
 
 ALTER TABLE public.place_reviews
+  DROP CONSTRAINT IF EXISTS place_reviews_place_id_fkey;
+ALTER TABLE public.place_reviews
   ADD CONSTRAINT place_reviews_place_id_fkey
   FOREIGN KEY (place_id) REFERENCES public.sta_v3_cavite_2025(id) ON DELETE CASCADE;
 
+ALTER TABLE public.saved_list_items
+  DROP CONSTRAINT IF EXISTS saved_list_items_place_id_fkey;
 ALTER TABLE public.saved_list_items
   ADD CONSTRAINT saved_list_items_place_id_fkey
   FOREIGN KEY (place_id) REFERENCES public.sta_v3_cavite_2025(id) ON DELETE CASCADE;

@@ -1,3 +1,4 @@
+import { ntdpCategoriesMatch } from 'cavitour-shared/ntdpFilterMeta';
 import type { Place } from '../data/mockData';
 import { FILTER_OPTION_LABEL_BY_KEY } from './dashboardFilterOptions';
 
@@ -6,6 +7,13 @@ export type AppliedPlaceFilters = {
   selectedCityKeys: string[];
   selectedMunicipalityKeys: string[];
 };
+
+export function placeMatchesSearchQuery(place: Place, query: string): boolean {
+  const q = fold(query);
+  if (!q) return true;
+  const blob = placeSearchBlob(place);
+  return q.split(' ').every((word) => Boolean(word) && blob.includes(word));
+}
 
 export function countActiveFilters(f: AppliedPlaceFilters | null): number {
   if (!f) return 0;
@@ -55,7 +63,7 @@ function placeMatchesLocationKeys(place: Place, keys: string[]): boolean {
   const addr = fold(place.address ?? '');
   const hay = `${cm} ${addr}`;
   return keys.some((key) => {
-    const label = FILTER_OPTION_LABEL_BY_KEY[key];
+    const label = EXTRA_LOCATION_LABELS[key] || FILTER_OPTION_LABEL_BY_KEY[key] || key;
     if (!label) return false;
     const core = fold(normalizeAreaLabel(label));
     if (!core) return false;
@@ -67,7 +75,7 @@ function placeMatchesLocationKeys(place: Place, keys: string[]): boolean {
 }
 
 /** NTDP / TA wording in Cavite STA data — match on blob or structured fields. */
-const CAT_KEYWORDS: Record<string, string[]> = {
+const DEFAULT_CAT_KEYWORDS: Record<string, string[]> = {
   'cat-nature': ['nature', 'eco', 'farm', 'agri', 'agritourism', 'wildlife', 'forest'],
   'cat-mice': ['mice', 'meeting', 'convention', 'conference', 'event venue', 'events', 'banquet'],
   'cat-restaurant': ['restaurant', 'dining', 'food service', 'eatery', 'bistro', 'cafe', 'café', 'food hub'],
@@ -78,10 +86,45 @@ const CAT_KEYWORDS: Record<string, string[]> = {
   'cat-shopping': ['shopping', 'mall', 'market', 'retail', 'boutique', 'bazaar', 'commercial'],
 };
 
+let CAT_KEYWORDS: Record<string, string[]> = { ...DEFAULT_CAT_KEYWORDS };
+let EXTRA_CATEGORY_LABELS: Record<string, string> = {};
+let EXTRA_LOCATION_LABELS: Record<string, string> = {};
+
+export function setRuntimeCategoryKeywords(map: Record<string, string[]>) {
+  CAT_KEYWORDS = { ...DEFAULT_CAT_KEYWORDS, ...(map || {}) };
+}
+
+export function setRuntimeCategoryLabels(map: Record<string, string>) {
+  EXTRA_CATEGORY_LABELS = { ...(map || {}) };
+}
+
+export function setRuntimeLocationLabels(map: Record<string, string>) {
+  EXTRA_LOCATION_LABELS = { ...(map || {}) };
+}
+
+export function getDefaultCategoryKeywords() {
+  return { ...DEFAULT_CAT_KEYWORDS };
+}
+
+function categorySelectionLabel(key: string): string {
+  if (!key) return '';
+  return EXTRA_CATEGORY_LABELS[key] || FILTER_OPTION_LABEL_BY_KEY[key] || key;
+}
+
 function placeMatchesCategoryKeys(place: Place, keys: string[]): boolean {
   const blob = placeSearchBlob(place);
   return keys.some((key) => {
-    const words = CAT_KEYWORDS[key];
+    const label = categorySelectionLabel(key);
+    if (ntdpCategoriesMatch(place.ntdp_category, label) || ntdpCategoriesMatch(place.ntdp_category, key)) {
+      return true;
+    }
+    if (!key.startsWith('cat-')) return false;
+    let words = CAT_KEYWORDS[key];
+    if (!words?.length) {
+      words = fold(label)
+        .split(/[^a-z0-9]+/)
+        .filter((w) => w.length > 2);
+    }
     if (!words?.length) return false;
     return words.some((w) => blob.includes(w));
   });

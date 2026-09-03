@@ -1,5 +1,5 @@
 .wrap {
-  min-height: 100%;
+  min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -21,14 +21,6 @@
   align-items: center;
   gap: 10px;
   margin-bottom: 20px;
-}
-
-.logo {
-  height: 36px;
-  width: auto;
-  max-width: 140px;
-  object-fit: contain;
-  object-position: left center;
 }
 
 .badge {
@@ -117,6 +109,57 @@
 .submit:disabled {
   opacity: 0.65;
   cursor: not-allowed;
+}
+
+.googleBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: 46px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0 !important;
+  background: #fff;
+  color: var(--text);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.googleBtn:hover:not(:disabled) {
+  background: #f8fafc;
+}
+
+.googleBtn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.googleMark {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #e2e8f0;
 }
 
 .forgotRow {

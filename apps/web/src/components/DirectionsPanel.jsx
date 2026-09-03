@@ -1,13 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { RouteLeafletMap } from './RouteLeafletMap';
 import { fetchDrivingRoute } from '../lib/fetchOsrmRoute';
-
-function formatDuration(totalMinutes) {
-  if (totalMinutes < 60) return `${totalMinutes} min`;
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return `${hours} hr ${minutes ? `${minutes} min` : ''}`.trim();
-}
+import { googleMapsDirectionsUrl } from '../lib/osmUrls';
 
 function numericSeed(value, fallback = 42) {
   const digits = Number(String(value ?? '').replace(/\D/g, '').slice(-4));
@@ -34,7 +28,7 @@ function buildFallbackRoute(seedId, distanceKmHint) {
 }
 
 /**
- * In-page directions (map + driving corridor) for establishment detail.
+ * Directions popup (map + driving corridor) for establishment detail.
  */
 export function DirectionsPanel({
   onClose,
@@ -43,12 +37,12 @@ export function DirectionsPanel({
   destinationLat,
   destinationLng,
   userCoords,
-  onRequestLocation,
-  locationStatus = null,
   fallbackDistanceKm,
   seedId = 'route',
 }) {
   const [osrmDriving, setOsrmDriving] = useState(null);
+
+  const mapsUrl = googleMapsDirectionsUrl(destinationLat, destinationLng, 'driving', null);
 
   useEffect(() => {
     if (destinationLat == null || destinationLng == null || !userCoords) {
@@ -81,7 +75,7 @@ export function DirectionsPanel({
       return {
         id: 'main-road',
         label: 'Main road',
-        mode: 'OSRM driving corridor',
+        mode: 'Via main roads',
         distanceKm: Number((osrmDriving.distanceM / 1000).toFixed(1)),
         durationMin: Math.max(1, Math.round(osrmDriving.durationS / 60)),
         traffic: 'Moderate',
@@ -92,178 +86,71 @@ export function DirectionsPanel({
     return fallbackRoute;
   }, [osrmDriving, fallbackRoute]);
 
-  const routeTimeline = useMemo(
-    () => [
-      {
-        title: userCoords ? 'Your location' : 'Starting point',
-        meta: userCoords ? 'Detected via GPS' : 'Set your current location',
-      },
-      {
-        title: destinationName,
-        meta: destinationAddress || destinationName,
-      },
-    ],
-    [destinationName, destinationAddress, userCoords]
-  );
-
   const destEnd =
     destinationLat != null && destinationLng != null
       ? { lat: destinationLat, lng: destinationLng }
       : null;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-neutral-200/90 bg-white shadow-[0_4px_28px_rgba(0,0,0,0.05)]">
-      <div className="border-t border-neutral-100 bg-neutral-50 px-4 py-5 sm:px-6 sm:py-6">
-        <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
-          <div className="flex items-start justify-between gap-3 border-b border-neutral-100 px-4 py-4 sm:px-5 sm:py-4">
-            <div className="min-w-0">
-              <h3 className="font-['Poppins',sans-serif] text-lg font-semibold tracking-tight text-neutral-900">
-                Directions
-              </h3>
-              <p className="mt-0.5 truncate text-sm text-neutral-500">{destinationName}</p>
+    <div>
+      <div className="flex items-center justify-between gap-3 border-b border-neutral-100 px-5 py-4">
+        <h3 className="min-w-0 truncate font-['Poppins',sans-serif] text-lg font-semibold tracking-tight text-neutral-900">
+          Directions
+        </h3>
+        <button
+          type="button"
+          onClick={onClose}
+          className="shrink-0 rounded-lg p-2 text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800"
+          aria-label="Close directions"
+        >
+          <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+            <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
+          </svg>
+        </button>
+      </div>
+
+      <div className="px-5 py-5">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,200px)_minmax(0,1fr)] lg:gap-0 lg:divide-x lg:divide-neutral-100">
+          <aside className="flex flex-col gap-4 lg:pr-5">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">From</p>
+              <p className="mt-1 text-sm font-semibold text-neutral-900">Your location</p>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="shrink-0 rounded-lg p-2 text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800"
-              aria-label="Close directions"
-            >
-              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
-              </svg>
-            </button>
-          </div>
 
-          <div className="px-4 pb-5 pt-3 sm:px-5 sm:pb-6">
-            <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,260px)_minmax(0,1fr)] lg:gap-0 lg:divide-x lg:divide-neutral-100">
-              <aside className="flex flex-col gap-5 lg:pr-5">
-                <div>
-                  <p className="text-xs font-medium text-neutral-400">Trip</p>
-                  <div className="mt-2 space-y-3 text-sm">
-                    <div>
-                      <p className="text-xs text-neutral-500">From</p>
-                      <p className="mt-0.5 font-medium text-neutral-900">
-                        {userCoords ? 'Your location' : 'Current location'}
-                      </p>
-                      {userCoords ? (
-                        <p className="mt-0.5 text-xs text-neutral-500">GPS · green dot on map</p>
-                      ) : (
-                        <div className="mt-2 space-y-1.5">
-                          <p className="text-xs text-neutral-500">
-                            {locationStatus === 'denied'
-                              ? 'Location blocked — allow it in the browser, then try again.'
-                              : locationStatus === 'locating'
-                                ? 'Getting your GPS…'
-                                : 'Allow location so the route starts from where you are.'}
-                          </p>
-                          {typeof onRequestLocation === 'function' ? (
-                            <button
-                              type="button"
-                              onClick={onRequestLocation}
-                              disabled={locationStatus === 'locating'}
-                              className="rounded-lg bg-[#7EA00E] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#6d8c0c] disabled:opacity-60"
-                            >
-                              {locationStatus === 'locating' ? 'Locating…' : 'Use my location'}
-                            </button>
-                          ) : null}
-                        </div>
-                      )}
-                    </div>
-                    <div className="h-px bg-neutral-200" />
-                    <div>
-                      <p className="text-xs text-neutral-500">To</p>
-                      <p className="mt-0.5 font-medium leading-snug text-neutral-900">{destinationName}</p>
-                      {destinationAddress ? (
-                        <p className="mt-1 text-xs leading-relaxed text-neutral-500">{destinationAddress}</p>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">To</p>
+              <p className="mt-1 text-sm font-semibold leading-snug text-neutral-900">{destinationName}</p>
+              {destinationAddress ? (
+                <p className="mt-1 text-xs leading-relaxed text-neutral-500">{destinationAddress}</p>
+              ) : null}
+            </div>
+          </aside>
 
-                {displayRoute ? (
-                  <div>
-                    <p className="text-xs font-medium text-neutral-400">Best route</p>
-                    <div className="mt-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-neutral-900">{displayRoute.label}</p>
-                          <p className="mt-0.5 text-xs text-neutral-500">{displayRoute.mode}</p>
-                        </div>
-                        <span className={`h-2 w-2 shrink-0 rounded-full ${displayRoute.accent}`} aria-hidden />
-                      </div>
-                      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-neutral-200/80 pt-3 text-xs tabular-nums text-neutral-700">
-                        <span>{formatDuration(displayRoute.durationMin)}</span>
-                        <span className="text-neutral-300" aria-hidden>
-                          |
-                        </span>
-                        <span>{displayRoute.distanceKm} km</span>
-                        <span className="text-neutral-300" aria-hidden>
-                          |
-                        </span>
-                        <span>{displayRoute.traffic}</span>
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-              </aside>
-
-              <div className="flex flex-col gap-5 lg:pl-5">
-                <div>
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <p className="text-sm text-neutral-600">
-                      <span className="tabular-nums text-neutral-900">{displayRoute?.distanceKm ?? '—'} km</span>
-                      <span className="mx-1.5 text-neutral-300">·</span>
-                      <span className="tabular-nums text-neutral-900">
-                        {formatDuration(displayRoute?.durationMin ?? 0)}
-                      </span>
-                    </p>
-                    <span className="text-xs text-neutral-400">OpenStreetMap · OSRM</span>
-                  </div>
-                  <p className="mt-1 text-xs text-neutral-500">
-                    Driving corridor; walking segments appear when the router uses them.
-                  </p>
-                  {destEnd ? (
-                    <div className="mt-3 overflow-hidden rounded-lg border border-neutral-200 bg-neutral-100">
-                      <RouteLeafletMap
-                        className="h-[220px] w-full sm:h-[300px] lg:h-[340px]"
-                        start={userCoords}
-                        end={destEnd}
-                        routeId={displayRoute?.id ?? 'main-road'}
-                        lineColor={displayRoute?.color ?? '#7EA00E'}
-                      />
-                    </div>
-                  ) : null}
-                </div>
-
-                <div>
-                  <p className="text-xs font-medium text-neutral-400">Overview</p>
-                  <ul className="mt-3">
-                    {routeTimeline.map((step, idx) => {
-                      const isLast = idx === routeTimeline.length - 1;
-                      return (
-                        <li key={`route-tl-${idx}-${step.title}`} className="flex gap-3">
-                          <div className="flex w-4 shrink-0 flex-col items-center pt-1.5">
-                            <span
-                              className={`h-2 w-2 rounded-full ${isLast ? 'bg-neutral-800' : 'bg-neutral-400'}`}
-                              aria-hidden
-                            />
-                            {!isLast ? (
-                              <span className="mt-1 w-px flex-1 min-h-[1.25rem] bg-neutral-200" aria-hidden />
-                            ) : null}
-                          </div>
-                          <div className={`min-w-0 flex-1 ${!isLast ? 'pb-4' : ''}`}>
-                            <p className="text-sm font-medium text-neutral-900">{step.title}</p>
-                            <p className="mt-0.5 text-xs leading-relaxed text-neutral-500">{step.meta}</p>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
+          <div className="lg:pl-5">
+            {destEnd ? (
+              <div className="overflow-hidden rounded-xl border border-neutral-200 bg-neutral-100">
+                <RouteLeafletMap
+                  className="h-[300px] w-full sm:h-[380px] lg:h-[460px]"
+                  start={userCoords}
+                  end={destEnd}
+                  routeId={displayRoute?.id ?? 'main-road'}
+                  lineColor={displayRoute?.color ?? '#10A37F'}
+                />
               </div>
-            </div>
+            ) : null}
           </div>
         </div>
+
+        {mapsUrl && mapsUrl !== '#' ? (
+          <a
+            href={mapsUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-5 inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#10A37F] px-4 text-base font-semibold text-white transition hover:bg-[#168F7A]"
+          >
+            Open in Google Maps
+          </a>
+        ) : null}
       </div>
     </div>
   );

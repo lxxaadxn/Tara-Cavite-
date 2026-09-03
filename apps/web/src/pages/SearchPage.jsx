@@ -11,6 +11,7 @@ import { countActiveFilters, placePassesAppliedFilters } from '../lib/placeFilte
 import { AppHeader } from '../components/AppHeader';
 import { FilterModal } from '../components/FilterModal';
 import { PlacesLeafletMap } from '../components/PlacesLeafletMap';
+import { fetchPlaceReviewStats } from '../lib/placeReviews';
 import { readCachedUserLocation } from '../lib/promptLocationOnLogin';
 
 const PLACEHOLDER_IMG = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80';
@@ -41,14 +42,6 @@ function sanitizeAddress(address, placeName = '') {
   return cleanedParts.length ? cleanedParts.join(', ') : address;
 }
 
-function cardRating(seed) {
-  return (4.6 + ((seed % 5) * 0.1)).toFixed(1);
-}
-
-function cardReviewCount(seed) {
-  return 640 + ((seed * 137) % 1800);
-}
-
 export function SearchPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
@@ -63,6 +56,7 @@ export function SearchPage() {
     return cached ? { lat: cached.lat, lng: cached.lng } : null;
   });
   const [previewPlaceId, setPreviewPlaceId] = useState(null);
+  const [reviewStats, setReviewStats] = useState(() => ({}));
   const trendingRef = useRef([]);
 
   useEffect(() => {
@@ -80,10 +74,17 @@ export function SearchPage() {
     let cancelled = false;
     (async () => {
       try {
-        const list = filterPlacesWithMedia(await fetchAllPlacesFromSupabase(supabase, 1000));
+        const [list, stats] = await Promise.all([
+          fetchAllPlacesFromSupabase(supabase, 1000).then(filterPlacesWithMedia),
+          fetchPlaceReviewStats(supabase).catch((err) => {
+            logPlacesFetchError('fetchPlaceReviewStats', err);
+            return {};
+          }),
+        ]);
         if (cancelled) return;
         trendingRef.current = list;
         setDisplayPlaces(list);
+        setReviewStats(stats);
         setFetchError('');
         setDataSource(list.length > 0 ? 'supabase' : 'empty');
       } catch (err) {
@@ -173,114 +174,84 @@ export function SearchPage() {
   );
 
   return (
-    <div className="min-h-screen bg-[#efefec] font-['Inter',sans-serif] text-neutral-900">
-      <AppHeader />
+    <div className="bg-[#F1F7F6] font-['Poppins',sans-serif] text-[#16352E] max-lg:min-h-dvh lg:h-dvh lg:overflow-hidden">
+      <div className="mx-auto flex max-w-[1600px] flex-col max-lg:min-h-dvh lg:h-full">
+        <AppHeader embedded />
 
-      <div className="sticky top-[116px] z-30 flex justify-center bg-[#efefec]/90 px-3 pb-3.5 pt-2.5 backdrop-blur-md sm:px-4 md:top-[72px] lg:px-8">
-        <div
-          className="flex w-full max-w-xl items-stretch overflow-hidden rounded-2xl bg-white shadow-[0_2px_14px_rgba(31,41,55,0.07)] ring-1 ring-neutral-900/[0.04] transition-shadow focus-within:shadow-[0_4px_20px_rgba(126,160,14,0.12)] focus-within:ring-[#7EA00E]/25"
-          role="search"
-        >
-          <div className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3">
-            <svg
-              className="h-[19px] w-[19px] shrink-0 text-neutral-400"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.75"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
-            >
-              <circle cx="11" cy="11" r="6.5" />
-              <path d="m20 20-4-4" />
-            </svg>
-            <input
-              type="search"
-              placeholder="Enter a tourist spot"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full min-w-0 bg-transparent text-[15px] leading-snug text-neutral-800 outline-none placeholder:text-neutral-400"
-            />
-          </div>
-          <div className="my-2.5 w-px shrink-0 bg-neutral-100" aria-hidden />
-          <button
-            type="button"
-            onClick={() => setFiltersOpen(true)}
-            className="group relative flex w-14 shrink-0 items-center justify-center text-neutral-500 transition hover:bg-neutral-50 hover:text-[#1F4F59] active:bg-neutral-100"
-            aria-label={activeFilterCount > 0 ? `Filters (${activeFilterCount} active)` : 'Open filters'}
+        <div className="shrink-0 px-4 pb-4 sm:px-6 lg:px-8">
+          <form
+            className="flex flex-col gap-2 sm:flex-row sm:items-center"
+            role="search"
+            onSubmit={(e) => {
+              e.preventDefault();
+            }}
           >
-            <svg
-              className="h-5 w-5 transition group-hover:scale-105"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.75"
-              strokeLinecap="round"
-              aria-hidden
-            >
-              <path d="M4 7h16" />
-              <path d="M7 12h10" />
-              <path d="M10 17h4" />
-              <circle cx="7" cy="7" r="2" fill="currentColor" stroke="none" />
-              <circle cx="17" cy="12" r="2" fill="currentColor" stroke="none" />
-              <circle cx="12" cy="17" r="2" fill="currentColor" stroke="none" />
-            </svg>
-            {activeFilterCount > 0 ? (
-              <span className="absolute right-2.5 top-2 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#7EA00E] px-1 text-[10px] font-semibold leading-none text-white shadow-sm">
-                {activeFilterCount}
-              </span>
-            ) : null}
-          </button>
-        </div>
-      </div>
-
-      <div className="w-full px-3 pb-2 sm:px-4 lg:px-8">
-        <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2 lg:gap-4">
-          <section
-            className="relative min-h-[62vh] min-w-0 overflow-hidden rounded-[20px] border border-neutral-200 bg-[#e8ebe6] shadow-[0_10px_28px_rgba(0,0,0,0.08)] lg:order-2 lg:sticky lg:top-[128px] lg:self-start lg:min-h-[calc(100vh-144px)]"
-            onMouseLeave={() => setPreviewPlaceId(null)}
-          >
-            <PlacesLeafletMap
-              places={mapPlaces}
-              userLocation={userCoords}
-              onMarkerClick={(p) => navigate(`/place/${p.id}`)}
-              onMarkerHover={(p) => setPreviewPlaceId(p.id)}
-            />
-
-            <div className="pointer-events-none absolute inset-0 z-[450] bg-[radial-gradient(circle_at_20%_10%,rgba(255,255,255,0.45),transparent_42%)]" />
-
-            {previewPlace ? (
-              <button
-                type="button"
-                onClick={() => navigate(`/place/${previewPlace.id}`)}
-                className="absolute left-4 top-4 z-[500] max-w-[280px] overflow-hidden rounded-xl border border-neutral-200 bg-white/95 text-left shadow-[0_12px_30px_rgba(0,0,0,0.15)] backdrop-blur-sm transition hover:border-[#7ea00e]/40 sm:left-5 sm:top-5 sm:max-w-[300px]"
-                aria-label={`About ${previewPlace.name}`}
+            <div className="flex min-w-0 flex-1 items-center gap-3 rounded-full bg-[#F1F7F6] px-4 py-3 shadow-[inset_0_1px_2px_rgba(22,53,46,0.04)]">
+              <svg
+                className="h-[19px] w-[19px] shrink-0 text-[#707D7D]"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
               >
-                <img
-                  src={previewPlace.imageUrl || PLACEHOLDER_IMG}
-                  alt=""
-                  className="h-28 w-full object-cover"
-                />
-                <div className="p-3">
-                  <p className="font-['Poppins',sans-serif] text-base font-semibold text-neutral-900">{previewPlace.name}</p>
-                  <p className="mt-0.5 line-clamp-2 text-xs text-neutral-500">
-                    {sanitizeAddress(previewPlace.address, previewPlace.name)}
-                  </p>
-                  {previewPlace.ntdp_category ? (
-                    <p className="mt-2 text-[11px] font-medium uppercase tracking-wide text-[#7EA00E]">
-                      {previewPlace.ntdp_category}
-                    </p>
-                  ) : null}
-                  <p className="mt-2 text-xs font-semibold text-[#7ea00e]">View establishment →</p>
-                </div>
-              </button>
-            ) : null}
-          </section>
+                <circle cx="11" cy="11" r="6.5" />
+                <path d="m20 20-4-4" />
+              </svg>
+              <input
+                type="search"
+                placeholder="Enter a tourist spot"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full min-w-0 bg-transparent text-[15px] leading-snug text-[#16352E] outline-none placeholder:text-[#707D7D]"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setFiltersOpen(true)}
+              className="relative shrink-0 rounded-full bg-[#F1F7F6] px-5 py-3 text-sm font-semibold text-[#1B8A70] transition hover:bg-[#D4EFE8]"
+              aria-label={activeFilterCount > 0 ? `Filters (${activeFilterCount} active)` : 'Open filters'}
+            >
+              Filters
+              {activeFilterCount > 0 ? (
+                <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#10A37F] px-1.5 text-[10px] font-semibold text-white">
+                  {activeFilterCount}
+                </span>
+              ) : null}
+            </button>
+            <button
+              type="submit"
+              className="shrink-0 rounded-full bg-[#10A37F] px-6 py-3 text-sm font-semibold text-white shadow-[0_6px_16px_rgba(16,163,127,0.28)] transition hover:bg-[#168F7A]"
+            >
+              Search
+            </button>
+          </form>
+        </div>
 
-          <section className="min-w-0 lg:order-1 lg:self-start">
-            <div className="grid grid-cols-2 gap-3">
-              {filteredPlaces.map((place, idx) => (
+        <div className="grid min-h-0 flex-1 grid-cols-1 items-stretch gap-4 px-4 pb-5 sm:px-6 lg:grid-cols-12 lg:gap-5 lg:overflow-hidden lg:px-8">
+          <section className="flex min-h-0 flex-col overflow-hidden rounded-[24px] bg-white p-4 sm:p-5 lg:col-span-7 lg:h-full">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {dataSource === 'error' && (
+                <p className="mb-4 text-center text-xs text-amber-800">
+                  Could not load Cavite establishments from Supabase
+                  {fetchError ? ` (${fetchError})` : ''}. Check your connection and that{' '}
+                  <code className="rounded bg-amber-100 px-1">public.places</code> is readable, then run{' '}
+                  <code className="rounded bg-amber-100 px-1">npm run cavite:verify-places</code>.
+                </p>
+              )}
+              {dataSource === 'empty' && (
+                <p className="mb-4 text-center text-xs text-amber-800">
+                  Supabase connected but no rows in public.places. Run the view migration, then sync_places_with_images.sql.
+                </p>
+              )}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {filteredPlaces.map((place) => {
+                const stats = reviewStats[String(place.id)];
+                const reviewCount = stats?.reviewCount ?? 0;
+                const avgRating = stats?.avgRating;
+                return (
                 <article
                   key={place.id}
                   role="link"
@@ -292,21 +263,29 @@ export function SearchPage() {
                       navigate(`/place/${place.id}`);
                     }
                   }}
-                  className="flex h-full min-h-[280px] cursor-pointer flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white p-2 text-left transition hover:border-[#7ea00e]/35 hover:shadow-md sm:p-2.5"
+                  className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-[16px] bg-white text-left shadow-[0_8px_24px_rgba(22,53,46,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(22,53,46,0.1)]"
                 >
-                  <div className="overflow-hidden rounded-xl bg-neutral-100">
+                  <div className="overflow-hidden bg-neutral-100">
                     <img
                       src={place.imageUrl || PLACEHOLDER_IMG}
                       alt={place.name}
-                      className="h-36 w-full object-cover sm:h-40"
+                      className="h-40 w-full object-cover transition duration-300 group-hover:scale-[1.03] sm:h-44"
                     />
                   </div>
-                  <div className="flex-1 px-1 pb-1 pt-2">
+                  <div className="flex flex-1 flex-col px-3.5 pb-3.5 pt-3">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="line-clamp-1 text-base font-semibold text-neutral-900">{place.name}</p>
+                      <p className="line-clamp-1 text-base font-semibold leading-snug text-[#16352E]">{place.name}</p>
+                      <span
+                        className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-[#1B8A70] shadow-[0_4px_10px_rgba(22,53,46,0.08)]"
+                        aria-hidden
+                      >
+                        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M7 17 17 7M8 7h9v9" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </span>
                     </div>
-                    <p className="mt-1 line-clamp-1 text-sm text-neutral-500">
-                      <svg className="-mt-0.5 mr-1 inline h-4 w-4 text-neutral-400" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                    <p className="mt-1 line-clamp-1 text-sm text-[#707D7D]">
+                      <svg className="-mt-0.5 mr-1 inline h-4 w-4 text-[#39A98F]" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                         <path
                           fillRule="evenodd"
                           d="M12 2.25a7.5 7.5 0 00-7.5 7.5c0 5.25 7.5 12 7.5 12s7.5-6.75 7.5-12a7.5 7.5 0 00-7.5-7.5zm0 10.5a3 3 0 100-6 3 3 0 000 6z"
@@ -315,42 +294,59 @@ export function SearchPage() {
                       </svg>
                       {sanitizeAddress(place.address, place.name)}
                     </p>
-                    <div className="mt-1 flex items-center justify-between gap-2">
-                      <p className="text-sm text-neutral-500">
-                        <span className="mr-1 text-[#f4c430]">★</span>
-                        {cardRating(idx)} ({cardReviewCount(idx).toLocaleString()} Reviews)
-                      </p>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/place/${place.id}`);
-                        }}
-                        className="shrink-0 rounded-full border border-neutral-300 bg-white px-3.5 py-1.5 text-sm font-semibold leading-none text-neutral-700 transition hover:bg-neutral-50"
-                      >
-                        About
-                      </button>
-                    </div>
+                    <p className="mt-2 text-sm text-[#707D7D]">
+                      <span className="mr-1 text-[#f4c430]">★</span>
+                      {reviewCount > 0
+                        ? `${avgRating.toFixed(1)} (${reviewCount.toLocaleString()} ${reviewCount === 1 ? 'Review' : 'Reviews'})`
+                        : 'No reviews yet'}
+                    </p>
                   </div>
                 </article>
-              ))}
+                );
+              })}
+              </div>
             </div>
           </section>
-        </div>
 
-        {dataSource === 'error' && (
-          <p className="mx-auto mt-3 max-w-3xl text-center text-xs text-amber-800">
-            Could not load Cavite establishments from Supabase
-            {fetchError ? ` (${fetchError})` : ''}. Check your connection and that{' '}
-            <code className="rounded bg-amber-100 px-1">public.places</code> is readable, then run{' '}
-            <code className="rounded bg-amber-100 px-1">npm run cavite:verify-places</code>.
-          </p>
-        )}
-        {dataSource === 'empty' && (
-          <p className="mx-auto mt-3 max-w-3xl text-center text-xs text-amber-800">
-            Supabase connected but no rows in public.places. Run the view migration, then sync_places_with_images.sql.
-          </p>
-        )}
+          <section
+            className="relative min-h-[50vh] min-w-0 overflow-hidden rounded-[24px] bg-[#E8F3F0] outline-none lg:col-span-5 lg:h-full lg:min-h-0"
+            onMouseLeave={() => setPreviewPlaceId(null)}
+          >
+            <PlacesLeafletMap
+              places={mapPlaces}
+              userLocation={userCoords}
+              onMarkerClick={(p) => navigate(`/place/${p.id}`)}
+              onMarkerHover={(p) => setPreviewPlaceId(p.id)}
+            />
+
+            {previewPlace ? (
+              <button
+                type="button"
+                onClick={() => navigate(`/place/${previewPlace.id}`)}
+                className="absolute left-4 top-4 z-[500] max-w-[280px] overflow-hidden rounded-2xl bg-white/95 text-left shadow-[0_12px_30px_rgba(22,53,46,0.16)] backdrop-blur-sm transition hover:shadow-[0_16px_36px_rgba(22,53,46,0.2)] sm:left-5 sm:top-5"
+                aria-label={`About ${previewPlace.name}`}
+              >
+                <img
+                  src={previewPlace.imageUrl || PLACEHOLDER_IMG}
+                  alt=""
+                  className="h-28 w-full object-cover"
+                />
+                <div className="p-3">
+                  <p className="font-['Poppins',sans-serif] text-base font-semibold text-[#16352E]">{previewPlace.name}</p>
+                  <p className="mt-0.5 line-clamp-2 text-xs text-[#707D7D]">
+                    {sanitizeAddress(previewPlace.address, previewPlace.name)}
+                  </p>
+                  {previewPlace.ntdp_category ? (
+                    <p className="mt-2 text-[11px] font-medium uppercase tracking-wide text-[#10A37F]">
+                      {previewPlace.ntdp_category}
+                    </p>
+                  ) : null}
+                  <p className="mt-2 text-xs font-semibold text-[#10A37F]">View establishment →</p>
+                </div>
+              </button>
+            ) : null}
+          </section>
+        </div>
       </div>
 
       <FilterModal

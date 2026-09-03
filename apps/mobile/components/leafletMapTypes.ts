@@ -3,6 +3,7 @@ export type LeafletMarker = {
   name: string;
   lat: number;
   lng: number;
+  iconUrl?: string;
 };
 
 export type LeafletPreviewPoint = { x: number; y: number };

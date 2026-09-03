@@ -6,6 +6,7 @@
   "scripts": {
     "expo": "node scripts/run-expo.cjs",
     "start": "npm run expo -- start",
+    "mobile": "npm run start",
     "start:clear": "npm run expo -- start --clear",
     "start:tunnel": "npm run expo -- start --tunnel",
     "start:clear:tunnel": "npm run expo -- start --clear --tunnel",
@@ -18,8 +19,8 @@
     "lint": "npm run expo -- lint"
   },
   "dependencies": {
+    "@expo-google-fonts/bebas-neue": "^0.4.1",
     "@expo-google-fonts/inter": "^0.4.2",
-    "@expo-google-fonts/pacifico": "^0.4.1",
     "@expo-google-fonts/poppins": "^0.4.1",
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "^2.2.0",

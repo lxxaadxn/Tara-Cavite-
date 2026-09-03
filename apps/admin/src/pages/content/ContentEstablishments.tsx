@@ -10,6 +10,7 @@ import {
   type SetStateAction,
 } from 'react';
 import { ContentCrudPage, CrudBadge } from '../../components/ContentCrudPage';
+import { DestinationMapPicker } from '../../components/DestinationMapPicker';
 import styles from '../../components/ContentCrudPage.module.css';
 import { useToast } from '../../components/Toast';
 import { persistStaAboutAndMedia } from '../../lib/staAttractionMedia';
@@ -19,6 +20,7 @@ import {
   deleteStaV3Row,
   fetchStaV3Rows,
   insertStaV3Row,
+  parseCoordsFromMapsUrl,
   rowImages,
   rowToForm,
   updateStaV3Row,
@@ -29,6 +31,7 @@ import {
   mergeSelectOptions,
   tableSelectOptions,
 } from '../../lib/staLookups';
+import { fetchPlaceCheckinMap, type PlaceCheckinInfo } from '../../lib/placeVisits';
 import { supabase } from '../../lib/supabase';
 
 /** Admin table/form row (string coords for inputs + About/media/hours/contact). */
@@ -149,10 +152,130 @@ function toStaForm(form: Omit<StaCrudRow, 'id'>): StaV3Form {
   };
 }
 
-function formatCoord(v: string): string {
-  const n = parseFloat(v);
-  if (!Number.isFinite(n)) return '—';
-  return n.toFixed(4);
+function AttractionLocationMap({
+  form,
+  setForm,
+}: {
+  form: Omit<StaCrudRow, 'id'>;
+  setForm: Dispatch<SetStateAction<Omit<StaCrudRow, 'id'>>>;
+}) {
+  const link = String(form.google_maps_link ?? '').trim();
+  const lastSyncedLink = useRef<string | null>(null);
+
+  useEffect(() => {
+    const parsed = parseCoordsFromMapsUrl(link);
+    if (lastSyncedLink.current === null) {
+      lastSyncedLink.current = link;
+      if (!parsed) return;
+      setForm((f) => {
+        const hasLat = Number.isFinite(parseFloat(String(f.latitude)));
+        const hasLng = Number.isFinite(parseFloat(String(f.longitude)));
+        if (hasLat && hasLng) return f;
+        return {
+          ...f,
+          latitude: parsed.lat.toFixed(7),
+          longitude: parsed.lng.toFixed(7),
+        };
+      });
+      return;
+    }
+    if (lastSyncedLink.current === link) return;
+    lastSyncedLink.current = link;
+    if (!parsed) return;
+    setForm((f) => ({
+      ...f,
+      latitude: parsed.lat.toFixed(7),
+      longitude: parsed.lng.toFixed(7),
+    }));
+  }, [link, setForm]);
+
+  const parsed = parseCoordsFromMapsUrl(link);
+  const latN = parseFloat(String(form.latitude ?? ''));
+  const lngN = parseFloat(String(form.longitude ?? ''));
+  const mapLat = Number.isFinite(latN) ? String(latN) : parsed ? String(parsed.lat) : '';
+  const mapLng = Number.isFinite(lngN) ? String(lngN) : parsed ? String(parsed.lng) : '';
+
+  return (
+    <div className={styles.spanFull}>
+      <DestinationMapPicker
+        lat={mapLat}
+        lng={mapLng}
+        onPick={(la, ln) => {
+          setForm((f) => ({
+            ...f,
+            latitude: la.toFixed(7),
+            longitude: ln.toFixed(7),
+          }));
+        }}
+      />
+    </div>
+  );
+}
+
+function AttractionCheckinQr({
+  editingId,
+  checkins,
+}: {
+  editingId: string | null;
+  checkins: Map<string, PlaceCheckinInfo>;
+}) {
+  if (!editingId) {
+    return (
+      <p className={styles.qrPanelHint}>
+        Save this attraction first to generate its check-in QR code.
+      </p>
+    );
+  }
+
+  const ci = checkins.get(editingId);
+  if (!ci) {
+    return (
+      <p className={styles.qrPanelHint}>
+        No QR yet — run <code>PLACE_CHECKIN_ON_STA.sql</code> in Supabase (after STA collapse), then reload.
+      </p>
+    );
+  }
+
+  return (
+    <div className={styles.qrPanel}>
+      <img src={ci.qrUrl} alt="Establishment check-in QR" width={180} height={180} />
+      <div>
+        <p className={styles.qrPanelTitle}>Check-in QR (give this to the business)</p>
+        <p className={styles.qrPanelHint}>
+          Print or download and post at the entrance. Visitors scan with their phone — visits count for
+          Admin analytics.
+        </p>
+        <p>
+          Code: <code>{ci.code}</code>
+        </p>
+        <p className={styles.qrPanelHint}>
+          Visits recorded: <strong>{ci.totalVisits}</strong>
+        </p>
+        <div className={styles.qrActions}>
+          <a
+            href={ci.qrUrl}
+            download={`cavitour-qr-${ci.code}.png`}
+            target="_blank"
+            rel="noreferrer"
+            className={styles.qrActionBtn}
+          >
+            Download QR image
+          </a>
+          <a
+            href={`/checkin/poster/${encodeURIComponent(ci.code)}`}
+            target="_blank"
+            rel="noreferrer"
+            className={styles.qrActionBtnPrimary}
+          >
+            Print QR poster
+          </a>
+          <a href={ci.checkinUrl} target="_blank" rel="noreferrer">
+            Test check-in link
+          </a>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function AttractionAboutPhotos({
@@ -223,7 +346,7 @@ function AttractionAboutPhotos({
           />
         </label>
         <label className={`${styles.field} ${styles.spanFull}`}>
-          Website
+          Social Media
           <input
             type="url"
             value={form.website ?? ''}
@@ -245,6 +368,48 @@ function AttractionAboutPhotos({
       </label>
       <div className={styles.field}>
         <span>Photos</span>
+        {(form.images ?? []).length > 0 ? (
+          <div className={styles.imageGrid}>
+            {(form.images ?? []).map((url, idx) => (
+              <div key={`${url}-${idx}`} className={styles.imageTile}>
+                <button
+                  type="button"
+                  className={styles.imageTileBtn}
+                  aria-label="View image"
+                  disabled={saving}
+                  onClick={() => setLightboxUrl(url)}
+                >
+                  <img src={url} alt="" />
+                </button>
+                <button
+                  type="button"
+                  className={styles.removeImg}
+                  aria-label="Remove image"
+                  disabled={saving}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setForm((prev) => {
+                      const images = [...(prev.images ?? [])];
+                      const [removed] = images.splice(idx, 1);
+                      if (
+                        removed?.startsWith('blob:') &&
+                        !imagesAtOpenRef.current.includes(removed)
+                      ) {
+                        fileByBlobUrl.current.delete(removed);
+                        URL.revokeObjectURL(removed);
+                      }
+                      return { ...prev, images };
+                    });
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className={styles.loadState}>No photos yet</p>
+        )}
         <label className={styles.fileBtn}>
           Add images
           <input
@@ -269,48 +434,6 @@ function AttractionAboutPhotos({
           />
         </label>
       </div>
-      {(form.images ?? []).length > 0 ? (
-        <div className={styles.imageGrid}>
-          {(form.images ?? []).map((url, idx) => (
-            <div key={`${url}-${idx}`} className={styles.imageTile}>
-              <button
-                type="button"
-                className={styles.imageTileBtn}
-                aria-label="View image"
-                disabled={saving}
-                onClick={() => setLightboxUrl(url)}
-              >
-                <img src={url} alt="" />
-              </button>
-              <button
-                type="button"
-                className={styles.removeImg}
-                aria-label="Remove image"
-                disabled={saving}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setForm((prev) => {
-                    const images = [...(prev.images ?? [])];
-                    const [removed] = images.splice(idx, 1);
-                    if (
-                      removed?.startsWith('blob:') &&
-                      !imagesAtOpenRef.current.includes(removed)
-                    ) {
-                      fileByBlobUrl.current.delete(removed);
-                      URL.revokeObjectURL(removed);
-                    }
-                    return { ...prev, images };
-                  });
-                }}
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className={styles.loadState}>No photos yet</p>
-      )}
       {lightboxUrl ? (
         <div
           className={styles.lightbox}
@@ -340,6 +463,7 @@ function AttractionAboutPhotos({
 export function ContentEstablishments() {
   const toast = useToast();
   const [rows, setRows] = useState<StaCrudRow[]>([]);
+  const [checkins, setCheckins] = useState<Map<string, PlaceCheckinInfo>>(new Map());
   const [lookups, setLookups] = useState<StaLookups>(emptyLookups);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -364,16 +488,33 @@ export function ContentEstablishments() {
         fetchStaLookups(supabase),
       ]);
       setLookups(nextLookups);
-      setRows(
-        data.map((row) =>
-          toCrudRow({
-            id: row.id,
-            is_listed: row.is_listed,
-            ...rowToForm(row),
-            images: rowImages(row),
-          })
-        )
+      const mapped = data.map((row) =>
+        toCrudRow({
+          id: row.id,
+          is_listed: row.is_listed,
+          ...rowToForm(row),
+          images: rowImages(row),
+        })
       );
+      setRows(mapped);
+      try {
+        const cmap = await fetchPlaceCheckinMap(
+          supabase,
+          mapped.map((r) => r.id)
+        );
+        setCheckins(cmap);
+        if (mapped.length > 0 && cmap.size === 0) {
+          toast(
+            'No check-in codes found for these places. Run PLACE_CHECKIN_ON_STA.sql in Supabase, then reload.',
+            'error'
+          );
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Failed to load check-in QR codes';
+        console.warn('[ContentEstablishments] check-in codes:', e);
+        setCheckins(new Map());
+        toast(msg, 'error');
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to load STA attractions';
       setError(msg);
@@ -454,7 +595,6 @@ export function ContentEstablishments() {
   return (
     <ContentCrudPage<StaCrudRow>
       title="Tourist Attractions"
-      description="Manage STA catalog listings, hours, about text, and photos."
       modalSize="wide"
       rows={rows}
       loading={loading}
@@ -521,8 +661,7 @@ export function ContentEstablishments() {
         },
         { key: 'barangay', label: 'Barangay' },
         { key: 'address', label: 'Address', type: 'textarea', span: 'full' },
-        {
-          key: 'google_maps_link',
+        { key: 'google_maps_link',
           label: 'Google Maps link',
           placeholder: 'https://www.google.com/maps/...',
           span: 'full',
@@ -553,20 +692,26 @@ export function ContentEstablishments() {
           type: 'select',
           options: [
             { value: 'none', label: 'Display' },
-            { value: 'red', label: 'Hidden (red)' },
-            { value: 'yellow', label: 'Hidden (yellow)' },
+            { value: 'red', label: 'Hidden' },
+            { value: 'yellow', label: 'Festivals' },
           ],
         },
       ]}
-      renderExtraForm={({ form, setForm, saving }) => (
-        <AttractionAboutPhotos
-          form={form}
-          setForm={setForm}
-          saving={saving}
-          fileRef={fileRef}
-          fileByBlobUrl={fileByBlobUrl}
-          imagesAtOpenRef={imagesAtOpenRef}
-        />
+      renderAfterField={(key, { form, setForm }) =>
+        key === 'google_maps_link' ? <AttractionLocationMap form={form} setForm={setForm} /> : null
+      }
+      renderExtraForm={({ form, setForm, saving, editingId }) => (
+        <>
+          <AttractionCheckinQr editingId={editingId} checkins={checkins} />
+          <AttractionAboutPhotos
+            form={form}
+            setForm={setForm}
+            saving={saving}
+            fileRef={fileRef}
+            fileByBlobUrl={fileByBlobUrl}
+            imagesAtOpenRef={imagesAtOpenRef}
+          />
+        </>
       )}
       columns={[
         {
@@ -583,31 +728,32 @@ export function ContentEstablishments() {
         { key: 'city', header: 'City', render: (r) => r.city_mun || '—' },
         { key: 'barangay', header: 'Barangay', render: (r) => r.barangay || '—' },
         {
-          key: 'address',
-          header: 'Address',
-          render: (r) =>
-            r.address ? (r.address.length > 48 ? `${r.address.slice(0, 48)}…` : r.address) : '—',
+          key: 'visits',
+          header: 'Visits',
+          render: (r) => checkins.get(r.id)?.totalVisits ?? 0,
         },
         {
-          key: 'listed',
-          header: 'Listed',
-          render: (r) => (
-            <CrudBadge label={r.is_listed ? 'Listed' : 'Hidden'} tone={r.is_listed ? 'green' : 'neutral'} />
-          ),
+          key: 'qr',
+          header: 'Check-in QR',
+          render: (r) => {
+            const ci = checkins.get(r.id);
+            if (!ci) return <span className={styles.muted}>No code</span>;
+            return (
+              <div className={styles.qrCell}>
+                <img src={ci.qrUrl} alt={`QR for ${r.ta_name}`} width={48} height={48} />
+                <code className={styles.qrCode}>{ci.code}</code>
+              </div>
+            );
+          },
         },
         {
           key: 'highlight',
           header: 'Display',
           render: (r) => {
-            if (r.highlight === 'red') return <CrudBadge label="Hidden (red)" tone="red" />;
-            if (r.highlight === 'yellow') return <CrudBadge label="Hidden (yellow)" tone="amber" />;
+            if (r.highlight === 'red') return <CrudBadge label="Hidden" tone="neutral" />;
+            if (r.highlight === 'yellow') return <CrudBadge label="Festivals" tone="amber" />;
             return <CrudBadge label="Display" tone="green" />;
           },
-        },
-        {
-          key: 'coords',
-          header: 'Lat / Lng',
-          render: (r) => `${formatCoord(r.latitude)} / ${formatCoord(r.longitude)}`,
         },
       ]}
     />

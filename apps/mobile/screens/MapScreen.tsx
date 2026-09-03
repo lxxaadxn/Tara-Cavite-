@@ -22,12 +22,15 @@ import { placeToMapSpot, type CommuteLegKind } from '../data/mapBrowseSpots';
 import { getMainFloatingTabBarStyle } from '../lib/mainTabBarStyle';
 import { supabase } from '../lib/supabase';
 import { fetchTrendingPlacesFromSupabase, logPlacesFetchError } from '../lib/placesFromSupabase';
+import { launchGoogleMapsDrivingTo } from '../lib/launchGoogleMapsDirections';
+import { fetchSiteContent } from 'cavitour-shared/siteContent';
+import { resolveMapPinUrlForLabel } from 'cavitour-shared/mapPins';
 import type { Place } from '../data/mockData';
 
 const H_PAD = 16;
 const OVERLAY_TOP = 10;
-const GREEN = '#7EA00E';
-const TEAL = '#1F4F59';
+const GREEN = '#10A37F';
+const TEAL = '#1B8A70';
 const MUTED = '#7A7878';
 const MAP_BG = '#E8E8E8';
 const TITLE = '#241D13';
@@ -82,13 +85,22 @@ export default function MapScreen() {
     let cancelled = false;
     (async () => {
       try {
-        const places = await fetchTrendingPlacesFromSupabase(supabase, 600);
+        const [places, cms, ntdpRes] = await Promise.all([
+          fetchTrendingPlacesFromSupabase(supabase, 600),
+          fetchSiteContent(supabase).catch(() => ({})),
+          supabase.from('ntdp_categories').select('ntdp_category_id, ntdp_category_name'),
+        ]);
         setDbPlaces(places);
+        const lookups = (ntdpRes.data ?? []).map((r) => ({
+          tableId: r.ntdp_category_id,
+          label: r.ntdp_category_name,
+        }));
         const m: LeafletMarker[] = places.map((p) => ({
           id: p.id,
           name: p.name,
           lat: p.latitude,
           lng: p.longitude,
+          iconUrl: resolveMapPinUrlForLabel(cms as Record<string, string>, lookups, p.ntdp_category ?? ''),
         }));
         if (!cancelled) setDbMarkers(m);
       } catch (err) {
@@ -178,10 +190,8 @@ export default function MapScreen() {
     setPreviewPoint(null);
   };
 
-  const openDirectionsSheet = (id: string) => {
-    clearPreview();
-    setSelectedId(id);
-    setSheetMode('preview');
+  const openGoogleDirections = (place: Place) => {
+    void launchGoogleMapsDrivingTo(place.latitude, place.longitude, userLocation);
   };
 
   const closeSheet = () => {
@@ -246,7 +256,7 @@ export default function MapScreen() {
                   clearPreview();
                   navigation.navigate('AboutEstablishment' as never, { place: previewPlace } as never);
                 }}
-                onDirections={() => openDirectionsSheet(previewPlace.id)}
+                onDirections={() => openGoogleDirections(previewPlace)}
               />
             </View>
           ) : null}
@@ -352,7 +362,7 @@ export default function MapScreen() {
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.directionsCta}
-                    onPress={() => setSheetMode('routes')}
+                    onPress={() => openGoogleDirections(selectedSpot)}
                     accessibilityRole="button"
                     accessibilityLabel="Directions"
                   >
@@ -460,9 +470,10 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   wordmark: {
-    fontFamily: 'Pacifico_400Regular',
-    fontSize: 34,
-    lineHeight: 40,
+    fontFamily: 'BebasNeue_400Regular',
+    fontSize: 38,
+    lineHeight: 42,
+    letterSpacing: 0.6,
   },
   wordmarkAccent: {
     color: GREEN,
@@ -610,7 +621,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   openPill: {
-    backgroundColor: 'rgba(31, 79, 89, 0.12)',
+    backgroundColor: 'rgba(27, 138, 112, 0.12)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
@@ -681,7 +692,7 @@ const styles = StyleSheet.create({
   timelineLine: {
     flex: 1,
     width: 2,
-    backgroundColor: 'rgba(126, 160, 14, 0.35)',
+    backgroundColor: 'rgba(16, 163, 127, 0.35)',
     minHeight: 24,
     marginVertical: 2,
   },
@@ -701,7 +712,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(126, 160, 14, 0.16)',
+    backgroundColor: 'rgba(16, 163, 127, 0.16)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -725,7 +736,7 @@ const styles = StyleSheet.create({
   legBadge: {
     alignSelf: 'flex-start',
     marginTop: 8,
-    backgroundColor: 'rgba(126, 160, 14, 0.2)',
+    backgroundColor: 'rgba(16, 163, 127, 0.2)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,

@@ -1,5 +1,5 @@
-const olive = '#7ea00e';
-const teal = '#1f4f59';
+const olive = '#10A37F';
+const teal = '#1B8A70';
 export function RouteStepsPanel({ steps, className = '', directionsUrl }) {
     return (<div className={`bg-white rounded-2xl border border-neutral-200 shadow-[0_8px_30px_rgba(0,0,0,0.06)] p-6 ${className}`}>
       <h2 className="font-['Poppins',sans-serif] font-bold text-lg text-neutral-800 mb-6">Route Steps</h2>
@@ -16,7 +16,7 @@ export function RouteStepsPanel({ steps, className = '', directionsUrl }) {
               <div className="relative z-[1] shrink-0 mt-1">
                 <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${solid ? '' : 'bg-white'}`} style={solid
                     ? { backgroundColor: olive, borderColor: olive }
-                    : { borderColor: 'rgba(126, 160, 14, 0.7)' }}>
+                    : { borderColor: 'rgba(16, 163, 127, 0.7)' }}>
                   {solid ? <span className="w-2 h-2 rounded-full bg-white"/> : null}
                 </div>
               </div>

@@ -1,9 +1,11 @@
 /** Light line icons for category filter cards. */
 
-export function FilterCategoryIcon({ name, selected = false }) {
-  const stroke = selected ? '#7EA00E' : '#9ca3af';
+export function FilterCategoryIcon({ name, selected = false, size = 36, color }) {
+  const stroke = color || (selected ? '#10A37F' : '#9ca3af');
   const props = {
-    className: 'h-9 w-9',
+    width: size,
+    height: size,
+    style: { width: size, height: size },
     viewBox: '0 0 24 24',
     fill: 'none',
     stroke,
@@ -70,6 +72,10 @@ export function FilterCategoryIcon({ name, selected = false }) {
         </svg>
       );
     default:
-      return null;
+      return (
+        <svg {...props}>
+          <path d="M12 3c-2 4-5.5 5-5.5 9.5a5.5 5.5 0 1011 0C18.5 8 14 7 12 3z" />
+        </svg>
+      );
   }
 }

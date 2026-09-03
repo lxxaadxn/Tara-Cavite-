@@ -18,14 +18,14 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native';
 import { JamIcon } from '../components/JamIcon';
 
-const HEADER_GREEN = '#7EA00E';
-const TEAL = '#1F4F59';
+const HEADER_GREEN = '#10A37F';
+const TEAL = '#1B8A70';
 const PAGE_BG = '#F4F6EC';
 const WHITE = '#FFFFFF';
 const TITLE = '#241D13';
 const MUTED = '#7A7878';
 const PLACEHOLDER = '#B3AAAA';
-const BORDER = 'rgba(31, 79, 89, 0.12)';
+const BORDER = 'rgba(27, 138, 112, 0.12)';
 const H_PAD = 16;
 
 function formatDate(d: Date): string {
@@ -446,8 +446,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(126, 160, 14, 0.35)',
-    backgroundColor: 'rgba(126, 160, 14, 0.08)',
+    borderColor: 'rgba(16, 163, 127, 0.35)',
+    backgroundColor: 'rgba(16, 163, 127, 0.08)',
   },
   addMoreText: {
     fontFamily: 'Poppins_700Bold',

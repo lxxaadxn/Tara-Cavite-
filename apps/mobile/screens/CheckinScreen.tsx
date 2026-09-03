@@ -17,7 +17,7 @@ import {
 import { Header } from '../components/Header';
 import { confirmCheckinFromCode } from '../lib/confirmCheckin';
 
-const TEAL = '#1f4f59';
+const TEAL = '#1B8A70';
 const MUTED = '#737373';
 const BORDER = '#e5e5e5';
 

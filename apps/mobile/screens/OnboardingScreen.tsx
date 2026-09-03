@@ -1,15 +1,16 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StackActions, useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/theme';
+import { LogoWordmark } from '../components/LogoWordmark';
 
 /** Slightly longer than before so the landing is easier to read */
 const LANDING_MS = 3200;
 
 /**
- * Brief Tara, Cavite! landing — wordmark matches dashboard Header; then navigates to sign-in.
- * Shown on every app launch while logged out (no AsyncStorage flag — see App Unauthed stack).
+ * Brief Tara, Cavite! opening — mark + wordmark, then sign-in.
+ * Shown on every app launch while logged out.
  */
 const OnboardingScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -24,17 +25,7 @@ const OnboardingScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.center}>
-        <View
-          style={styles.wordmarkRow}
-          accessible
-          accessibilityRole="header"
-          accessibilityLabel="Tara, Cavite!"
-        >
-          <Text style={styles.wordmark}>
-            <Text style={styles.wordmarkAccent}>Tara</Text>
-            <Text style={styles.wordmarkPrimary}>, Cavite!</Text>
-          </Text>
-        </View>
+        <LogoWordmark markSize={52} wordFontSize={42} />
       </View>
     </SafeAreaView>
   );
@@ -43,27 +34,13 @@ const OnboardingScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.background,
   },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  wordmarkRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-  },
-  wordmark: {
-    fontFamily: 'Pacifico_400Regular',
-    fontSize: 42,
-    lineHeight: 50,
-  },
-  wordmarkAccent: {
-    color: Colors.accent,
-  },
-  wordmarkPrimary: {
-    color: Colors.primary,
+    paddingHorizontal: 24,
   },
 });
 

@@ -93,10 +93,56 @@ export function optimizeStopsOrder(stops, catalog) {
  * @param {object} template itinerary from mockItineraries
  * @param {object[]} catalog
  */
+function stopsHaveSchedule(stops) {
+  return (stops || []).some((stop) => String(stop?.timeWindow || '').trim());
+}
+
+export function itineraryPriceBadge(itinerary) {
+  const n = itinerary?.priceTier;
+  const symbols = n === 1 ? '$' : n === 3 ? '$$$' : n === 2 ? '$$' : '';
+  const label = itinerary?.priceTierLabel;
+  if (label && symbols) return `${label} · ${symbols}`;
+  return label || symbols || null;
+}
+
+export function itineraryStopsDurationLine(itinerary) {
+  const n = itinerary?.stopList?.length || itinerary?.stops;
+  const parts = [];
+  if (n) parts.push(`${n} ${n === 1 ? 'stop' : 'stops'}`);
+  if (itinerary?.durationLabel) parts.push(itinerary.durationLabel);
+  return parts.join(' · ');
+}
+
+export function stopVenueName(stop) {
+  return String(stop?.place?.name || stop?.venueName || '').trim();
+}
+
+export function stopMapsQuery(stop) {
+  return [stop?.place?.name, stop?.place?.address, stop?.venueName, stop?.name].filter(Boolean).join(', ');
+}
+
+export function stopMapPoint(stop, index = 0) {
+  const lat = Number(stop?.place?.lat ?? stop?.place?.latitude ?? stop?.venueLat);
+  const lng = Number(stop?.place?.lng ?? stop?.place?.longitude ?? stop?.venueLng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return {
+    id: stop?.place?.id || `stop-${index}`,
+    name: stopVenueName(stop) || stop?.name || 'Stop',
+    lat,
+    lng,
+    ntdp_category: stop?.place?.ntdp_category ?? null,
+  };
+}
+
+export function itineraryMapPlaces(stops) {
+  return (stops || []).map((stop, index) => stopMapPoint(stop, index)).filter(Boolean);
+}
+
 export function buildEnrichedItinerary(template, catalog) {
   if (!template) return null;
 
-  const orderedStops = optimizeStopsOrder(template.stopList || [], catalog);
+  const rawStops = template.stopList || [];
+  const orderedStops = stopsHaveSchedule(rawStops) ? rawStops : optimizeStopsOrder(rawStops, catalog);
   const stopList = orderedStops.map((stop) => {
     const catalogPlace = resolveEstablishment(stop.establishment, catalog);
     return {
@@ -113,4 +159,28 @@ export function buildEnrichedItinerary(template, catalog) {
     stops: stopList.length,
     image: heroFromCatalog || template.image,
   };
+}
+
+/** Unique photo URLs for list-card carousels: template hero, then stop photos. */
+export function itineraryGalleryUrls(itinerary) {
+  const urls = [];
+  const seen = new Set();
+  const add = (value) => {
+    const src = String(value || '').trim();
+    if (!src || seen.has(src)) return;
+    seen.add(src);
+    urls.push(src);
+  };
+  add(itinerary?.image);
+  for (const stop of itinerary?.stopList || []) {
+    add(stop?.place?.image);
+  }
+  return urls;
+}
+
+export function itineraryCardChips(itinerary) {
+  const chips = [...(itinerary?.tags || [])].filter(Boolean);
+  const n = itinerary?.stopList?.length || itinerary?.stops;
+  if (n) chips.push(`${n} ${n === 1 ? 'stop' : 'stops'}`);
+  return chips;
 }

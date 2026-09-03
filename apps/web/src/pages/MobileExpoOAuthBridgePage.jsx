@@ -77,7 +77,7 @@ export function MobileExpoOAuthBridgePage() {
   }, []);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f5f0e8] px-4 font-['Inter',sans-serif]">
+    <div className="min-h-screen flex items-center justify-center bg-[#f5f0e8] px-4 font-['Poppins',sans-serif]">
       <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-[0_24px_60px_rgba(0,0,0,0.12)]">
         <p className="text-base font-semibold text-neutral-900">Google sign in</p>
         <p className="mt-2 text-sm text-neutral-600">{message}</p>

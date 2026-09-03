@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DestinationMapPicker } from '../components/DestinationMapPicker';
 import { useToast } from '../components/Toast';
 import {
@@ -53,6 +54,8 @@ export function TouristSpots() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<Destination | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const imagesAtOpenRef = useRef<string[]>([]);
   const editingSourceSlugRef = useRef('');
@@ -207,15 +210,20 @@ export function TouristSpots() {
     }
   };
 
-  const handleDelete = async (d: Destination) => {
-    if (!window.confirm(`Delete “${d.name}”? This cannot be undone.`)) return;
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    const d = pendingDelete;
+    setDeleting(true);
     try {
       d.images.filter((u) => u.startsWith('blob:')).forEach((u) => URL.revokeObjectURL(u));
       await deleteAdminPlace(supabase, d.id);
       await reload();
+      setPendingDelete(null);
       toast('Destination deleted.');
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Delete failed', 'error');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -247,9 +255,6 @@ export function TouristSpots() {
             visitors scan with their phone camera and the visit counts for Admin and the establishment.
           </p>
         </div>
-        <button type="button" className={styles.addBtn} onClick={openCreate} disabled={loadState === 'loading'}>
-          <span>+</span> Add destination
-        </button>
       </div>
 
       <div className={styles.specCard}>
@@ -302,6 +307,9 @@ export function TouristSpots() {
             ))}
           </select>
         </div>
+        <button type="button" className={styles.addBtn} onClick={openCreate} disabled={loadState === 'loading'}>
+          <span>+</span> Add destination
+        </button>
       </div>
 
       <div className={styles.tableWrap}>
@@ -351,7 +359,12 @@ export function TouristSpots() {
                       <button type="button" className={styles.linkBtn} onClick={() => openEdit(spot)}>
                         Edit
                       </button>
-                      <button type="button" className={styles.dangerBtn} onClick={() => void handleDelete(spot)}>
+                      <button
+                        type="button"
+                        className={styles.dangerBtn}
+                        onClick={() => setPendingDelete(spot)}
+                        disabled={deleting}
+                      >
                         Delete
                       </button>
                     </div>
@@ -579,6 +592,17 @@ export function TouristSpots() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        title={pendingDelete ? `Delete “${pendingDelete.name}”?` : 'Delete destination?'}
+        message="This cannot be undone."
+        confirming={deleting}
+        onConfirm={() => void handleDelete()}
+        onCancel={() => {
+          if (!deleting) setPendingDelete(null);
+        }}
+      />
     </div>
   );
 }

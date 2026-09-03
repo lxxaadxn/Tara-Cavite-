@@ -13,7 +13,7 @@ import { JamIcon } from '../components/JamIcon';
 import { DirectionsMapView } from '../components/DirectionsMapView';
 import type { DirectionsMapPayload } from '../lib/directionsMapBridge';
 
-const GREEN = '#7EA00E';
+const GREEN = '#10A37F';
 const TITLE = '#241D13';
 const WHITE = '#FFFFFF';
 const PAGE_BG = '#F5F5F6';

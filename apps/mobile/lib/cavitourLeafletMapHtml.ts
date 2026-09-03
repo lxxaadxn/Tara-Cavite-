@@ -136,7 +136,20 @@ export const CAVITOUR_LEAFLET_HTML = `<!DOCTYPE html>
 
           markers.forEach(function (p) {
             if (p.lat == null || p.lng == null || isNaN(p.lat) || isNaN(p.lng)) return;
-            var m = L.marker([p.lat, p.lng], { icon: greenPinIcon });
+            var pinIcon = greenPinIcon;
+            if (p.iconUrl) {
+              pinIcon = L.icon({
+                iconUrl: p.iconUrl,
+                iconRetinaUrl: p.iconUrl,
+                iconSize: [28, 46],
+                iconAnchor: [14, 46],
+                popupAnchor: [1, -38],
+                shadowUrl: LEAFLET_MARKER_SHADOW,
+                shadowSize: [40, 40],
+                shadowAnchor: [12, 46]
+              });
+            }
+            var m = L.marker([p.lat, p.lng], { icon: pinIcon });
             m.on('click', function (ev) {
               L.DomEvent.stopPropagation(ev);
               postMarkerPreview(m, p.id);

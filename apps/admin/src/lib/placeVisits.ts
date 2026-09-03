@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { CONTENT_PIPELINE } from 'cavitour-shared';
 import {
   buildCheckinUrl,
   foldEstablishmentName,
@@ -25,6 +26,7 @@ export type EstablishmentVisitStatRow = {
   lastVisitAt: string | null;
 };
 
+/** Public marketing-web origin used inside QR codes (must host /checkin/:code). */
 export function getPublicWebOrigin(): string {
   const fromEnv = String(
     (import.meta as ImportMeta & { env?: Record<string, string> }).env?.VITE_PUBLIC_WEB_ORIGIN ||
@@ -37,12 +39,24 @@ export function getPublicWebOrigin(): string {
 
   if (typeof window !== 'undefined' && window.location?.origin) {
     const { protocol, hostname, port } = window.location;
+    // Standalone admin (:3001) does not serve /checkin — point QR at the web app.
     if (port === '3001' || port === '3000') {
       return `${protocol}//${hostname}:5173`;
     }
     return window.location.origin.replace(/\/$/, '');
   }
   return 'http://localhost:5173';
+}
+
+/** Avoid PostgREST URL limits when filtering many UUIDs with `.in()`. */
+const PLACE_ID_CHUNK = 80;
+
+function chunkIds(ids: string[], size = PLACE_ID_CHUNK): string[][] {
+  const out: string[][] = [];
+  for (let i = 0; i < ids.length; i += size) {
+    out.push(ids.slice(i, i + size));
+  }
+  return out;
 }
 
 type RawCounts = Map<string, { total: number; qr: number }>;
@@ -108,14 +122,29 @@ function sumAliases(
 async function loadPlacesNames(
   client: SupabaseClient,
   placeIds: string[]
-): Promise<{ id: string; name: string }[]> {
+): Promise<{ id: string; name: string; city: string }[]> {
   if (!placeIds.length) return [];
-  const { data, error } = await client.from('places').select('id, name').in('id', placeIds);
-  if (error) {
-    console.warn('[placeVisits] places', error.message);
-    return placeIds.map((id) => ({ id, name: '' }));
+  const byId = new Map<string, { id: string; name: string; city: string }>();
+  for (const chunk of chunkIds(placeIds)) {
+    const { data, error } = await client
+      .from(CONTENT_PIPELINE.establishmentsView)
+      .select('establishment_public_id, ta_name, city_mun')
+      .in('establishment_public_id', chunk);
+    if (error) {
+      console.warn('[placeVisits] STA catalog', error.message);
+      continue;
+    }
+    for (const r of data ?? []) {
+      const id = String(r.establishment_public_id ?? '');
+      if (!id) continue;
+      byId.set(id, {
+        id,
+        name: String(r.ta_name || ''),
+        city: String(r.city_mun || '—'),
+      });
+    }
   }
-  return (data ?? []).map((r) => ({ id: String(r.id), name: String(r.name || '') }));
+  return placeIds.map((id) => byId.get(id) ?? { id, name: '', city: '—' });
 }
 
 async function loadViaAdminRpc(client: SupabaseClient): Promise<{
@@ -208,7 +237,7 @@ async function loadViaDirectQueries(client: SupabaseClient): Promise<{
 
   let sta: { id: string; name: string }[] = [];
   const staView = await client
-    .from('v_sta_v3_cavite_2025_catalog')
+    .from(CONTENT_PIPELINE.establishmentsView)
     .select('establishment_public_id, ta_name')
     .limit(1200);
   if (!staView.error && staView.data?.length) {
@@ -217,7 +246,7 @@ async function loadViaDirectQueries(client: SupabaseClient): Promise<{
       name: String(r.ta_name || ''),
     }));
   } else {
-    const staTable = await client.from('sta_v3_cavite_2025').select('id, ta_name').limit(1200);
+    const staTable = await client.from(CONTENT_PIPELINE.adminPlacesTable).select('id, ta_name').limit(1200);
     if (!staTable.error) {
       sta = (staTable.data ?? []).map((r) => ({
         id: String(r.id || ''),
@@ -279,32 +308,58 @@ export async function fetchMostVisitedPlaces(
   client: SupabaseClient,
   limit = 8
 ): Promise<{ name: string; visits: number; city: string; placeId: string }[]> {
-  const { data: places, error: placeErr } = await client.from('places').select('id, name, city_mun');
-  if (placeErr) throw new Error(placeErr.message);
-  const placeRows = (places ?? []).map((p) => ({
-    id: String(p.id),
-    name: String(p.name || 'Place'),
-    city: String(p.city_mun || '—'),
-  }));
+  const { data: counts, error } = await client
+    .from('v_place_visit_counts')
+    .select('place_id, total_visits')
+    .order('total_visits', { ascending: false })
+    .limit(Math.max(limit * 4, 32));
+
+  let ranked: [string, number][] = [];
+  if (error) {
+    const { data: visits, error: visitErr } = await client
+      .from('place_visits')
+      .select('place_id')
+      .order('created_at', { ascending: false })
+      .limit(5000);
+    if (visitErr) throw new Error(visitErr.message);
+    if (!visits?.length) return [];
+    const tally = new Map<string, number>();
+    for (const row of visits) {
+      const id = String(row.place_id);
+      tally.set(id, (tally.get(id) ?? 0) + 1);
+    }
+    ranked = [...tally.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit * 4);
+  } else {
+    ranked = (counts ?? []).map((r) => [String(r.place_id), Number(r.total_visits) || 0] as [string, number]);
+  }
+
+  const names = await loadPlacesNames(
+    client,
+    ranked.map(([id]) => id)
+  );
+  const byId = new Map(names.map((p) => [p.id, p]));
   const cmap = await fetchPlaceCheckinMap(
     client,
-    placeRows.map((p) => p.id)
+    ranked.map(([id]) => id)
   );
 
-  const ranked = placeRows
-    .map((p) => ({
-      placeId: p.id,
-      name: p.name,
-      city: p.city,
-      visits: cmap.get(p.id)?.totalVisits ?? 0,
-    }))
+  return ranked
+    .map(([placeId, visitsCount]) => {
+      const info = cmap.get(placeId);
+      const named = byId.get(placeId);
+      return {
+        placeId,
+        visits: info?.totalVisits ?? visitsCount,
+        name: named?.name || placeId.slice(0, 8),
+        city: named?.city || '—',
+      };
+    })
     .filter((r) => r.visits > 0)
     .sort((a, b) => b.visits - a.visits)
     .slice(0, limit);
-
-  return ranked;
 }
 
+/** Future Establishment portal — same visit totals the business will see. */
 export async function fetchMyEstablishmentVisitStats(
   client: SupabaseClient
 ): Promise<EstablishmentVisitStatRow[]> {

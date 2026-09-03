@@ -40,7 +40,7 @@ const TITLE = '#241D13';
 
 const MUTED = '#737373';
 
-const GREEN = '#7EA00E';
+const GREEN = '#10A37F';
 
 const WHITE = '#FFFFFF';
 

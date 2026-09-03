@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,14 +9,14 @@ import {
   Image,
   Dimensions,
   ActivityIndicator,
+  FlatList,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { JamIcon } from '../components/JamIcon';
 import { FilterModal } from '../components/FilterModal';
 import { Header } from '../components/Header';
-import { CheckinScannerModal, ScanCheckinButton } from '../components/CheckinScannerModal';
 import type { Place } from '../data/mockData';
 import { supabase } from '../lib/supabase';
 import {
@@ -26,30 +26,36 @@ import {
 } from '../lib/placesFromSupabase';
 import { placeImageSource, placeHasDisplayImage } from '../lib/placeImageSource';
 import {
+  countActiveFilters,
+  placeMatchesSearchQuery,
   placePassesAppliedFilters,
   type AppliedPlaceFilters,
 } from '../lib/dashboardPlaceFilters';
+import { getFloatingTabBarScrollPadding } from '../lib/mainTabBarStyle';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const H_PAD = 16;
 const CARD_GAP = 40;
 const CARD_WIDTH = Math.min(320, Math.round(SCREEN_WIDTH * 0.74));
 const IMAGE_HEIGHT = Math.round(CARD_WIDTH * 0.58);
+const LIST_CARD_W = SCREEN_WIDTH - H_PAD * 2;
+const LIST_IMAGE_H = Math.round(LIST_CARD_W * 0.48);
 
 const FIGMA = {
   textTitle: '#241D13',
   textSubtitle: '#425466',
   textMuted: '#868686',
   star: '#FFC012',
-  searchGreen: '#7EA00E',
+  searchGreen: '#10A37F',
   white: '#FFFFFF',
   bg: '#FFFFFF',
 };
-const TEAL = '#1F4F59';
+const TEAL = '#1B8A70';
 const SEARCH_PLACEHOLDER = '#B3AAAA';
 
 const HomeScreen: React.FC = () => {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState('');
   const [filtersVisible, setFiltersVisible] = useState(false);
   const [appliedFilters, setAppliedFilters] = useState<AppliedPlaceFilters | null>(null);
@@ -58,7 +64,6 @@ const HomeScreen: React.FC = () => {
   const [catalogFromSupabase, setCatalogFromSupabase] = useState(false);
   const [catalogError, setCatalogError] = useState('');
   const [userPt, setUserPt] = useState<{ lat: number; lng: number } | null>(null);
-  const [scannerOpen, setScannerOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -105,17 +110,27 @@ const HomeScreen: React.FC = () => {
     };
   }, []);
 
-  const filteredSorted = useMemo(() => {
-    return catalogPlaces
-      .filter((p) => placeHasDisplayImage(p))
-      .filter((p) => placePassesAppliedFilters(p, appliedFilters));
-  }, [catalogPlaces, appliedFilters]);
+  const searchActive = searchQuery.trim().length > 0;
+  const filterActive = countActiveFilters(appliedFilters) > 0;
+  const browseMode = searchActive || filterActive;
 
-  const trendingRow = useMemo(() => filteredSorted, [filteredSorted]);
+  const filteredSorted = useMemo(() => {
+    const withImages = catalogPlaces.filter((p) => placeHasDisplayImage(p));
+    const pool = browseMode ? catalogPlaces : withImages;
+    return pool
+      .filter((p) => placePassesAppliedFilters(p, appliedFilters))
+      .filter((p) => placeMatchesSearchQuery(p, searchQuery));
+  }, [catalogPlaces, appliedFilters, searchQuery, browseMode]);
+
+  const trendingRow = useMemo(
+    () => filteredSorted.filter((p) => placeHasDisplayImage(p)),
+    [filteredSorted]
+  );
 
   const nearbyRow = useMemo(() => {
-    if (!userPt) return filteredSorted;
-    const scored = filteredSorted.map((p) => ({
+    const pictured = filteredSorted.filter((p) => placeHasDisplayImage(p));
+    if (!userPt) return pictured;
+    const scored = pictured.map((p) => ({
       place: p,
       km: haversineDistanceKm(userPt.lat, userPt.lng, p.latitude, p.longitude),
     }));
@@ -123,17 +138,18 @@ const HomeScreen: React.FC = () => {
     return scored.map((s) => s.place);
   }, [filteredSorted, userPt]);
 
-  const handleSearch = () => {
-    if (searchQuery.trim()) {
-      navigation.navigate('PlaceDetail', { query: searchQuery.trim() });
-    }
-  };
+  const openPlace = useCallback(
+    (place: Place) => {
+      (navigation as { navigate: (name: string, params: object) => void }).navigate('PlaceDetail', { place });
+    },
+    [navigation]
+  );
 
-  const renderPlaceCard = (place: Place) => (
+  const renderPlaceCard = (place: Place, portrait = false) => (
     <TouchableOpacity
       key={place.id}
-      style={styles.card}
-      onPress={() => navigation.navigate('PlaceDetail', { place })}
+      style={portrait ? styles.cardPortrait : styles.card}
+      onPress={() => openPlace(place)}
       accessibilityLabel={`${place.name}, ${place.address}`}
       accessibilityRole="button"
       activeOpacity={0.9}
@@ -141,12 +157,12 @@ const HomeScreen: React.FC = () => {
       {placeImageSource(place.image) ? (
         <Image
           source={placeImageSource(place.image)!}
-          style={styles.cardImage}
+          style={portrait ? styles.cardImagePortrait : styles.cardImage}
           resizeMode="cover"
           accessibilityLabel={`${place.name} image`}
         />
       ) : (
-        <View style={[styles.cardImage, styles.imagePlaceholder]}>
+        <View style={[portrait ? styles.cardImagePortrait : styles.cardImage, styles.imagePlaceholder]}>
           <JamIcon ionicon="image-outline" size={40} color={FIGMA.textMuted} />
         </View>
       )}
@@ -165,9 +181,11 @@ const HomeScreen: React.FC = () => {
     </TouchableOpacity>
   );
 
+  const listBottom = getFloatingTabBarScrollPadding(insets.bottom);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <Header title="" homeBranding showFilter={false} />
+      <Header title="" homeBranding showNotification />
       <View style={styles.searchFilterRow}>
         <View style={styles.searchPill}>
           <JamIcon name="search" size={18} color={FIGMA.searchGreen} />
@@ -177,7 +195,8 @@ const HomeScreen: React.FC = () => {
             placeholderTextColor={SEARCH_PLACEHOLDER}
             value={searchQuery}
             onChangeText={setSearchQuery}
-            onSubmitEditing={handleSearch}
+            onSubmitEditing={() => undefined}
+            returnKeyType="search"
             accessibilityLabel="Search for destinations"
           />
         </View>
@@ -190,12 +209,37 @@ const HomeScreen: React.FC = () => {
           <JamIcon name="filter" size={20} color={TEAL} />
         </TouchableOpacity>
       </View>
-      <View style={styles.scanRow}>
-        <ScanCheckinButton onPress={() => setScannerOpen(true)} label="Scan poster QR" />
-      </View>
+      {browseMode ? (
+        catalogLoading ? (
+          <View style={styles.rowLoading}>
+            <ActivityIndicator color={FIGMA.searchGreen} />
+          </View>
+        ) : (
+          <FlatList
+            style={styles.scroll}
+            data={filteredSorted}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => renderPlaceCard(item, true)}
+            contentContainerStyle={[styles.browseList, { paddingBottom: listBottom }]}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            ListHeaderComponent={
+              <Text style={styles.resultsTitle}>
+                {filteredSorted.length} place{filteredSorted.length === 1 ? '' : 's'}
+              </Text>
+            }
+            ListEmptyComponent={
+              <Text style={styles.emptyHint}>
+                No places match. Try another name, city, or reset filters.
+              </Text>
+            }
+          />
+        )
+      ) : (
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: listBottom }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.section}>
@@ -245,6 +289,7 @@ const HomeScreen: React.FC = () => {
           </Text>
         ) : null}
       </ScrollView>
+      )}
 
       <FilterModal
         visible={filtersVisible}
@@ -254,7 +299,6 @@ const HomeScreen: React.FC = () => {
         places={catalogPlaces}
         resultNoun="place"
       />
-      <CheckinScannerModal visible={scannerOpen} onClose={() => setScannerOpen(false)} />
     </SafeAreaView>
   );
 };
@@ -268,8 +312,29 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 110,
     paddingTop: 4,
+  },
+  browseList: {
+    paddingHorizontal: H_PAD,
+    paddingTop: 4,
+  },
+  resultsTitle: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 16,
+    lineHeight: 24,
+    color: FIGMA.textTitle,
+    marginBottom: 14,
+  },
+  cardPortrait: {
+    width: '100%',
+    marginBottom: 22,
+  },
+  cardImagePortrait: {
+    width: '100%',
+    height: LIST_IMAGE_H,
+    borderRadius: 21,
+    backgroundColor: '#E8E8E8',
+    marginBottom: 10,
   },
   searchFilterRow: {
     flexDirection: 'row',
@@ -278,10 +343,6 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     paddingBottom: 12,
     gap: 10,
-  },
-  scanRow: {
-    paddingHorizontal: H_PAD,
-    paddingBottom: 8,
   },
   searchPill: {
     flex: 1,

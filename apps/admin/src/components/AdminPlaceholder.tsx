@@ -10,7 +10,6 @@ export function AdminPlaceholder({ title, description, bullets }: Props) {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <h1>{title}</h1>
         <p>{description}</p>
       </header>
       <div className={styles.card}>

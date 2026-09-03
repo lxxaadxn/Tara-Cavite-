@@ -52,8 +52,8 @@ import { recordPlaceVisit } from 'cavitour-shared/placeCheckin';
 import { fetchPlaceById, haversineDistanceKm } from '../lib/placesFromSupabase';
 import { DirectionsMapView } from '../components/DirectionsMapView';
 
-const GREEN = '#7EA00E';
-const TEAL = '#1F4F59';
+const GREEN = '#10A37F';
+const TEAL = '#1B8A70';
 const OLIVE = '#213502';
 const TITLE = '#241D13';
 const MUTED = '#868686';
@@ -67,8 +67,8 @@ const COMMUTER_DISCLAIMER =
 const COMMUTER_FOOTNOTE = 'Roads and stops change — double-check locally, especially if you drive.';
 
 const PILL_STYLES = {
-  green: { bg: 'rgba(126, 160, 14, 0.5)', text: GREEN },
-  teal: { bg: 'rgba(31, 79, 89, 0.5)', text: TEAL },
+  green: { bg: 'rgba(16, 163, 127, 0.5)', text: GREEN },
+  teal: { bg: 'rgba(27, 138, 112, 0.5)', text: TEAL },
 } as const;
 
 type PillVariant = keyof typeof PILL_STYLES;
@@ -979,9 +979,9 @@ const styles = StyleSheet.create({
     gap: 10,
     padding: 12,
     borderRadius: 14,
-    backgroundColor: 'rgba(31, 79, 89, 0.08)',
+    backgroundColor: 'rgba(27, 138, 112, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(31, 79, 89, 0.12)',
+    borderColor: 'rgba(27, 138, 112, 0.12)',
     marginBottom: 14,
   },
   caviTripBannerText: {
@@ -1031,9 +1031,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   fabSave: {
-    backgroundColor: 'rgba(126, 160, 14, 0.14)',
+    backgroundColor: 'rgba(16, 163, 127, 0.14)',
     borderWidth: 1.5,
-    borderColor: 'rgba(126, 160, 14, 0.45)',
+    borderColor: 'rgba(16, 163, 127, 0.45)',
   },
   fabSaveActive: {
     backgroundColor: GREEN,
@@ -1042,7 +1042,7 @@ const styles = StyleSheet.create({
   fabShare: {
     backgroundColor: WHITE,
     borderWidth: 1.5,
-    borderColor: 'rgba(31, 79, 89, 0.28)',
+    borderColor: 'rgba(27, 138, 112, 0.28)',
     shadowColor: TEAL,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
@@ -1052,12 +1052,12 @@ const styles = StyleSheet.create({
   segmentWrap: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    backgroundColor: 'rgba(126, 160, 14, 0.12)',
+    backgroundColor: 'rgba(16, 163, 127, 0.12)',
     borderRadius: 14,
     padding: 4,
     marginBottom: 18,
     borderWidth: 1,
-    borderColor: 'rgba(126, 160, 14, 0.22)',
+    borderColor: 'rgba(16, 163, 127, 0.22)',
   },
   segmentSlot: {
     flex: 1,
@@ -1112,7 +1112,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(31, 79, 89, 0.15)',
+    borderColor: 'rgba(27, 138, 112, 0.15)',
     backgroundColor: '#fff',
     padding: 10,
   },
@@ -1120,7 +1120,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(31, 79, 89, 0.12)',
+    borderTopColor: 'rgba(27, 138, 112, 0.12)',
   },
   routeTripSummaryLabel: {
     fontFamily: 'Inter_700Bold',
@@ -1147,8 +1147,8 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(126, 160, 14, 0.28)',
-    backgroundColor: 'rgba(126, 160, 14, 0.06)',
+    borderColor: 'rgba(16, 163, 127, 0.28)',
+    backgroundColor: 'rgba(16, 163, 127, 0.06)',
   },
   routeModeSectionTitle: {
     fontFamily: 'Poppins_700Bold',
@@ -1169,14 +1169,14 @@ const styles = StyleSheet.create({
   routeModeOption: {
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: 'rgba(31, 79, 89, 0.2)',
+    borderColor: 'rgba(27, 138, 112, 0.2)',
     backgroundColor: WHITE,
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
   routeModeOptionOn: {
     borderColor: GREEN,
-    backgroundColor: 'rgba(126, 160, 14, 0.12)',
+    backgroundColor: 'rgba(16, 163, 127, 0.12)',
   },
   routeModeOptionText: {
     fontFamily: 'Poppins_600SemiBold',
@@ -1204,7 +1204,7 @@ const styles = StyleSheet.create({
     minWidth: 28,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(31, 79, 89, 0.2)',
+    borderColor: 'rgba(27, 138, 112, 0.2)',
     backgroundColor: '#fff',
     flexDirection: 'row',
     alignItems: 'center',
@@ -1214,7 +1214,7 @@ const styles = StyleSheet.create({
   },
   mapsModeChipActive: {
     backgroundColor: 'rgba(118, 214, 255, 0.35)',
-    borderColor: 'rgba(31, 79, 89, 0.3)',
+    borderColor: 'rgba(27, 138, 112, 0.3)',
   },
   mapsModeChipText: {
     fontFamily: 'Poppins_700Bold',
@@ -1224,7 +1224,7 @@ const styles = StyleSheet.create({
   mapsInputCard: {
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(31, 79, 89, 0.18)',
+    borderColor: 'rgba(27, 138, 112, 0.18)',
     backgroundColor: '#fff',
     overflow: 'hidden',
   },
@@ -1260,13 +1260,13 @@ const styles = StyleSheet.create({
   transportChip: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(31, 79, 89, 0.22)',
+    borderColor: 'rgba(27, 138, 112, 0.22)',
     backgroundColor: WHITE,
     paddingHorizontal: 12,
     paddingVertical: 7,
   },
   transportChipActive: {
-    backgroundColor: 'rgba(126, 160, 14, 0.18)',
+    backgroundColor: 'rgba(16, 163, 127, 0.18)',
     borderColor: GREEN,
   },
   transportChipText: {
@@ -1280,7 +1280,7 @@ const styles = StyleSheet.create({
   },
   commuterBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(126, 160, 14, 0.18)',
+    backgroundColor: 'rgba(16, 163, 127, 0.18)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
@@ -1436,9 +1436,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: 8,
-    backgroundColor: 'rgba(126, 160, 14, 0.12)',
+    backgroundColor: 'rgba(16, 163, 127, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(126, 160, 14, 0.35)',
+    borderColor: 'rgba(16, 163, 127, 0.35)',
   },
   guideSignLabel: {
     fontFamily: 'Inter_500Medium',

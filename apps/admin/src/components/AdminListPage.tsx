@@ -58,7 +58,6 @@ export function AdminListPage<T extends { id: string }>({
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <h1>{title}</h1>
         {description ? <p>{description}</p> : null}
         {sourceNote ? <p className={styles.sourceNote}>{sourceNote}</p> : null}
       </header>

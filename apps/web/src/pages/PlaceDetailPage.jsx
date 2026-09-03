@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, Link, useSearchParams } from 'react-router-dom';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import {
   fetchAllPlacesFromSupabase,
@@ -9,28 +9,19 @@ import {
 } from '../lib/placesFromSupabase';
 import { AppHeader } from '../components/AppHeader';
 import { PlaceImageLightbox } from '../components/PlaceImageLightbox';
-import { DirectionsPanel } from '../components/DirectionsPanel';
 import { SaveSuccessToast } from '../components/SaveSuccessToast';
 import { PlaceReviewForm } from '../components/PlaceReviewForm';
 import { fetchPlaceReviews } from '../lib/placeReviews';
-import { readSavedLists, savePlaceToList, savePlaceToListId } from '../lib/savedPlaces';
+import { hasQrPlaceVisit } from 'cavitour-shared/placeCheckin';
+import { fetchSavedListsForUser, savePlaceToListIdRemote, savePlaceToListRemote } from '../lib/savedPlacesSupabase';
 import { useSaveSuccessToast } from '../lib/useSaveSuccessToast';
 import { formatNtdpCategoryTagLabel, getEstablishmentAboutBody } from '../lib/ntdpDisplayLabels';
 import { readCachedUserLocation } from '../lib/promptLocationOnLogin';
 import { googleMapsDirectionsUrl } from '../lib/osmUrls';
-import { fetchPlaceCheckinDisplay, recordCheckinByCode } from 'cavitour-shared/placeCheckin';
-import { CheckinScannerModal } from '../components/CheckinScannerModal';
-import { recordDestinationReached } from '../lib/destinationReachedActivity';
+import { PlacesLeafletMap } from '../components/PlacesLeafletMap';
+import { lookupLocalEstablishmentUrls } from '../lib/establishmentLocalImages';
 
-function thankYouVisitMessage(placeName, alreadyCheckedIn) {
-  const name = String(placeName || '').trim() || 'this establishment';
-  if (alreadyCheckedIn) {
-    return `You already checked in today at ${name}. Thank you for visiting!`;
-  }
-  return `Thank you for visiting ${name}! Your visit was counted.`;
-}
-
-const olive = '#7ea00e';
+const olive = '#10A37F';
 const PLACEHOLDER_IMG =
   'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80';
 function isUuid(s) {
@@ -44,6 +35,31 @@ function formatProximityKm(km) {
     return `${m} m`;
   }
   return `${km.toFixed(km < 10 ? 1 : 0)} km`;
+}
+
+function formatClockAnalog(raw) {
+  const m = String(raw ?? '').trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const hour24 = Number(m[1]);
+  const minutes = m[2];
+  if (!Number.isInteger(hour24) || hour24 < 0 || hour24 > 23) return null;
+  const suffix = hour24 >= 12 ? 'PM' : 'AM';
+  const hour12 = hour24 % 12 || 12;
+  return `${hour12}:${minutes} ${suffix}`;
+}
+
+/** Catalog hours are "07:00 – 17:00"; show analog 12-hour time. */
+function formatHoursAnalog(hours) {
+  const text = String(hours ?? '').trim();
+  if (!text) return '';
+  if (/\b(?:am|pm)\b/i.test(text)) return text;
+  const parts = text.split(/\s*[–—-]\s*/);
+  if (parts.length === 2) {
+    const start = formatClockAnalog(parts[0]);
+    const end = formatClockAnalog(parts[1]);
+    if (start && end) return `${start} – ${end}`;
+  }
+  return formatClockAnalog(text) || text;
 }
 
 function cleanPlaceAddress(name, address) {
@@ -157,34 +173,6 @@ function buildReviewStatsFromRatings(ratings) {
   };
 }
 
-function buildDummyReviews(placeName) {
-  const name = placeName?.trim() || 'This place';
-  const base = Date.now() - 86_400_000 * 14;
-  return [
-    {
-      id: 'sample-1',
-      nickname: 'Mika R.',
-      rating: 5,
-      text: `Easy visit on a weekday. ${name} matched what we expected from the listing and staff were approachable.`,
-      at: base + 86_400_000 * 3,
-    },
-    {
-      id: 'sample-2',
-      nickname: 'Kai del Rosario',
-      rating: 4,
-      text: `Solid stop along our route. A bit busy on a Saturday but still worth the time.`,
-      at: base + 86_400_000 * 8,
-    },
-    {
-      id: 'sample-3',
-      nickname: 'Benj D.',
-      rating: 4,
-      text: `Good for a short stay. We'd consider coming back when we're in Cavite again.`,
-      at: base + 86_400_000 * 11,
-    },
-  ];
-}
-
 function ReviewStars({ value = 5, size = 'h-4 w-4', dimmed = false }) {
   return (
     <div className="flex items-center gap-1">
@@ -207,28 +195,6 @@ function ReviewStars({ value = 5, size = 'h-4 w-4', dimmed = false }) {
   );
 }
 
-function storageKeyForPlaceReviews(placeId) {
-  return `cavitour-place-reviews-${placeId}`;
-}
-
-function loadSessionReviews(placeId) {
-  if (typeof window === 'undefined' || !placeId) return [];
-  try {
-    const raw = window.sessionStorage.getItem(storageKeyForPlaceReviews(placeId));
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveSessionReviews(placeId, reviews) {
-  if (typeof window === 'undefined' || !placeId) return;
-  try {
-    window.sessionStorage.setItem(storageKeyForPlaceReviews(placeId), JSON.stringify(reviews));
-  } catch {
-  }
-}
 
 function formatReviewTime(ts) {
   const ms = Date.now() - Number(ts);
@@ -239,10 +205,55 @@ function formatReviewTime(ts) {
   return `${Math.floor(ms / 86_400_000)}d ago`;
 }
 
+function HighlightIcon({ name }) {
+  const common = 'h-5 w-5 text-[#10A37F]';
+  switch (name) {
+    case 'type':
+      return (
+        <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M4 12h10M4 17h7" />
+        </svg>
+      );
+    case 'category':
+      return (
+        <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 7a2 2 0 0 1 2-2h6l4 4v10a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V7Z" />
+        </svg>
+      );
+    case 'hours':
+      return (
+        <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+          <circle cx="12" cy="12" r="8" />
+          <path strokeLinecap="round" d="M12 8v4l3 2" />
+        </svg>
+      );
+    case 'municipality':
+      return (
+        <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 21s7-5.4 7-11a7 7 0 1 0-14 0c0 5.6 7 11 7 11Z" />
+          <circle cx="12" cy="10" r="2.2" />
+        </svg>
+      );
+    case 'phone':
+      return (
+        <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6.5 4.5h3l1.2 3.2-1.8 1.1a12 12 0 0 0 6.3 6.3l1.1-1.8 3.2 1.2v3A2 2 0 0 1 17.5 19 14.5 14.5 0 0 1 5 6.5a2 2 0 0 1 1.5-2Z" />
+        </svg>
+      );
+    default:
+      return (
+        <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+          <circle cx="12" cy="12" r="8" />
+          <path strokeLinecap="round" d="M9 12h6M12 9v6" />
+        </svg>
+      );
+  }
+}
+
 export function PlaceDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [routePanelOpen, setRoutePanelOpen] = useState(false);
   const [spot, setSpot] = useState(null);
   const [loading, setLoading] = useState(true);
   const [placeNotFound, setPlaceNotFound] = useState(false);
@@ -251,85 +262,58 @@ export function PlaceDetailPage() {
     const cached = readCachedUserLocation();
     return cached ? { lat: cached.lat, lng: cached.lng } : null;
   });
-  const [locationStatus, setLocationStatus] = useState(() =>
-    readCachedUserLocation() ? 'ready' : 'idle'
-  );
   const [saveStatus, setSaveStatus] = useState('');
   const [saveModalOpen, setSaveModalOpen] = useState(false);
+  const [reviewFormOpen, setReviewFormOpen] = useState(false);
+  const [canWriteReview, setCanWriteReview] = useState(false);
+  const [reviewPhotoLightbox, setReviewPhotoLightbox] = useState(null);
   const [listNameDraft, setListNameDraft] = useState('');
   const [existingLists, setExistingLists] = useState([]);
-  const [sessionReviews, setSessionReviews] = useState([]);
+  const [saveListError, setSaveListError] = useState('');
   const [publishedReviews, setPublishedReviews] = useState([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewsError, setReviewsError] = useState('');
   const [authUser, setAuthUser] = useState(null);
   const { showSaveSuccess, toastProps } = useSaveSuccessToast();
   const [lightboxIndex, setLightboxIndex] = useState(null);
-  const [checkinInfo, setCheckinInfo] = useState(null);
-  const [checkinBusy, setCheckinBusy] = useState(false);
-  const [checkinMsg, setCheckinMsg] = useState('');
-  const [scannerOpen, setScannerOpen] = useState(false);
-  const [arrivalOptionsOpen, setArrivalOptionsOpen] = useState(false);
-  const [tapQrReveal, setTapQrReveal] = useState(false);
-  const checkinSectionRef = useRef(null);
+  const [heroIndex, setHeroIndex] = useState(0);
+  const [overviewExpanded, setOverviewExpanded] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
 
-  const openStartCaviTrip = useCallback(() => {
+  const openGoogleDirections = useCallback(() => {
     if (spot?.lat == null || spot?.lng == null) {
       window.alert('This place does not have map coordinates yet.');
       return;
     }
-
-    const placeName = spot.name || 'this place';
-    const openMaps = window.confirm(
-      `Start CaviTrip — open Google Maps with directions from your location to ${placeName}?`
-    );
-    if (openMaps) {
-      const url = googleMapsDirectionsUrl(
-        spot.lat,
-        spot.lng,
-        'driving',
-        userCoords
-      );
-      if (url && url !== '#') {
-        window.open(url, '_blank', 'noopener,noreferrer');
-      }
+    const url = googleMapsDirectionsUrl(spot.lat, spot.lng, 'driving', null);
+    if (url && url !== '#') {
+      window.open(url, '_blank', 'noopener,noreferrer');
     }
-    setRoutePanelOpen(true);
-  }, [spot?.lat, spot?.lng, spot?.name, userCoords]);
-
-  const openArrivalCheckinOptions = useCallback(() => {
-    setRoutePanelOpen(false);
-    setArrivalOptionsOpen(true);
-    setTapQrReveal(false);
-    requestAnimationFrame(() => {
-      checkinSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    });
-  }, []);
+  }, [spot?.lat, spot?.lng]);
 
   useEffect(() => {
-    if (searchParams.get('confirmArrival') !== '1') return;
-    setArrivalOptionsOpen(true);
-    setTapQrReveal(false);
-    const t = window.setTimeout(() => {
-      checkinSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 400);
-    const p = new URLSearchParams(searchParams);
-    p.delete('confirmArrival');
-    setSearchParams(p, { replace: true });
-    return () => window.clearTimeout(t);
-  }, [searchParams, setSearchParams]);
-
-  const closeRoutePanel = useCallback(() => {
-    setRoutePanelOpen(false);
-    const p = new URLSearchParams(searchParams);
-    if (!p.has('tab')) return;
-    p.delete('tab');
-    setSearchParams(p, { replace: true });
-  }, [searchParams, setSearchParams]);
-
-  useEffect(() => {
-    setRoutePanelOpen(false);
     setLightboxIndex(null);
+    setHeroIndex(0);
+    setOverviewExpanded(false);
+    setShareCopied(false);
+    setReviewFormOpen(false);
+    setCanWriteReview(false);
+    setReviewPhotoLightbox(null);
   }, [id]);
+
+  useEffect(() => {
+    if (!reviewFormOpen) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setReviewFormOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [reviewFormOpen]);
 
   useEffect(() => {
     const q = searchParams.get('tab');
@@ -345,68 +329,10 @@ export function PlaceDetailPage() {
       const d = ev?.detail;
       if (d && Number.isFinite(d.lat) && Number.isFinite(d.lng)) {
         setUserCoords({ lat: d.lat, lng: d.lng });
-        setLocationStatus('ready');
       }
     };
     window.addEventListener('cavitour:user-location', onCached);
     return () => window.removeEventListener('cavitour:user-location', onCached);
-  }, []);
-
-  const requestUserLocation = useCallback(() => {
-    if (typeof window === 'undefined' || !window.navigator?.geolocation) {
-      setLocationStatus('unavailable');
-      return;
-    }
-    setLocationStatus('locating');
-    window.navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setUserCoords({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        });
-        setLocationStatus('ready');
-      },
-      (err) => {
-        setLocationStatus(err?.code === 1 ? 'denied' : 'unavailable');
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 60_000,
-      }
-    );
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.navigator?.geolocation) {
-      setLocationStatus('unavailable');
-      return;
-    }
-    let cancelled = false;
-    setLocationStatus('locating');
-    const watchId = window.navigator.geolocation.watchPosition(
-      (position) => {
-        if (cancelled) return;
-        setUserCoords({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        });
-        setLocationStatus('ready');
-      },
-      (err) => {
-        if (cancelled) return;
-        setLocationStatus(err?.code === 1 ? 'denied' : 'unavailable');
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 60_000,
-      }
-    );
-    return () => {
-      cancelled = true;
-      window.navigator.geolocation.clearWatch(watchId);
-    };
   }, []);
 
   useEffect(() => {
@@ -472,14 +398,6 @@ export function PlaceDetailPage() {
   }, [id, relatedPlacesRaw]);
 
   useEffect(() => {
-    if (!spot?.id) {
-      setSessionReviews([]);
-      return;
-    }
-    setSessionReviews(loadSessionReviews(spot.id));
-  }, [spot?.id]);
-
-  useEffect(() => {
     let cancelled = false;
     supabase.auth.getUser().then(({ data }) => {
       if (!cancelled) setAuthUser(data?.user ?? null);
@@ -496,18 +414,38 @@ export function PlaceDetailPage() {
   }, []);
 
   useEffect(() => {
+    if (!spot?.id || !authUser) {
+      setCanWriteReview(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const visited = await hasQrPlaceVisit(supabase, spot.id);
+      if (!cancelled) setCanWriteReview(visited);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [spot?.id, authUser]);
+
+  useEffect(() => {
     if (!spot?.id) {
       setPublishedReviews([]);
+      setReviewsError('');
       return;
     }
     let cancelled = false;
     setReviewsLoading(true);
+    setReviewsError('');
     (async () => {
       try {
         const rows = await fetchPlaceReviews(supabase, spot.id);
         if (!cancelled) setPublishedReviews(rows);
-      } catch {
-        if (!cancelled) setPublishedReviews([]);
+      } catch (err) {
+        if (!cancelled) {
+          setPublishedReviews([]);
+          setReviewsError(err?.message || 'Could not load reviews.');
+        }
       } finally {
         if (!cancelled) setReviewsLoading(false);
       }
@@ -516,80 +454,6 @@ export function PlaceDetailPage() {
       cancelled = true;
     };
   }, [spot?.id]);
-
-  useEffect(() => {
-    if (!spot?.id) {
-      setCheckinInfo(null);
-      setCheckinMsg('');
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      try {
-        const info = await fetchPlaceCheckinDisplay(supabase, spot.id, window.location.origin);
-        if (!cancelled) setCheckinInfo(info);
-      } catch {
-        if (!cancelled) setCheckinInfo(null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [spot?.id]);
-
-  const handleEstablishmentCheckin = async () => {
-    if (!checkinInfo?.code) {
-      setCheckinMsg('No QR code for this establishment yet. Ask admin to run the check-in SQL.');
-      return;
-    }
-    if (!authUser) {
-      window.location.assign(`/login?next=${encodeURIComponent(`/place/${spot.id}`)}`);
-      return;
-    }
-    setCheckinBusy(true);
-    setCheckinMsg('');
-    try {
-      const result = await recordCheckinByCode(supabase, checkinInfo.code, 'qr');
-      try {
-        await recordDestinationReached(authUser.id, spot.id, {
-          name: spot.name || result.placeName,
-          image: spot.image_url || spot.image,
-        });
-      } catch {
-      }
-      const msg = thankYouVisitMessage(result.placeName, result.alreadyCheckedIn);
-      setCheckinMsg(msg);
-      window.alert(
-        result.alreadyCheckedIn
-          ? `Already checked in\n\n${msg}`
-          : `Thank you for visiting!\n\n${msg}`
-      );
-    } catch (err) {
-      setCheckinMsg(err instanceof Error ? err.message : 'Check-in failed.');
-    } finally {
-      setCheckinBusy(false);
-    }
-  };
-
-  const handleScannedCheckin = async (code) => {
-    if (!authUser) {
-      window.location.assign(`/login?next=${encodeURIComponent(`/place/${spot.id}`)}`);
-      return;
-    }
-    const result = await recordCheckinByCode(supabase, code, 'qr');
-    try {
-      await recordDestinationReached(authUser.id, spot.id, {
-        name: spot.name || result.placeName,
-        image: spot.image_url || spot.image,
-      });
-    } catch {
-    }
-    const msg = thankYouVisitMessage(result.placeName, result.alreadyCheckedIn);
-    setCheckinMsg(msg);
-    window.alert(
-      result.alreadyCheckedIn ? `Already checked in\n\n${msg}` : `Thank you for visiting!\n\n${msg}`
-    );
-  };
 
   useEffect(() => {
     let cancelled = false;
@@ -607,32 +471,50 @@ export function PlaceDetailPage() {
     };
   }, []);
 
-  const extras = [
-    'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&q=80',
-    'https://images.unsplash.com/photo-1559925393-8be0ec4767c8?w=400&q=80',
-  ];
-
-  const dummyReviews = useMemo(() => (spot ? buildDummyReviews(spot.name) : []), [spot?.name]);
-
-  const visitorReviews = useMemo(() => {
-    const publishedIds = new Set(publishedReviews.map((r) => r.id));
-    const sessionOnly = sessionReviews.filter((r) => !publishedIds.has(r.id));
-    return [...publishedReviews, ...sessionOnly].sort((a, b) => b.at - a.at);
-  }, [publishedReviews, sessionReviews]);
-
-  const reviewStatsRatings = useMemo(() => {
-    if (visitorReviews.length > 0) {
-      return visitorReviews.map((r) => r.rating);
+  const galleryImages = useMemo(() => {
+    const urls = [];
+    const push = (u) => {
+      const v = String(u ?? '').trim();
+      if (!v || v === PLACEHOLDER_IMG) return;
+      if (!urls.includes(v)) urls.push(v);
+    };
+    if (spot) {
+      push(spot.image);
+      for (const u of spot.galleryUrls ?? []) push(u);
+      const hasDbImage = Boolean(spot.image?.trim() && spot.image !== PLACEHOLDER_IMG);
+      const hasDbGallery = Boolean((spot.galleryUrls ?? []).some((u) => String(u ?? '').trim()));
+      if (!hasDbImage && !hasDbGallery) {
+        for (const u of lookupLocalEstablishmentUrls(spot.name) ?? []) push(u);
+      }
     }
-    return dummyReviews.map((d) => d.rating);
-  }, [visitorReviews, dummyReviews]);
+    return urls.length ? urls : [PLACEHOLDER_IMG];
+  }, [spot]);
+
+  const heroImage = galleryImages[Math.min(heroIndex, galleryImages.length - 1)] || PLACEHOLDER_IMG;
+
+  const galleryThumbs = useMemo(() => {
+    if (!galleryImages.length) return [];
+    const restIdx = galleryImages.map((_, i) => i).filter((i) => i !== heroIndex);
+    const poolIdx = restIdx.length ? restIdx : galleryImages.map((_, i) => i);
+    return Array.from({ length: 3 }, (_, i) => {
+      const index = poolIdx[i % poolIdx.length];
+      return { url: galleryImages[index], index };
+    });
+  }, [galleryImages, heroIndex]);
+
+  const extraPhotoCount = Math.max(0, galleryImages.length - 4);
+
+  const visitorReviews = useMemo(
+    () => [...publishedReviews].sort((a, b) => b.at - a.at),
+    [publishedReviews]
+  );
+
+  const reviewStatsRatings = useMemo(
+    () => visitorReviews.map((r) => r.rating),
+    [visitorReviews]
+  );
 
   const mergedReviewStats = useMemo(() => buildReviewStatsFromRatings(reviewStatsRatings), [reviewStatsRatings]);
-
-  const allListedReviews = useMemo(() => {
-    if (visitorReviews.length > 0) return visitorReviews;
-    return [...dummyReviews].sort((a, b) => b.at - a.at);
-  }, [visitorReviews, dummyReviews]);
 
   const reviewAuthorNickname = useMemo(() => {
     const meta = authUser?.user_metadata ?? {};
@@ -645,39 +527,17 @@ export function PlaceDetailPage() {
     return email || '';
   }, [authUser]);
 
-  const handleReviewSubmitted = useCallback(
-    (review) => {
-      if (authUser) {
-        setPublishedReviews((prev) => {
-          const without = prev.filter((r) => r.userId !== review.userId);
-          return [review, ...without];
-        });
-        setSessionReviews((prev) => prev.filter((r) => r.userId !== review.userId));
-      } else if (spot?.id) {
-        setSessionReviews((prev) => {
-          const next = [review, ...prev.filter((r) => r.id !== review.id)];
-          saveSessionReviews(spot.id, next);
-          return next;
-        });
-      }
-    },
-    [authUser, spot?.id]
-  );
-
-  const detailThumbs = useMemo(() => {
-    if (!spot) return [extras[0], extras[1], PLACEHOLDER_IMG];
-    if (spot.galleryUrls?.length > 1) {
-      const t = spot.galleryUrls.slice(1, 4);
-      return [0, 1, 2].map((i) => t[i] ?? spot.image);
+  const handleReviewSubmitted = useCallback(async () => {
+    setReviewFormOpen(false);
+    if (!spot?.id) return;
+    try {
+      const rows = await fetchPlaceReviews(supabase, spot.id);
+      setPublishedReviews(rows);
+      setReviewsError('');
+    } catch (err) {
+      setReviewsError(err?.message || 'Could not load reviews.');
     }
-    return [extras[0], extras[1], spot.image];
-  }, [spot]);
-
-  const galleryImages = useMemo(() => {
-    if (!spot?.image) return detailThumbs.filter(Boolean);
-    const merged = [spot.image, ...detailThumbs];
-    return merged.filter((url, i) => url && merged.indexOf(url) === i);
-  }, [spot?.image, detailThumbs]);
+  }, [spot?.id]);
 
   const suggestedPlaces = useMemo(() => {
     if (!spot?.lat || !spot?.lng) return [];
@@ -711,9 +571,66 @@ export function PlaceDetailPage() {
     [spot]
   );
 
+  const highlightCards = useMemo(() => {
+    if (!spot) return [];
+    const typeValue = String(spot.ta_category || spot.type_code || '').trim();
+    const categoryValue = touristSpotCategory !== '—' ? touristSpotCategory : '';
+    const municipalityValue = String(spot.city_mun || '').trim();
+    return [
+      { key: 'type', label: 'Type', value: typeValue || '—' },
+      { key: 'category', label: 'Category', value: categoryValue || '—' },
+      { key: 'municipality', label: 'Municipality', value: municipalityValue || '—' },
+    ];
+  }, [spot, touristSpotCategory]);
+
+  const hasContact = Boolean(
+    String(spot?.hours || '').trim() ||
+      spot?.phone ||
+      spot?.email ||
+      spot?.website ||
+      spot?.social_facebook ||
+      spot?.social_instagram ||
+      spot?.social_twitter
+  );
+
+  const overviewNeedsToggle = touristSpotOverview.length > 220;
+  const overviewText =
+    overviewNeedsToggle && !overviewExpanded
+      ? `${touristSpotOverview.slice(0, 220).trim()}…`
+      : touristSpotOverview;
+
+  const cycleHero = useCallback(
+    (delta) => {
+      setHeroIndex((prev) => {
+        const len = galleryImages.length || 1;
+        return (prev + delta + len) % len;
+      });
+    },
+    [galleryImages.length]
+  );
+
+  const handleShare = useCallback(async () => {
+    const url = typeof window !== 'undefined' ? window.location.href : '';
+    const title = spot?.name || 'Tara, Cavite!';
+    try {
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        await navigator.share({ title, url, text: title });
+        return;
+      }
+    } catch {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareCopied(true);
+      window.setTimeout(() => setShareCopied(false), 2000);
+    } catch {
+    }
+  }, [spot?.name]);
+
   if (loading || !spot) {
     return (
-      <div className="min-h-screen flex flex-col bg-white font-['Inter',sans-serif]">
+      <div className="min-h-screen flex flex-col bg-white font-['Poppins',sans-serif]">
         <AppHeader />
         <main className="flex-1 flex flex-col items-center justify-center gap-3 p-8 text-center text-neutral-600">
           {loading ? (
@@ -726,7 +643,7 @@ export function PlaceDetailPage() {
                   ? 'This listing is not in public.places yet. Run sync_places_with_images.sql in Supabase SQL Editor.'
                   : 'Invalid place link.'}
               </p>
-              <Link to="/search" className="text-sm font-semibold text-[#7ea00e] hover:underline">
+              <Link to="/search" className="text-sm font-semibold text-[#10A37F] hover:underline">
                 Back to search
               </Link>
             </>
@@ -736,464 +653,437 @@ export function PlaceDetailPage() {
     );
   }
 
-  const handleSaveToList = () => {
+  const handleSaveToList = async () => {
+    if (!authUser) {
+      const next = encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname : '/search');
+      navigate(`/login?next=${next}`);
+      return;
+    }
     const suggestedName = spot?.ntdp_category ? formatNtdpCategoryTagLabel(spot.ntdp_category) : 'My list';
     setListNameDraft(suggestedName);
-    setExistingLists(readSavedLists());
+    setExistingLists([]);
+    setSaveListError('');
     setSaveModalOpen(true);
-  };
-
-  const handleConfirmSaveToList = () => {
-    const trimmed = String(listNameDraft ?? '').trim();
-    if (!trimmed) return;
-    const result = savePlaceToList(trimmed, {
-      id: spot.id,
-      name: spot.name,
-      image: spot.image,
-      subtitle: cleanPlaceAddress(spot.name, spot.address),
-      establishmentTag: spot.ntdp_category
-        ? formatNtdpCategoryTagLabel(spot.ntdp_category)
-        : spot.tags?.[0] ?? '',
-    });
-    if (result.ok) {
-      showSaveSuccess(trimmed);
-      setSaveModalOpen(false);
+    try {
+      const lists = await fetchSavedListsForUser(authUser.id);
+      setExistingLists(lists);
+    } catch {
+      setExistingLists([]);
     }
   };
 
-  const handleSaveToExistingList = (listId) => {
-    const result = savePlaceToListId(listId, {
-      id: spot.id,
-      name: spot.name,
-      image: spot.image,
-      subtitle: cleanPlaceAddress(spot.name, spot.address),
-      establishmentTag: spot.ntdp_category
-        ? formatNtdpCategoryTagLabel(spot.ntdp_category)
-        : spot.tags?.[0] ?? '',
-    });
-    if (result.ok) {
-      const label = result.listName || 'list';
-      showSaveSuccess(label);
-      setSaveModalOpen(false);
+  const placePayload = {
+    id: spot.id,
+    name: spot.name,
+    image: spot.image,
+    subtitle: cleanPlaceAddress(spot.name, spot.address),
+    establishmentTag: spot.ntdp_category
+      ? formatNtdpCategoryTagLabel(spot.ntdp_category)
+      : spot.tags?.[0] ?? '',
+  };
+
+  const saveFailureMessage = (reason) => {
+    if (reason === 'place_not_in_catalog') {
+      return 'This establishment could not be saved. Try again or pick another list.';
+    }
+    if (reason === 'list_not_found') return 'That list is no longer available.';
+    if (reason === 'invalid_input') return 'Enter a list name to save this establishment.';
+    return 'Could not save this establishment. Try again.';
+  };
+
+  const saveExceptionMessage = (err) => {
+    const msg = String(err?.message ?? '').trim();
+    return msg || saveFailureMessage();
+  };
+
+  const handleConfirmSaveToList = async () => {
+    const trimmed = String(listNameDraft ?? '').trim();
+    if (!trimmed) {
+      setSaveListError(saveFailureMessage('invalid_input'));
+      return;
+    }
+    if (!authUser) {
+      const next = encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname : '/search');
+      navigate(`/login?next=${next}`);
+      return;
+    }
+    setSaveListError('');
+    try {
+      const result = await savePlaceToListRemote(authUser.id, trimmed, placePayload);
+      if (result.ok) {
+        showSaveSuccess(trimmed);
+        setSaveModalOpen(false);
+        return;
+      }
+      setSaveListError(saveFailureMessage(result.reason));
+    } catch (err) {
+      setSaveListError(saveExceptionMessage(err));
+    }
+  };
+
+  const handleSaveToExistingList = async (listId) => {
+    if (!authUser) {
+      const next = encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname : '/search');
+      navigate(`/login?next=${next}`);
+      return;
+    }
+    setSaveListError('');
+    try {
+      const result = await savePlaceToListIdRemote(authUser.id, listId, placePayload);
+      if (result.ok) {
+        const label = result.listName || 'list';
+        showSaveSuccess(label);
+        setSaveModalOpen(false);
+        return;
+      }
+      setSaveListError(saveFailureMessage(result.reason));
+    } catch (err) {
+      setSaveListError(saveExceptionMessage(err));
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-white font-['Inter',sans-serif]">
+    <div className="min-h-screen flex flex-col bg-white font-['Poppins',sans-serif]">
       <AppHeader />
 
-      <main className="w-full max-w-[1480px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <section className="rounded-3xl border border-neutral-200 bg-[#f7f7f7] p-4 sm:p-5">
-            <div className="mb-3">
-              <Link
-                to="/search"
-                className="inline-flex items-center gap-1.5 text-sm font-semibold text-neutral-600 transition hover:text-neutral-900 hover:underline"
-              >
-                <span aria-hidden className="text-2xl leading-none">
-                  ‹
-                </span>
-                Back to search
-              </Link>
-            </div>
+      <main className="flex w-full min-w-0 flex-1 flex-col px-4 py-4 sm:px-6 lg:px-10 xl:px-12">
+        <Link
+          to="/search"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-neutral-500 transition hover:text-neutral-900"
+        >
+          <span aria-hidden className="text-lg leading-none">
+            ‹
+          </span>
+          Back to search
+        </Link>
 
-            <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_216px]">
-              <button
-                type="button"
-                onClick={() => setLightboxIndex(0)}
-                className="group relative block w-full overflow-hidden rounded-2xl text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7ea00e] focus-visible:ring-offset-2"
-                aria-label={`View photo of ${spot.name}`}
-              >
-                <img
-                  src={spot.image}
-                  alt={spot.name}
-                  className="h-[250px] w-full object-cover transition duration-200 group-hover:scale-[1.02] sm:h-[360px]"
-                />
-                <span className="pointer-events-none absolute inset-0 bg-black/0 transition group-hover:bg-black/10" />
-                <span className="pointer-events-none absolute bottom-3 right-3 rounded-full bg-black/55 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white opacity-0 transition group-hover:opacity-100">
-                  View
-                </span>
-              </button>
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-1">
-                {detailThumbs.map((img, i) => {
-                  const galleryIdx = galleryImages.indexOf(img);
-                  const openIdx = galleryIdx >= 0 ? galleryIdx : i + 1;
+        <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="font-['Poppins',sans-serif] text-2xl font-semibold tracking-tight text-neutral-900 sm:text-3xl">
+                {spot.name}
+              </h1>
+            </div>
+            <p className="mt-2 flex items-start gap-1.5 text-sm text-neutral-500">
+              <svg className="mt-0.5 h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 21s7-5.4 7-11a7 7 0 1 0-14 0c0 5.6 7 11 7 11Z" />
+                <circle cx="12" cy="10" r="2.2" />
+              </svg>
+              <span>{spot.address?.trim() || touristSpotMunicipalityProvince || 'Cavite, Philippines'}</span>
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {shareCopied ? <span className="text-xs font-medium text-emerald-700">Link copied</span> : null}
+            {saveStatus ? <span className="text-xs font-medium text-emerald-700">{saveStatus}</span> : null}
+            <button
+              type="button"
+              onClick={() => void handleShare()}
+              className="inline-flex h-10 items-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50"
+            >
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 6l-4-4-4 4M12 2v14" />
+              </svg>
+              Share
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleSaveToList()}
+              className="inline-flex h-10 items-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50"
+            >
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                <path d="M6 4h12a1 1 0 0 1 1 1v15l-7-4-7 4V5a1 1 0 0 1 1-1z" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Save
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-6 grid min-h-0 flex-1 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,28vw)] lg:gap-8">
+          <section className="min-w-0">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1.15fr)_minmax(150px,0.55fr)] lg:grid-cols-[minmax(0,1.1fr)_minmax(170px,0.5fr)] lg:gap-3">
+              <div className="relative h-[320px] overflow-hidden rounded-2xl bg-neutral-100 sm:h-[420px] lg:h-[min(64vh,680px)]">
+                <button
+                  type="button"
+                  onClick={() => setLightboxIndex(heroIndex)}
+                  className="block h-full w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10A37F] focus-visible:ring-offset-2"
+                  aria-label={`View photo of ${spot.name}`}
+                >
+                  <img
+                    src={heroImage}
+                    alt={spot.name}
+                    className="h-full w-full object-cover"
+                  />
+                </button>
+                {galleryImages.length > 1 ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => cycleHero(-1)}
+                      className="absolute left-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-neutral-800 shadow-sm"
+                      aria-label="Previous photo"
+                    >
+                      ‹
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => cycleHero(1)}
+                      className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-neutral-800 shadow-sm"
+                      aria-label="Next photo"
+                    >
+                      ›
+                    </button>
+                  </>
+                ) : null}
+              </div>
+              <div className="grid h-[220px] grid-cols-3 gap-2 sm:h-[420px] sm:grid-cols-1 sm:grid-rows-3 lg:h-[min(64vh,680px)]">
+                {galleryThumbs.map((thumb, i) => {
+                  const isLast = i === galleryThumbs.length - 1 && extraPhotoCount > 0;
                   return (
                     <button
-                      key={`${img}-${i}`}
+                      key={`${thumb.url}-${thumb.index}-${i}`}
                       type="button"
-                      onClick={() => setLightboxIndex(openIdx)}
-                      className="group relative overflow-hidden rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7ea00e] focus-visible:ring-offset-2"
-                      aria-label={`View photo ${i + 1}`}
+                      onClick={() => setLightboxIndex(thumb.index)}
+                      className="relative min-h-0 overflow-hidden rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10A37F] focus-visible:ring-offset-2"
+                      aria-label={isLast ? `View ${extraPhotoCount} more photos` : `View photo ${i + 2}`}
                     >
-                      <img
-                        src={img}
-                        alt=""
-                        className="h-24 w-full object-cover transition duration-200 group-hover:scale-105 sm:h-[114px]"
-                      />
-                      <span className="pointer-events-none absolute inset-0 bg-black/0 transition group-hover:bg-black/15" />
+                      <img src={thumb.url} alt="" className="h-full w-full object-cover" />
+                      {isLast ? (
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-sm font-semibold text-white">
+                          +{extraPhotoCount}
+                        </span>
+                      ) : null}
                     </button>
                   );
                 })}
               </div>
             </div>
-
-            <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
-              <div className="min-w-0 flex-1">
-                <h1 className="font-['Poppins',sans-serif] text-xl font-medium tracking-tight text-neutral-900 sm:text-2xl sm:leading-snug">
-                  {spot.name}
-                </h1>
-                {spot.address?.trim() ? (
-                  <p className="mt-2 text-sm leading-relaxed text-neutral-500">{spot.address.trim()}</p>
-                ) : touristSpotMunicipalityProvince ? (
-                  <p className="mt-2 text-sm leading-relaxed text-neutral-500">{touristSpotMunicipalityProvince}</p>
-                ) : null}
-                <p className="mt-3">
-                  <span
-                    className="inline-block max-w-full rounded-full px-3 py-1 text-[10px] font-normal leading-snug text-[#3d4a06] shadow-sm sm:text-[11px]"
-                    style={{ backgroundColor: 'rgba(126, 160, 14, 0.22)' }}
-                  >
-                    {touristSpotCategory !== '—' ? touristSpotCategory : 'Cavite tourism'}
-                  </span>
-                </p>
-              </div>
-              <div className="flex shrink-0 items-start gap-2 pt-1">
-                {saveStatus && <span className="text-xs font-medium text-emerald-700">{saveStatus}</span>}
-                <button
-                  type="button"
-                  onClick={handleSaveToList}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-neutral-300 bg-white text-neutral-700 transition hover:bg-neutral-50"
-                  aria-label="Save place"
-                  title="Save place"
-                >
-                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M6 4h12a1 1 0 0 1 1 1v15l-7-4-7 4V5a1 1 0 0 1 1-1z" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            <div ref={checkinSectionRef}>
-            {arrivalOptionsOpen ? (
-              <div className="mb-4 overflow-hidden rounded-2xl border border-[#241D13]/15 bg-[#fafaf8] p-4 shadow-sm sm:p-5">
-                <p className="text-sm font-semibold text-neutral-900">Destination Reached</p>
-                <p className="mt-1 text-sm text-neutral-600">
-                  Confirm your visit at {spot.name}. Tap QR shows the code to tap on this page; Scan QR is for a
-                  printed poster; or Enter Code.
-                </p>
-                <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                  <button
-                    type="button"
-                    disabled={!checkinInfo?.code}
-                    onClick={() => {
-                      setArrivalOptionsOpen(false);
-                      setTapQrReveal(true);
-                      requestAnimationFrame(() => {
-                        checkinSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                      });
-                    }}
-                    className="inline-flex h-11 items-center justify-center rounded-full px-5 text-sm font-semibold text-white disabled:opacity-60"
-                    style={{ backgroundColor: '#1f4f59' }}
-                  >
-                    Tap QR
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!authUser) {
-                        window.location.assign(`/login?next=${encodeURIComponent(`/place/${spot.id}?confirmArrival=1`)}`);
-                        return;
-                      }
-                      setArrivalOptionsOpen(false);
-                      setScannerOpen(true);
-                    }}
-                    className="inline-flex h-11 items-center justify-center rounded-full border-2 border-[#1f4f59] bg-white px-5 text-sm font-semibold text-[#1f4f59]"
-                  >
-                    Scan QR
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      window.location.assign(`/checkin?place=${encodeURIComponent(spot.id)}&name=${encodeURIComponent(spot.name || '')}`);
-                    }}
-                    className="inline-flex h-11 items-center justify-center rounded-full border border-neutral-300 bg-white px-5 text-sm font-semibold text-neutral-800"
-                  >
-                    Enter Code
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setArrivalOptionsOpen(false)}
-                    className="inline-flex h-11 items-center justify-center rounded-full px-5 text-sm font-medium text-neutral-500"
-                  >
-                    Cancel
-                  </button>
+            {formatProximityKm(distanceToPlaceKm) ? (
+              <div className="mt-8 flex flex-wrap items-end gap-x-8 gap-y-3 border-b border-neutral-100 pb-5">
+                <div>
+                  <p className="text-xs font-medium text-neutral-400">Distance</p>
+                  <p className="mt-1 text-lg font-semibold text-neutral-900">{formatProximityKm(distanceToPlaceKm)}</p>
                 </div>
               </div>
             ) : null}
-            {checkinInfo ? (
-              <div className="mb-4 overflow-hidden rounded-2xl border border-[#1f4f59]/20 bg-white p-4 shadow-[0_4px_20px_rgba(0,0,0,0.04)] sm:p-5">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
-                  {tapQrReveal ? 'Confirm arrival — check in' : 'Check in at this place'}
-                </p>
-                <p className="mt-1 text-sm text-neutral-600">
-                  {tapQrReveal
-                    ? 'Tap the QR code below to count your visit. You can also scan a printed poster or enter the code.'
-                    : 'Tap the QR code to count your visit. Use Scan QR only for a printed poster, or Enter Code.'}
-                </p>
-                <div className="mt-4 flex flex-col items-center gap-4 sm:flex-row sm:items-start">
-                  <button
-                    type="button"
-                    onClick={() => void handleEstablishmentCheckin()}
-                    disabled={checkinBusy}
-                    className="rounded-xl border border-neutral-200 bg-white p-1 disabled:opacity-60"
-                    title="Tap the QR code to check in"
-                  >
-                    <img
-                      src={checkinInfo.qrUrl}
-                      alt={`Check-in QR for ${spot.name}`}
-                      width={168}
-                      height={168}
-                      className="rounded-lg"
-                    />
-                  </button>
-                  <div className="min-w-0 flex-1 text-center sm:text-left">
-                    <p className="font-mono text-base font-semibold tracking-wide text-neutral-900">
-                      {checkinInfo.code}
-                    </p>
-                    {checkinBusy ? (
-                      <p className="mt-3 text-sm text-neutral-500">Counting visit…</p>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!authUser) {
-                          window.location.assign(`/login?next=${encodeURIComponent(`/place/${spot.id}`)}`);
-                          return;
-                        }
-                        setScannerOpen(true);
-                      }}
-                      className="mt-3 inline-flex h-11 w-full items-center justify-center rounded-full border-2 border-[#1f4f59] bg-white px-5 text-sm font-semibold text-[#1f4f59] sm:w-auto"
-                    >
-                      Scan QR
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        window.location.assign(`/checkin?place=${encodeURIComponent(spot.id)}&name=${encodeURIComponent(spot.name || '')}`);
-                      }}
-                      className="mt-2 inline-flex h-11 w-full items-center justify-center rounded-full border border-neutral-300 bg-white px-5 text-sm font-semibold text-neutral-800 sm:w-auto"
-                    >
-                      Enter Code
-                    </button>
-                    {checkinMsg ? <p className="mt-2 text-sm text-neutral-600">{checkinMsg}</p> : null}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="mb-4 overflow-hidden rounded-2xl border border-[#1f4f59]/20 bg-white p-4">
-                <p className="text-sm text-neutral-600">Scan an establishment poster QR to count your visit.</p>
+
+            <div className="mt-8">
+              <h2 className="font-['Poppins',sans-serif] text-lg font-semibold text-neutral-900">Overview</h2>
+              <p className="mt-3 text-sm leading-relaxed text-neutral-600 whitespace-pre-line">{overviewText}</p>
+              {overviewNeedsToggle ? (
                 <button
                   type="button"
-                  onClick={() => {
-                    if (!authUser) {
-                      window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname)}`);
-                      return;
-                    }
-                    setScannerOpen(true);
-                  }}
-                  className="mt-3 inline-flex h-11 items-center justify-center rounded-full border-2 border-[#1f4f59] bg-white px-5 text-sm font-semibold text-[#1f4f59]"
+                  onClick={() => setOverviewExpanded((open) => !open)}
+                  className="mt-2 text-sm font-semibold text-[#10A37F] hover:underline"
                 >
-                  Scan QR
+                  {overviewExpanded ? 'Read less' : 'Read more'}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    window.location.assign(`/checkin?place=${encodeURIComponent(spot.id)}&name=${encodeURIComponent(spot.name || '')}`);
-                  }}
-                  className="mt-2 inline-flex h-11 items-center justify-center rounded-full border border-neutral-300 bg-white px-5 text-sm font-semibold text-neutral-800"
-                >
-                  Enter Code
-                </button>
-              </div>
-            )}
+              ) : null}
             </div>
 
-            <CheckinScannerModal
-              open={scannerOpen}
-              onClose={() => setScannerOpen(false)}
-              onCode={handleScannedCheckin}
-            />
-
-            <div className="overflow-hidden rounded-2xl border border-neutral-200/90 bg-white shadow-[0_4px_28px_rgba(0,0,0,0.05)]">
-              {!routePanelOpen && (
-                <div className="border-b border-neutral-100 bg-gradient-to-b from-neutral-50/90 to-white px-5 py-6 sm:px-7 sm:py-7">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-400">About this place</p>
-                  <p className="mt-4 text-sm leading-relaxed text-neutral-700 whitespace-pre-line">{touristSpotOverview}</p>
-                  {spot.hours?.trim() ? (
-                    <p className="mt-4 text-sm text-neutral-700">
-                      <span className="font-semibold text-neutral-900">Hours: </span>
-                      {spot.hours.trim()}
-                    </p>
-                  ) : null}
-                  {spot.phone || spot.email || spot.website || spot.social_facebook || spot.social_instagram || spot.social_twitter ? (
-                    <div className="mt-4 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-400">Contact</p>
-                      <ul className="mt-2 space-y-1.5">
-                        {spot.phone ? (
-                          <li>
-                            <span className="font-medium text-neutral-900">Phone: </span>
-                            {spot.phone}
-                          </li>
-                        ) : null}
-                        {spot.email ? (
-                          <li>
-                            <span className="font-medium text-neutral-900">Email: </span>
-                            {spot.email}
-                          </li>
-                        ) : null}
-                        {spot.website ? (
-                          <li>
-                            <span className="font-medium text-neutral-900">Website: </span>
-                            <a href={spot.website} className="text-[#6B8E23] underline break-all" target="_blank" rel="noreferrer">
-                              {spot.website}
-                            </a>
-                          </li>
-                        ) : null}
-                        {spot.social_facebook ? (
-                          <li>
-                            <span className="font-medium text-neutral-900">Facebook: </span>
-                            <a href={spot.social_facebook} className="text-[#6B8E23] underline break-all" target="_blank" rel="noreferrer">
-                              {spot.social_facebook}
-                            </a>
-                          </li>
-                        ) : null}
-                        {spot.social_instagram ? (
-                          <li>
-                            <span className="font-medium text-neutral-900">Instagram: </span>
-                            <a href={spot.social_instagram} className="text-[#6B8E23] underline break-all" target="_blank" rel="noreferrer">
-                              {spot.social_instagram}
-                            </a>
-                          </li>
-                        ) : null}
-                        {spot.social_twitter ? (
-                          <li>
-                            <span className="font-medium text-neutral-900">X: </span>
-                            <a href={spot.social_twitter} className="text-[#6B8E23] underline break-all" target="_blank" rel="noreferrer">
-                              {spot.social_twitter}
-                            </a>
-                          </li>
-                        ) : null}
-                      </ul>
+            {highlightCards.length > 0 ? (
+              <div className="mt-8">
+                <h2 className="font-['Poppins',sans-serif] text-lg font-semibold text-neutral-900">Highlights</h2>
+                <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {highlightCards.map((item) => (
+                    <div key={item.key} className="rounded-xl border border-neutral-200 bg-white p-4">
+                      <HighlightIcon name={item.key} />
+                      <p className="mt-3 text-xs font-medium text-neutral-400">{item.label}</p>
+                      <p className="mt-1 break-all text-sm font-semibold text-neutral-900">{item.value}</p>
                     </div>
-                  ) : null}
+                  ))}
                 </div>
-              )}
+              </div>
+            ) : null}
 
-              {routePanelOpen && (
-                <div className="border-t border-neutral-100 bg-neutral-50 px-4 py-5 sm:px-6 sm:py-6">
-                  <DirectionsPanel
-                    onClose={closeRoutePanel}
-                    destinationName={spot.name}
-                    destinationAddress={cleanPlaceAddress(spot.name, spot.address)}
-                    destinationLat={spot.lat}
-                    destinationLng={spot.lng}
-                    userCoords={userCoords}
-                    onRequestLocation={requestUserLocation}
-                    locationStatus={locationStatus}
-                    fallbackDistanceKm={distanceToPlaceKm ?? undefined}
-                    seedId={spot.id}
-                    onDestinationReached={openArrivalCheckinOptions}
+            {spot.lat != null && spot.lng != null ? (
+              <div className="mt-8">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h2 className="font-['Poppins',sans-serif] text-lg font-semibold text-neutral-900">Location</h2>
+                  <button
+                    type="button"
+                    onClick={openGoogleDirections}
+                    className="rounded-full bg-[#10A37F] px-4 py-2 text-sm font-semibold text-white"
+                  >
+                    Directions
+                  </button>
+                </div>
+                <div className="relative mt-4 h-[360px] overflow-hidden rounded-2xl border border-neutral-200">
+                  <PlacesLeafletMap
+                    places={[
+                      {
+                        id: spot.id,
+                        name: spot.name,
+                        lat: spot.lat,
+                        lng: spot.lng,
+                        ntdp_category: spot.ntdp_category,
+                      },
+                    ]}
                   />
                 </div>
-              )}
+              </div>
+            ) : null}
 
-              {!routePanelOpen && (
-              <div className="bg-white">
-                <div className="border-b border-neutral-100 bg-gradient-to-br from-[rgba(126,160,14,0.08)] via-white to-white px-5 py-5 sm:px-7 sm:py-6">
-                  <h2 className="font-['Poppins',sans-serif] text-base font-semibold tracking-tight text-neutral-900 sm:text-lg">
-                    Reviews
-                  </h2>
-                  <p className="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-600">
-                    Read what visitors shared below — or add your own. Sample reviews show when no one has posted yet.
-                  </p>
-                </div>
-
-                <div className="space-y-5 p-5 sm:p-7 sm:pt-6">
-                  <PlaceReviewForm
-                    placeId={spot.id}
-                    placeName={spot.name}
-                    signedIn={Boolean(authUser)}
-                    defaultNickname={reviewAuthorNickname}
-                    onSubmitted={handleReviewSubmitted}
-                  />
-
-                  <div className="overflow-hidden rounded-xl border border-neutral-100 bg-neutral-50/40 shadow-sm">
-                    <div className="grid grid-cols-1 gap-0 lg:grid-cols-[minmax(0,1.35fr)_minmax(220px,1fr)]">
-                      <div className="space-y-3 border-b border-neutral-100/90 p-5 sm:p-6 lg:border-b-0 lg:border-r lg:border-neutral-100/90 lg:py-7 lg:pl-7 lg:pr-8">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-400">
-                          Rating breakdown
-                        </p>
-                        <div className="space-y-2.5">
-                          {mergedReviewStats.breakdown.map((row) => (
-                            <div
-                              key={row.label}
-                              className="grid grid-cols-[48px_minmax(0,80px)_minmax(0,1fr)_52px] items-center gap-2 sm:gap-3"
-                            >
-                              <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
-                                {row.label}
-                              </p>
-                              <div className="flex shrink-0 justify-start">
-                                <ReviewStars value={row.stars} size="h-3.5 w-3.5" />
-                              </div>
-                              <div className="h-2 min-w-0 rounded-full bg-white/80 ring-1 ring-neutral-200/80">
-                                <div
-                                  className="h-full rounded-full transition-[width] duration-500 ease-out"
-                                  style={{ width: `${row.pct}%`, backgroundColor: olive }}
-                                />
-                              </div>
-                              <span className="text-right text-xs text-neutral-300 tabular-nums" aria-hidden>
-                                {'\u00a0'}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      <div
-                        className="flex flex-col justify-center gap-2 px-5 py-6 text-center sm:px-8 sm:py-8"
-                        style={{
-                          background:
-                            'linear-gradient(165deg, rgba(126,160,14,0.12), rgba(126,160,14,0.04) 50%, #fff 100%)',
-                        }}
+            {suggestedPlaces.length > 0 ? (
+              <div className="mt-8">
+                <h2 className="font-['Poppins',sans-serif] text-lg font-semibold text-neutral-900">Nearby</h2>
+                <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {suggestedPlaces.slice(0, 4).map((p) => {
+                    const distLabel = formatProximityKm(p.distanceKm);
+                    return (
+                      <Link
+                        key={p.id}
+                        to={`/place/${p.id}`}
+                        className="overflow-hidden rounded-xl border border-neutral-200 bg-white transition hover:shadow-sm"
                       >
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-500">
-                          Overall
-                        </p>
-                        <p
-                          className="text-4xl font-bold tabular-nums leading-none sm:text-5xl"
-                          style={{ color: olive }}
-                        >
-                          {mergedReviewStats.total > 0 ? mergedReviewStats.avgRating.toFixed(1) : '—'}
-                        </p>
-                        <div className="flex justify-center pt-1">
-                          {mergedReviewStats.total > 0 ? (
-                            <ReviewStars value={mergedReviewStats.displayStarCount} size="h-5 w-5 sm:h-6 sm:w-6" />
-                          ) : (
-                            <ReviewStars value={0} size="h-5 w-5 sm:h-6 sm:w-6" dimmed />
-                          )}
+                        <img src={p.image} alt="" className="h-28 w-full object-cover" />
+                        <div className="p-2.5">
+                          <p className="truncate text-sm font-semibold text-neutral-900">{p.name}</p>
+                          <p className="mt-0.5 truncate text-xs text-neutral-500">{distLabel ? `${distLabel} away` : p.location}</p>
                         </div>
-                        <p className="text-xs font-medium text-neutral-700 sm:text-sm">
-                          {mergedReviewStats.total > 0 ? `${formatReviewCount(mergedReviewStats.total)} reviews` : '—'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+          </section>
 
-                  <ul className="divide-y divide-neutral-100 overflow-hidden rounded-xl border border-neutral-100 bg-white shadow-sm">
-                    {allListedReviews.map((r) => {
+          <aside className="self-start space-y-5 lg:sticky lg:top-24 lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+              <h2 className="font-['Poppins',sans-serif] text-lg font-semibold text-neutral-900">Contact</h2>
+              {hasContact ? (
+                <div className="mt-4 grid grid-cols-2 gap-4 items-start text-sm text-neutral-700">
+                  <ul className="space-y-2.5">
+                    {String(spot.hours || '').trim() ? (
+                      <li>
+                        <span className="text-xs font-medium text-neutral-400">Hours</span>
+                        <p className="mt-0.5 font-medium text-neutral-900">{formatHoursAnalog(spot.hours)}</p>
+                      </li>
+                    ) : null}
+                    {spot.phone ? (
+                      <li>
+                        <span className="text-xs font-medium text-neutral-400">Phone</span>
+                        <p className="mt-0.5 font-medium text-neutral-900">{spot.phone}</p>
+                      </li>
+                    ) : null}
+                    {spot.email ? (
+                      <li>
+                        <span className="text-xs font-medium text-neutral-400">Email</span>
+                        <p className="mt-0.5 font-medium text-neutral-900">{spot.email}</p>
+                      </li>
+                    ) : null}
+                  </ul>
+                  {spot.website || spot.social_facebook || spot.social_instagram || spot.social_twitter ? (
+                    <div className="space-y-2.5">
+                      <div>
+                        <span className="block text-xs font-medium text-neutral-400">Social Media</span>
+                        {spot.website ? (
+                          <a
+                            href={spot.website}
+                            className="mt-1.5 flex h-7 w-7 overflow-hidden rounded-md bg-[#1877F2] text-white shadow-sm transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1877F2]"
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-label="Open Facebook page"
+                          >
+                            <svg className="h-full w-full" viewBox="0 0 40 40" aria-hidden>
+                              <path
+                                fill="currentColor"
+                                d="M22.25 40V24.6h5.15l.77-6H22.25v-3.86c0-1.74.48-2.93 2.98-2.93h3.17V6.34c-.55-.08-2.43-.24-4.62-.24-4.57 0-7.7 2.79-7.7 7.91V18.6H13v6h3.08V40h6.17Z"
+                              />
+                            </svg>
+                          </a>
+                        ) : null}
+                      </div>
+                      {spot.social_facebook ? (
+                        <div>
+                          <span className="text-xs font-medium text-neutral-400">Facebook</span>
+                          <a href={spot.social_facebook} className="mt-0.5 block break-all font-medium text-[#10A37F] underline" target="_blank" rel="noreferrer">
+                            {spot.social_facebook}
+                          </a>
+                        </div>
+                      ) : null}
+                      {spot.social_instagram ? (
+                        <div>
+                          <span className="text-xs font-medium text-neutral-400">Instagram</span>
+                          <a href={spot.social_instagram} className="mt-0.5 block break-all font-medium text-[#10A37F] underline" target="_blank" rel="noreferrer">
+                            {spot.social_instagram}
+                          </a>
+                        </div>
+                      ) : null}
+                      {spot.social_twitter ? (
+                        <div>
+                          <span className="text-xs font-medium text-neutral-400">X</span>
+                          <a href={spot.social_twitter} className="mt-0.5 block break-all font-medium text-[#10A37F] underline" target="_blank" rel="noreferrer">
+                            {spot.social_twitter}
+                          </a>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-neutral-500">No contact details listed yet.</p>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+              <h2 className="font-['Poppins',sans-serif] text-lg font-semibold text-neutral-900">Reviews</h2>
+              <p className="mt-2 text-sm leading-relaxed text-neutral-600">
+                Reviews from visitors who posted about this establishment.
+              </p>
+              <div className="mt-4 space-y-4">
+                <div className="overflow-hidden rounded-xl border border-neutral-100 bg-neutral-50/40">
+                  <div className="flex flex-col gap-4 p-4">
+                    <div className="text-center">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-500">
+                        Overall
+                      </p>
+                      <p className="mt-1 text-3xl font-bold tabular-nums leading-none" style={{ color: olive }}>
+                        {mergedReviewStats.total > 0 ? mergedReviewStats.avgRating.toFixed(1) : '—'}
+                      </p>
+                      <div className="mt-2 flex justify-center">
+                        {mergedReviewStats.total > 0 ? (
+                          <ReviewStars value={mergedReviewStats.displayStarCount} size="h-4 w-4" />
+                        ) : (
+                          <ReviewStars value={0} size="h-4 w-4" dimmed />
+                        )}
+                      </div>
+                      <p className="mt-1 text-xs font-medium text-neutral-700">
+                        {mergedReviewStats.total > 0 ? `${formatReviewCount(mergedReviewStats.total)} reviews` : 'No reviews yet'}
+                      </p>
+                    </div>
+                    {mergedReviewStats.total > 0 ? (
+                      <div className="space-y-2">
+                        {mergedReviewStats.breakdown.map((row) => (
+                          <div key={row.label} className="grid grid-cols-[40px_minmax(0,1fr)] items-center gap-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+                              {row.label}
+                            </p>
+                            <div className="h-1.5 min-w-0 rounded-full bg-neutral-100">
+                              <div
+                                className="h-full rounded-full"
+                                style={{ width: `${row.pct}%`, backgroundColor: olive }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                {reviewsError ? (
+                  <p className="text-sm text-red-600">{reviewsError}</p>
+                ) : null}
+                {reviewsLoading ? (
+                  <p className="text-sm text-neutral-500">Loading reviews…</p>
+                ) : visitorReviews.length > 0 ? (
+                  <ul className="divide-y divide-neutral-100 overflow-hidden rounded-xl border border-neutral-100 bg-white">
+                    {visitorReviews.map((r) => {
                       const displayNickname =
-                        typeof r.nickname === 'string' && r.nickname.trim() ? r.nickname.trim() : 'Guest';
+                        typeof r.nickname === 'string' && r.nickname.trim() ? r.nickname.trim() : 'Traveler';
                       return (
-                        <li key={r.id} className="px-4 py-4 transition-colors hover:bg-neutral-50/60 sm:px-5 sm:py-5">
+                        <li key={r.id} className="px-3 py-3">
                           <div className="flex flex-wrap items-baseline justify-between gap-2">
                             <p className="text-sm font-semibold text-neutral-900">{displayNickname}</p>
                             <time
@@ -1203,73 +1093,101 @@ export function PlaceDetailPage() {
                               {formatReviewTime(r.at)}
                             </time>
                           </div>
-                          <div className="mt-1.5">
-                            <ReviewStars value={r.rating} size="h-4 w-4" />
+                          <div className="mt-1">
+                            <ReviewStars value={r.rating} size="h-3.5 w-3.5" />
                           </div>
-                          <p className="mt-2 text-sm leading-relaxed text-neutral-700">{r.text}</p>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              </div>
-              )}
-
-            </div>
-          </section>
-
-          <aside className="rounded-3xl border border-neutral-200 bg-[#f7f7f7] p-4 lg:sticky lg:top-24 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto self-start">
-            <div className="space-y-5">
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Map location</p>
-                <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
-                  <iframe
-                    title="Map"
-                    src={`https://www.openstreetmap.org/export/embed.html?bbox=${spot.lng - 0.02}%2C${spot.lat - 0.02}%2C${spot.lng + 0.02}%2C${spot.lat + 0.02}&layer=mapnik&marker=${spot.lat}%2C${spot.lng}`}
-                    className="h-[180px] w-full border-0 lg:h-[200px]"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={openStartCaviTrip}
-                  className="w-full rounded-lg px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-white shadow-sm transition hover:opacity-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7ea00e] focus-visible:ring-offset-2"
-                  style={{ backgroundColor: olive }}
-                >
-                  Start CaviTrip
-                </button>
-              </div>
-
-              {suggestedPlaces.length > 0 ? (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Suggested establishments</p>
-                  <ul className="mt-2 space-y-2">
-                    {suggestedPlaces.map((p) => {
-                      const distLabel = formatProximityKm(p.distanceKm);
-                      return (
-                        <li key={p.id}>
-                          <Link
-                            to={`/places/${p.id}`}
-                            className="flex gap-3 rounded-xl border border-neutral-200 bg-white p-2 transition hover:border-neutral-300 hover:shadow-sm"
-                          >
-                            <img src={p.image} alt="" className="h-14 w-14 shrink-0 rounded-lg object-cover" />
-                            <div className="min-w-0 flex-1 py-0.5">
-                              <p className="truncate text-sm font-medium text-neutral-900">{p.name}</p>
-                              <p className="mt-0.5 truncate text-xs text-neutral-500">{p.location}</p>
-                              {distLabel ? (
-                                <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-[#7ea00e]">{distLabel} away</p>
-                              ) : null}
+                          <p className="mt-1.5 text-sm leading-relaxed text-neutral-700">{r.text}</p>
+                          {Array.isArray(r.photoUrls) && r.photoUrls.length > 0 ? (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {r.photoUrls.map((url, photoIndex) => (
+                                <button
+                                  key={`${r.id}-${url}`}
+                                  type="button"
+                                  onClick={() => setReviewPhotoLightbox({ images: r.photoUrls, index: photoIndex })}
+                                  className="h-14 w-14 overflow-hidden rounded-lg border border-neutral-200"
+                                  aria-label="Open review photo"
+                                >
+                                  <img src={url} alt="" className="h-full w-full object-cover" />
+                                </button>
+                              ))}
                             </div>
-                          </Link>
+                          ) : null}
                         </li>
                       );
                     })}
                   </ul>
-                </div>
-              ) : null}
+                ) : !reviewsError ? (
+                  <p className="rounded-xl border border-neutral-100 bg-neutral-50 px-3 py-4 text-sm text-neutral-500">
+                    No reviews yet. Be the first to share your visit.
+                  </p>
+                ) : null}
+
+                {canWriteReview ? (
+                  <button
+                    type="button"
+                    onClick={() => setReviewFormOpen(true)}
+                    className="inline-flex h-11 w-full items-center justify-center rounded-xl text-sm font-semibold text-white shadow-sm transition hover:opacity-95"
+                    style={{ backgroundColor: olive }}
+                  >
+                    Write a review
+                  </button>
+                ) : (
+                  <p className="rounded-xl border border-neutral-100 bg-neutral-50 px-3 py-4 text-sm text-neutral-600">
+                    <span className="font-semibold text-neutral-800">Visit to leave a review.</span>{' '}
+                    Scan the establishment QR code in the Tara, Cavite! app to unlock reviews.
+                  </p>
+                )}
+              </div>
             </div>
           </aside>
         </div>
       </main>
+
+      {reviewFormOpen && canWriteReview ? (
+        <div
+          className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Write a review"
+          onClick={() => setReviewFormOpen(false)}
+        >
+          <div
+            className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-neutral-200 bg-white p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)] sm:p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <h3 className="font-['Poppins',sans-serif] text-lg font-semibold text-neutral-900">Write a review</h3>
+              <button
+                type="button"
+                onClick={() => setReviewFormOpen(false)}
+                className="rounded-lg p-1 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-700"
+                aria-label="Close review form"
+              >
+                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <path strokeLinecap="round" d="M6 6l12 12M18 6 6 18" />
+                </svg>
+              </button>
+            </div>
+            <PlaceReviewForm
+              plain
+              placeId={spot.id}
+              placeName={spot.name}
+              signedIn={Boolean(authUser)}
+              defaultNickname={reviewAuthorNickname}
+              onSubmitted={handleReviewSubmitted}
+            />
+          </div>
+        </div>
+      ) : null}
+
+      {reviewPhotoLightbox?.images?.length ? (
+        <PlaceImageLightbox
+          images={reviewPhotoLightbox.images}
+          initialIndex={reviewPhotoLightbox.index || 0}
+          alt="Review photo"
+          onClose={() => setReviewPhotoLightbox(null)}
+        />
+      ) : null}
 
       {lightboxIndex !== null && galleryImages.length > 0 ? (
         <PlaceImageLightbox
@@ -1298,7 +1216,7 @@ export function PlaceDetailPage() {
                     <li key={l.id || l.name}>
                       <button
                         type="button"
-                        onClick={() => handleSaveToExistingList(l.id)}
+                        onClick={() => void handleSaveToExistingList(l.id)}
                         className="w-full rounded-md px-2 py-2 text-left text-sm font-medium text-neutral-800 transition hover:bg-white"
                       >
                         {l.name}
@@ -1315,10 +1233,18 @@ export function PlaceDetailPage() {
             <input
               type="text"
               value={listNameDraft}
-              onChange={(e) => setListNameDraft(e.target.value)}
+              onChange={(e) => {
+                setListNameDraft(e.target.value);
+                if (saveListError) setSaveListError('');
+              }}
               placeholder="My list"
-              className="mt-1 h-10 w-full rounded-lg border border-neutral-200 px-3 text-sm outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(126,160,14,0.22)]"
+              className="mt-1 h-10 w-full rounded-lg border border-neutral-200 px-3 text-sm outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(16, 163, 127,0.22)]"
             />
+            {saveListError ? (
+              <p className="mt-2 text-sm text-red-600" role="alert">
+                {saveListError}
+              </p>
+            ) : null}
             <div className="mt-4 flex items-center justify-end gap-2">
               <button
                 type="button"
@@ -1329,7 +1255,7 @@ export function PlaceDetailPage() {
               </button>
               <button
                 type="button"
-                onClick={handleConfirmSaveToList}
+                onClick={() => void handleConfirmSaveToList()}
                 className="rounded-lg px-3.5 py-2 text-sm font-semibold text-white"
                 style={{ backgroundColor: olive }}
               >

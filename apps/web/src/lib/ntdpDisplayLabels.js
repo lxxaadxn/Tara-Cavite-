@@ -99,7 +99,7 @@ export function isLikelyPlaceholderDescription(text) {
   return /lorem\s+ipsum/i.test(text);
 }
 
-function categoryHighlightPhrase(ntdpCategory) {
+export function categoryHighlightPhrase(ntdpCategory) {
   const key = normalizeCategoryKey(ntdpCategory);
   if (key.includes('cultural')) return 'history, heritage, and local culture';
   if (key.includes('nature')) return 'landscapes, trails, and outdoor experiences';

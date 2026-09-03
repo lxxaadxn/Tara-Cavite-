@@ -5,7 +5,13 @@ export function buildLeafletMapPayload(
   userLocation: { lat: number; lng: number } | null
 ) {
   return {
-    markers: markers.map((m) => ({ id: m.id, name: m.name, lat: m.lat, lng: m.lng })),
+    markers: markers.map((m) => ({
+      id: m.id,
+      name: m.name,
+      lat: m.lat,
+      lng: m.lng,
+      iconUrl: m.iconUrl || null,
+    })),
     userLat: userLocation?.lat ?? null,
     userLng: userLocation?.lng ?? null,
   };

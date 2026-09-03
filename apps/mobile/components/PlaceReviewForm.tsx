@@ -7,12 +7,13 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
-import { submitPlaceReview, type PlaceReview } from '../lib/placeReviews';
+import * as ImagePicker from 'expo-image-picker';
+import { MAX_REVIEW_PHOTOS, submitPlaceReview, type PlaceReview, type ReviewPhotoUpload } from '../lib/placeReviews';
 import { supabase } from '../lib/supabase';
 
-const OLIVE = '#7EA00E';
-const TEAL = '#1F4F59';
+const OLIVE = '#10A37F';
 const TITLE = '#241D13';
 const MUTED = '#868686';
 const WHITE = '#FFFFFF';
@@ -26,6 +27,7 @@ type Props = {
   signedIn: boolean;
   defaultNickname?: string;
   onSubmitted: (review: PlaceReview) => void;
+  onSignIn?: () => void;
 };
 
 function StarPicker({
@@ -60,24 +62,49 @@ export function PlaceReviewForm({
   placeId,
   placeName,
   signedIn,
-  defaultNickname = '',
   onSubmitted,
+  onSignIn,
 }: Props) {
   const [rating, setRating] = useState(5);
   const [body, setBody] = useState('');
-  const [nickname, setNickname] = useState(defaultNickname);
+  const [photos, setPhotos] = useState<ReviewPhotoUpload[]>([]);
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    setNickname(defaultNickname || '');
-  }, [defaultNickname, placeId]);
 
   useEffect(() => {
     setRating(5);
     setBody('');
+    setPhotos([]);
   }, [placeId]);
 
+  const pickPhotos = useCallback(async () => {
+    const remaining = MAX_REVIEW_PHOTOS - photos.length;
+    if (remaining <= 0) return;
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Allow access to photos to attach visit pictures.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      selectionLimit: remaining,
+      quality: 0.8,
+    });
+    if (result.canceled) return;
+    const next = (result.assets ?? []).slice(0, remaining).map((asset) => ({
+      uri: asset.uri,
+      mimeType: asset.mimeType,
+      fileName: asset.fileName,
+    }));
+    setPhotos((prev) => [...prev, ...next].slice(0, MAX_REVIEW_PHOTOS));
+  }, [photos.length]);
+
   const handleSubmit = useCallback(async () => {
+    if (!signedIn) {
+      onSignIn?.();
+      return;
+    }
+
     const trimmedBody = body.trim();
     if (!trimmedBody) {
       Alert.alert('Review', 'Please write a short comment about your visit.');
@@ -86,37 +113,22 @@ export function PlaceReviewForm({
 
     setSubmitting(true);
     try {
-      if (signedIn) {
-        const saved = await submitPlaceReview(supabase, {
-          placeId,
-          rating,
-          body: trimmedBody,
-        });
-        onSubmitted(saved);
-        setBody('');
-        Alert.alert('Thank you', 'Your review was posted.');
-      } else {
-        const nick = String(nickname ?? '').trim() || 'Guest';
-        const review: PlaceReview = {
-          id: `session-${Date.now()}`,
-          nickname: nick,
-          rating,
-          text: trimmedBody,
-          at: Date.now(),
-        };
-        onSubmitted(review);
-        setBody('');
-        Alert.alert(
-          'Thank you',
-          'Your review is saved on this device for now. Sign in to save it to your account.'
-        );
-      }
+      const saved = await submitPlaceReview(supabase, {
+        placeId,
+        rating,
+        body: trimmedBody,
+        photos,
+      });
+      onSubmitted(saved);
+      setBody('');
+      setPhotos([]);
+      Alert.alert('Thank you', 'Your review was posted.');
     } catch (err) {
       Alert.alert('Review', err instanceof Error ? err.message : 'Could not post your review.');
     } finally {
       setSubmitting(false);
     }
-  }, [body, nickname, onSubmitted, placeId, rating, signedIn]);
+  }, [body, onSignIn, onSubmitted, photos, placeId, rating, signedIn]);
 
   return (
     <View style={styles.card}>
@@ -124,69 +136,83 @@ export function PlaceReviewForm({
       <Text style={styles.hint}>
         {signedIn
           ? `Share your experience at ${placeName || 'this place'}.`
-          : 'Post as a guest on this device, or sign in to save your review to your account.'}
+          : 'Sign in to post a review that other visitors can read.'}
       </Text>
 
-      <Text style={styles.label}>Your rating</Text>
-      <StarPicker value={rating} onChange={setRating} disabled={submitting} />
-
-      {!signedIn ? (
+      {signedIn ? (
         <>
-          <Text style={styles.label}>Display name</Text>
+          <Text style={styles.label}>Your rating</Text>
+          <StarPicker value={rating} onChange={setRating} disabled={submitting} />
+
+          <Text style={styles.label}>Your review</Text>
           <TextInput
-            style={styles.input}
-            value={nickname}
-            onChangeText={setNickname}
-            placeholder="Your name"
+            style={[styles.input, styles.textarea]}
+            value={body}
+            onChangeText={setBody}
+            placeholder="What stood out during your visit?"
             placeholderTextColor={MUTED}
-            maxLength={80}
+            multiline
+            maxLength={4000}
+            textAlignVertical="top"
             editable={!submitting}
           />
+
+          <Text style={styles.label}>Photos (optional)</Text>
+          <Text style={styles.photoHint}>Up to {MAX_REVIEW_PHOTOS} photos from your visit.</Text>
+          {photos.length > 0 ? (
+            <View style={styles.photoRow}>
+              {photos.map((photo, index) => (
+                <View key={`${photo.uri}-${index}`} style={styles.photoWrap}>
+                  <Image source={{ uri: photo.uri }} style={styles.photoThumb} />
+                  <TouchableOpacity
+                    style={styles.photoRemove}
+                    onPress={() => setPhotos((prev) => prev.filter((_, i) => i !== index))}
+                    accessibilityRole="button"
+                    accessibilityLabel="Remove photo"
+                    disabled={submitting}
+                  >
+                    <Text style={styles.photoRemoveLabel}>×</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          ) : null}
+          {photos.length < MAX_REVIEW_PHOTOS ? (
+            <TouchableOpacity
+              style={styles.addPhotoBtn}
+              onPress={() => void pickPhotos()}
+              disabled={submitting}
+              accessibilityRole="button"
+              accessibilityLabel="Add photos"
+            >
+              <Text style={styles.addPhotoLabel}>Add photos</Text>
+            </TouchableOpacity>
+          ) : null}
+
+          <TouchableOpacity
+            style={[styles.submitBtn, submitting && styles.submitDisabled]}
+            onPress={() => void handleSubmit()}
+            disabled={submitting}
+            accessibilityRole="button"
+            accessibilityLabel="Post review"
+          >
+            {submitting ? (
+              <ActivityIndicator color={WHITE} />
+            ) : (
+              <Text style={styles.submitLabel}>Post review</Text>
+            )}
+          </TouchableOpacity>
         </>
-      ) : null}
-
-      <Text style={styles.label}>Your review</Text>
-      <TextInput
-        style={[styles.input, styles.textarea]}
-        value={body}
-        onChangeText={setBody}
-        placeholder="What stood out during your visit?"
-        placeholderTextColor={MUTED}
-        multiline
-        maxLength={4000}
-        textAlignVertical="top"
-        editable={!submitting}
-      />
-
-      <TouchableOpacity
-        style={[styles.submitBtn, submitting && styles.submitDisabled]}
-        onPress={() => void handleSubmit()}
-        disabled={submitting}
-        accessibilityRole="button"
-        accessibilityLabel="Post review"
-      >
-        {submitting ? (
-          <ActivityIndicator color={WHITE} />
-        ) : (
-          <Text style={styles.submitLabel}>Post review</Text>
-        )}
-      </TouchableOpacity>
-
-      {!signedIn ? (
+      ) : (
         <TouchableOpacity
-          onPress={() => {
-            Alert.alert(
-              'Sign in',
-              'Sign in to your Tara, Cavite! account to save reviews permanently across devices.'
-            );
-          }}
-          style={styles.signInLink}
+          style={styles.submitBtn}
+          onPress={() => onSignIn?.()}
           accessibilityRole="button"
-          accessibilityLabel="Sign in to save permanently"
+          accessibilityLabel="Sign in to post a review"
         >
-          <Text style={styles.signInLinkText}>Sign in to save permanently</Text>
+          <Text style={styles.submitLabel}>Sign in to post a review</Text>
         </TouchableOpacity>
-      ) : null}
+      )}
     </View>
   );
 }
@@ -244,6 +270,59 @@ const styles = StyleSheet.create({
     minHeight: 110,
     paddingTop: 12,
   },
+  photoHint: {
+    marginTop: -4,
+    marginBottom: 8,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: MUTED,
+  },
+  photoRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
+  },
+  photoWrap: {
+    width: 64,
+    height: 64,
+  },
+  photoThumb: {
+    width: 64,
+    height: 64,
+    borderRadius: 10,
+    backgroundColor: '#F3F3F3',
+  },
+  photoRemove: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoRemoveLabel: {
+    color: WHITE,
+    fontSize: 12,
+    lineHeight: 14,
+    fontWeight: '700',
+  },
+  addPhotoBtn: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  addPhotoLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: TITLE,
+  },
   submitBtn: {
     marginTop: 16,
     height: 48,
@@ -259,14 +338,5 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 15,
     color: WHITE,
-  },
-  signInLink: {
-    marginTop: 12,
-    alignSelf: 'flex-start',
-  },
-  signInLinkText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-    color: TEAL,
   },
 });

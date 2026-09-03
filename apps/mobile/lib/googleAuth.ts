@@ -1,4 +1,4 @@
-import { AppState, InteractionManager, Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
@@ -37,12 +37,6 @@ function isHttpUrl(url: string | undefined | null): boolean {
   return !!url && /^https?:\/\//i.test(url);
 }
 
-function waitForInteractions(): Promise<void> {
-  return new Promise((resolve) => {
-    InteractionManager.runAfterInteractions(() => resolve());
-  });
-}
-
 function isOAuthReturnUrl(url: string | null | undefined): boolean {
   if (!url) return false;
   return (
@@ -53,8 +47,29 @@ function isOAuthReturnUrl(url: string | null | undefined): boolean {
   );
 }
 
+async function markSignedIn(): Promise<void> {
+  await Promise.all([
+    persistOAuthRedirectMode('expo'),
+    AsyncStorage.setItem('isAuthenticated', 'true'),
+  ]);
+}
+
+async function sessionReady(): Promise<boolean> {
+  const { data } = await supabase.auth.getSession();
+  return Boolean(data.session);
+}
+
+async function waitForSession(maxMs = 800): Promise<boolean> {
+  if (await sessionReady()) return true;
+  const started = Date.now();
+  while (Date.now() - started < maxMs) {
+    await new Promise((r) => setTimeout(r, 40));
+    if (await sessionReady()) return true;
+  }
+  return false;
+}
+
 async function ensureSessionFromCallback(callbackUrl: string): Promise<void> {
-  // Must return via app deep link — never a LAN/web page on the phone.
   if (isLocalhostAuthUrl(callbackUrl) || isHttpUrl(callbackUrl)) {
     throw new Error(SETUP_HINT);
   }
@@ -65,24 +80,13 @@ async function ensureSessionFromCallback(callbackUrl: string): Promise<void> {
 
   const ok = await applyOAuthCallbackFromUrl(supabase, callbackUrl);
   if (!ok) {
-    try {
-      await createSessionFromOAuthUrl(callbackUrl);
-    } catch (err) {
-      if (__DEV__) console.warn('[authOAuth] createSessionFromOAuthUrl:', err);
-    }
+    await createSessionFromOAuthUrl(callbackUrl);
   }
 
-  for (let i = 0; i < 40; i++) {
-    const { data } = await supabase.auth.getSession();
-    if (data.session) {
-      await persistOAuthRedirectMode('expo');
-      await AsyncStorage.setItem('isAuthenticated', 'true');
-      return;
-    }
-    await new Promise((r) => setTimeout(r, 100));
+  if (!(await waitForSession())) {
+    throw new Error('Google sign-in finished, but no session was created. Try again.');
   }
-
-  throw new Error('Google sign-in finished, but no session was created. Try again.');
+  await markSignedIn();
 }
 
 async function runGoogleOAuthExpoOnly(options?: GoogleSignInOptions): Promise<void> {
@@ -101,14 +105,18 @@ async function runGoogleOAuthExpoOnly(options?: GoogleSignInOptions): Promise<vo
 
   onPhase?.('starting');
 
-  const { data, error } = await supabase.auth.signInWithOAuth({
+  const warmup =
+    Platform.OS === 'android' ? WebBrowser.warmUpAsync().catch(() => undefined) : Promise.resolve();
+
+  const oauthStart = supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
       redirectTo,
       skipBrowserRedirect: true,
-      queryParams: { prompt: 'select_account' },
     },
   });
+
+  const [{ data, error }] = await Promise.all([oauthStart, warmup]);
 
   if (error) throw error;
   if (!data?.url) throw new Error('Unable to start Google sign in.');
@@ -133,7 +141,6 @@ async function runGoogleOAuthExpoOnly(options?: GoogleSignInOptions): Promise<vo
   const linkSub = Linking.addEventListener('url', ({ url }) => {
     if (isOAuthReturnUrl(url)) {
       linkCallback = url;
-      // Unstick iOS if the auth sheet does not auto-dismiss on cavitour://
       void WebBrowser.dismissAuthSession();
     }
   });
@@ -151,14 +158,7 @@ async function runGoogleOAuthExpoOnly(options?: GoogleSignInOptions): Promise<vo
 
   try {
     onPhase?.('google');
-    await waitForInteractions();
-    await new Promise((r) => setTimeout(r, Platform.OS === 'ios' ? 350 : 150));
 
-    if (Platform.OS === 'android') {
-      await WebBrowser.warmUpAsync().catch(() => undefined);
-    }
-
-    // Match prefix: cavitour://… — must match Supabase redirect_to.
     const authSessionOptions =
       Platform.OS === 'android'
         ? { showInRecents: true, createTask: true }
@@ -176,8 +176,11 @@ async function runGoogleOAuthExpoOnly(options?: GoogleSignInOptions): Promise<vo
       result.type === 'success' && result.url ? result.url : linkCallback;
 
     if (!callbackUrl) {
-      await new Promise((r) => setTimeout(r, Platform.OS === 'android' ? 900 : 600));
-      callbackUrl = linkCallback;
+      const deadline = Date.now() + 280;
+      while (!callbackUrl && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 40));
+        callbackUrl = linkCallback;
+      }
     }
 
     if (!callbackUrl) {
@@ -193,16 +196,13 @@ async function runGoogleOAuthExpoOnly(options?: GoogleSignInOptions): Promise<vo
       return;
     }
 
-    const { data: existing } = await supabase.auth.getSession();
-    if (existing.session) {
-      await persistOAuthRedirectMode('expo');
-      await AsyncStorage.setItem('isAuthenticated', 'true');
+    if (await sessionReady()) {
+      await markSignedIn();
       onPhase?.('done');
       return;
     }
 
     if (result.type === 'cancel' || result.type === 'dismiss') {
-      // Late deep link after dismiss
       if (linkCallback) {
         await ensureSessionFromCallback(linkCallback);
         onPhase?.('done');
@@ -216,7 +216,7 @@ async function runGoogleOAuthExpoOnly(options?: GoogleSignInOptions): Promise<vo
     linkSub.remove();
     appStateSub.remove();
     if (Platform.OS === 'android') {
-      await WebBrowser.coolDownAsync().catch(() => undefined);
+      void WebBrowser.coolDownAsync().catch(() => undefined);
     }
   }
 }
@@ -225,10 +225,8 @@ export async function signInWithGoogleMobile(options?: GoogleSignInOptions): Pro
   try {
     await runGoogleOAuthExpoOnly(options);
   } catch (err) {
-    const { data } = await supabase.auth.getSession();
-    if (data.session) {
-      await persistOAuthRedirectMode('expo');
-      await AsyncStorage.setItem('isAuthenticated', 'true');
+    if (await sessionReady()) {
+      await markSignedIn();
       options?.onPhase?.('done');
       return;
     }

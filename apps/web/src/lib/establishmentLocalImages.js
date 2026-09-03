@@ -1378,7 +1378,7 @@ const LOCAL_MEDIA = {
   'Mayang Falls': mayangFallsGallery,
 };
 
-function lookupLocalEstablishmentUrls(name) {
+export function lookupLocalEstablishmentUrls(name) {
   const raw = String(name ?? '').trim();
   if (!raw) return undefined;
   if (LOCAL_MEDIA[raw]) return LOCAL_MEDIA[raw];

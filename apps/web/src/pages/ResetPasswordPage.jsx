@@ -8,7 +8,7 @@ import {
   urlLooksLikePasswordRecovery,
 } from '../lib/passwordRecovery';
 import { isAdminReservedEmail } from '../lib/adminReservedEmail';
-import { ADMIN_APP_HOME_PATH } from '../lib/adminPortalPath';
+import { resolveAccountHome } from '../lib/accountHome';
 
 const MIN_LEN = 8;
 const teal = 'var(--ct-teal)';
@@ -91,8 +91,16 @@ export function ResetPasswordPage() {
       const { error: err } = await supabase.auth.updateUser({ password });
       if (err) throw err;
       const { data } = await supabase.auth.getUser();
+      const sessionRes = await supabase.auth.getSession();
+      const session = sessionRes.data.session;
       const email = data.user?.email?.trim().toLowerCase() ?? '';
-      const nextPath = email && isAdminReservedEmail(email) ? '/admin' : '/login';
+      let nextPath = email && isAdminReservedEmail(email) ? '/admin' : '/login';
+      if (session && !isAdminReservedEmail(email)) {
+        const home = await resolveAccountHome(supabase, session);
+        if (home.path?.startsWith('/establishment')) {
+          nextPath = home.path;
+        }
+      }
       setSaved(true);
       window.setTimeout(() => {
         navigate(nextPath, {
@@ -108,7 +116,7 @@ export function ResetPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen px-4 py-6 font-['Inter',sans-serif] sm:px-8 sm:py-8" style={{ backgroundColor: cream }}>
+    <div className="flex min-h-screen items-center justify-center px-4 py-8 font-['Poppins',sans-serif]" style={{ backgroundColor: cream }}>
       <div className="mx-auto w-full max-w-md pt-8">
         <div className="mb-6 text-center">
           <Link to="/" className="inline-flex items-center justify-center">
@@ -152,7 +160,7 @@ export function ResetPasswordPage() {
                 placeholder="New password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="h-11 w-full rounded-full border border-neutral-200 px-4 text-sm outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(126,160,14,0.22)]"
+                className="h-11 w-full rounded-full border border-neutral-200 px-4 text-sm outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(16, 163, 127,0.22)]"
                 minLength={MIN_LEN}
                 autoComplete="new-password"
                 required
@@ -166,7 +174,7 @@ export function ResetPasswordPage() {
                 placeholder="Confirm password"
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
-                className="h-11 w-full rounded-full border border-neutral-200 px-4 text-sm outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(126,160,14,0.22)]"
+                className="h-11 w-full rounded-full border border-neutral-200 px-4 text-sm outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(16, 163, 127,0.22)]"
                 minLength={MIN_LEN}
                 autoComplete="new-password"
                 required

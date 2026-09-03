@@ -10,13 +10,13 @@ const emptyForm: Omit<ContentHighlight, 'id'> = {
   status: 'draft',
 };
 
-export function ContentOverview() {
+export function ContentOverview({ embedded = false }: { embedded?: boolean } = {}) {
   const [rows, setRows] = useState(contentHighlights);
 
   const active = rows.filter((r) => r.status === 'active').length;
 
   return (
-    <div>
+    <div className={embedded ? styles.embeddedRoot : undefined}>
       <div className={styles.summaryRow}>
         <div className={styles.summaryCard}>
           <span className={styles.summaryLabel}>Highlights</span>
@@ -33,8 +33,13 @@ export function ContentOverview() {
       </div>
 
       <ContentCrudPage<ContentHighlight>
-        title="Overview"
-        description="Catalog highlights shown on marketing surfaces. Edit featured destinations and notes."
+        title="highlights"
+        description={
+          embedded
+            ? undefined
+            : 'Catalog highlights shown on marketing surfaces. Edit featured destinations and notes.'
+        }
+        embedded={embedded}
         rows={rows}
         onChange={setRows}
         emptyForm={emptyForm}

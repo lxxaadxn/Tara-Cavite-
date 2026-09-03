@@ -22,10 +22,10 @@ import { SaveToListSheet, type SaveToListRow } from '../components/SaveToListShe
 import { Place, getItineraryEstablishments } from '../data/mockData';
 import { parsePlaceCoords } from '../lib/placeCoords';
 import { placeImageSource } from '../lib/placeImageSource';
-import { googleMapsDirectionsUrl } from '../lib/googleMapsDirections';
+import { launchGoogleMapsDrivingTo } from '../lib/launchGoogleMapsDirections';
 import * as Location from 'expo-location';
 import { formatNtdpCategoryTagLabel, getEstablishmentAboutBody } from '../lib/ntdpDisplayLabels';
-import { fetchPlaceById } from '../lib/placesFromSupabase';
+import { fetchPlaceById, fetchDashboardPlacesPool, haversineDistanceKm } from '../lib/placesFromSupabase';
 import { supabase } from '../lib/supabase';
 import {
   isSupabasePlaceId,
@@ -43,48 +43,21 @@ import {
   SAVE_TO_LIST_CREATE_BUSY_ID,
   suggestedSaveListName,
 } from '../lib/saveToListModalHelpers';
-import { fetchPlaceCheckinDisplay } from 'cavitour-shared/placeCheckin';
-import { buildMobileCheckinDeepLink, getMobileCheckinWebOrigin } from '../lib/checkinDeepLink';
-import { confirmCheckinFromCode } from '../lib/confirmCheckin';
-import { CheckinScannerModal, ScanCheckinButton } from '../components/CheckinScannerModal';
-import { CheckinQrMark } from '../components/CheckinQrMark';
+import { fetchPlaceReviews, type PlaceReview } from '../lib/placeReviews';
+import { hasQrPlaceVisit } from 'cavitour-shared/placeCheckin';
 import { PlaceReviewForm } from '../components/PlaceReviewForm';
 import { ReviewCardsList } from '../components/ReviewCardsList';
-import { fetchPlaceReviews, type PlaceReview } from '../lib/placeReviews';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LeafletMapView } from '../components/LeafletMapView';
 import type { User } from '@supabase/supabase-js';
 
-const GREEN = '#7EA00E';
-const TEAL = '#1F4F59';
+const GREEN = '#10A37F';
+const TEAL = '#1B8A70';
 const TITLE = '#241D13';
 const MUTED = '#868686';
 const WHITE = '#FFFFFF';
-const OLIVE = '#7EA00E';
+const OLIVE = '#10A37F';
 const STAR_FULL = '#FFC012';
 const STAR_EMPTY = '#E5E5E5';
-
-function sessionReviewsKey(placeId: string) {
-  return `cavitour-place-reviews:${placeId}`;
-}
-
-async function loadSessionReviews(placeId: string): Promise<PlaceReview[]> {
-  try {
-    const raw = await AsyncStorage.getItem(sessionReviewsKey(placeId));
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as PlaceReview[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-async function saveSessionReviews(placeId: string, reviews: PlaceReview[]) {
-  try {
-    await AsyncStorage.setItem(sessionReviewsKey(placeId), JSON.stringify(reviews.slice(0, 40)));
-  } catch {
-    /* empty */
-  }
-}
 
 function buildReviewStats(ratings: number[]) {
   const list = ratings.map((r) => Math.min(5, Math.max(1, Math.round(Number(r)))));
@@ -104,9 +77,16 @@ function buildReviewStats(ratings: number[]) {
 const PAGE_BG = '#FFFFFF';
 const LIST_PAGE_BG = '#F5F5F6';
 const CARD_BORDER = 'rgba(229, 229, 229, 0.9)';
-const CATEGORY_PILL_BG = 'rgba(126, 160, 14, 0.22)';
+const CATEGORY_PILL_BG = 'rgba(16, 163, 127, 0.22)';
 const CATEGORY_PILL_TEXT = '#3d4a06';
 const NEUTRAL_MUTED = '#737373';
+
+function formatProximityKm(km: number | null | undefined): string {
+  if (km == null || !Number.isFinite(km)) return '';
+  if (km < 0.1) return 'Nearby';
+  if (km < 10) return `${km.toFixed(1)} km`;
+  return `${Math.round(km)} km`;
+}
 
 export type AboutEstablishmentParams = {
   place?: Place;
@@ -260,19 +240,15 @@ export default function AboutEstablishmentScreen() {
   const [listNameDraft, setListNameDraft] = useState('');
   const [saveListBusyId, setSaveListBusyId] = useState<string | null>(null);
   const [checkingSaved, setCheckingSaved] = useState(false);
-  const [checkinInfo, setCheckinInfo] = useState<{
-    code: string;
-    qrValue: string;
-    checkinUrl: string;
-  } | null>(null);
-  const [checkinBusy, setCheckinBusy] = useState(false);
-  const [scannerOpen, setScannerOpen] = useState(false);
-  const [tapQrReveal, setTapQrReveal] = useState(false);
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [reviewNickname, setReviewNickname] = useState('');
   const [publishedReviews, setPublishedReviews] = useState<PlaceReview[]>([]);
-  const [sessionReviews, setSessionReviews] = useState<PlaceReview[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewsError, setReviewsError] = useState('');
+  const [canWriteReview, setCanWriteReview] = useState(false);
+  const [userPt, setUserPt] = useState<{ lat: number; lng: number } | null>(null);
+  const [nearbyPlaces, setNearbyPlaces] = useState<Array<Place & { distanceKm: number }>>([]);
+  const [overviewExpanded, setOverviewExpanded] = useState(false);
 
   useEffect(() => {
     if (routePlace) {
@@ -320,35 +296,6 @@ export default function AboutEstablishmentScreen() {
   }, [routePlace?.id, routePlaceId, isItinerary]);
 
   useEffect(() => {
-    const id = place?.id;
-    if (!id || isItinerary || !isSupabasePlaceId(id)) {
-      setCheckinInfo(null);
-      return;
-    }
-    let cancelled = false;
-    const origin = getMobileCheckinWebOrigin();
-    void fetchPlaceCheckinDisplay(supabase, id, origin)
-      .then((info) => {
-        if (cancelled || !info) {
-          if (!cancelled) setCheckinInfo(null);
-          return;
-        }
-        const deep = buildMobileCheckinDeepLink(info.code);
-        setCheckinInfo({
-          code: info.code,
-          checkinUrl: info.checkinUrl,
-          qrValue: deep || info.checkinUrl || info.code,
-        });
-      })
-      .catch(() => {
-        if (!cancelled) setCheckinInfo(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [place?.id, isItinerary]);
-
-  useEffect(() => {
     let cancelled = false;
     (async () => {
       const {
@@ -379,24 +326,21 @@ export default function AboutEstablishmentScreen() {
     const id = place?.id;
     if (!id || isItinerary || !isSupabasePlaceId(id)) {
       setPublishedReviews([]);
-      setSessionReviews([]);
+      setReviewsError('');
       return;
     }
     let cancelled = false;
     setReviewsLoading(true);
+    setReviewsError('');
     void (async () => {
       try {
-        const [rows, local] = await Promise.all([
-          fetchPlaceReviews(supabase, id),
-          loadSessionReviews(id),
-        ]);
+        const rows = await fetchPlaceReviews(supabase, id);
         if (cancelled) return;
         setPublishedReviews(rows);
-        setSessionReviews(local);
-      } catch {
+      } catch (err) {
         if (!cancelled) {
           setPublishedReviews([]);
-          setSessionReviews(await loadSessionReviews(id));
+          setReviewsError(err instanceof Error ? err.message : 'Could not load reviews.');
         }
       } finally {
         if (!cancelled) setReviewsLoading(false);
@@ -407,23 +351,19 @@ export default function AboutEstablishmentScreen() {
     };
   }, [place?.id, isItinerary]);
 
-  const onCheckinHere = useCallback(async () => {
-    if (!checkinInfo?.code) {
-      Alert.alert('Check-in', 'No QR for this establishment yet.');
+  const refreshCanWriteReview = useCallback(async () => {
+    const id = place?.id;
+    if (!id || isItinerary || !isSupabasePlaceId(id) || !authUser) {
+      setCanWriteReview(false);
       return;
     }
-    setCheckinBusy(true);
-    try {
-      await confirmCheckinFromCode(checkinInfo.code, 'qr', {
-        expectedPlaceId: place?.id,
-        expectedPlaceName: place?.name,
-        requireExpectedPlace: Boolean(routeParams.confirmArrival),
-        recordAsDestinationReached: true,
-      });
-    } finally {
-      setCheckinBusy(false);
-    }
-  }, [checkinInfo?.code, place?.id, place?.name, routeParams.confirmArrival]);
+    const visited = await hasQrPlaceVisit(supabase, id);
+    setCanWriteReview(visited);
+  }, [place?.id, isItinerary, authUser]);
+
+  useEffect(() => {
+    void refreshCanWriteReview();
+  }, [refreshCanWriteReview]);
 
   const categoryLabel = useMemo(() => (place ? getCategoryLabel(place) : ''), [place]);
   const photoSlides = useMemo(() => (place ? collectPhotoSlides(place) : []), [place]);
@@ -443,36 +383,93 @@ export default function AboutEstablishmentScreen() {
       place?.social_twitter
   );
 
-  const visitorReviews = useMemo(() => {
-    const publishedIds = new Set(publishedReviews.map((r) => r.id));
-    const sessionOnly = sessionReviews.filter((r) => !publishedIds.has(r.id));
-    return [...publishedReviews, ...sessionOnly].sort((a, b) => b.at - a.at);
-  }, [publishedReviews, sessionReviews]);
+  const placeCoords = useMemo(() => (place ? parsePlaceCoords(place) : null), [place]);
+  const distanceKm = useMemo(() => {
+    if (!userPt || !placeCoords) return null;
+    return haversineDistanceKm(userPt.lat, userPt.lng, placeCoords.lat, placeCoords.lng);
+  }, [userPt, placeCoords]);
+  const distanceLabel = formatProximityKm(distanceKm);
+  const highlightCards = useMemo(() => {
+    if (!place) return [];
+    return [
+      { key: 'type', label: 'Type', value: String(place.ta_category || place.type_code || place.type || '').trim() || '—' },
+      { key: 'category', label: 'Category', value: categoryLabel || '—' },
+      { key: 'municipality', label: 'Municipality', value: String(place.city_mun || '').trim() || '—' },
+    ];
+  }, [place, categoryLabel]);
+  const overviewNeedsToggle = bodyText.length > 220;
+  const overviewText =
+    overviewNeedsToggle && !overviewExpanded ? `${bodyText.slice(0, 220).trim()}…` : bodyText;
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') return;
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        if (!cancelled) setUserPt({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      } catch {
+        /* optional */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!placeCoords || isItinerary) {
+      setNearbyPlaces([]);
+      return;
+    }
+    let cancelled = false;
+    void fetchDashboardPlacesPool(supabase, 400)
+      .then((pool) => {
+        if (cancelled) return;
+        const ranked = pool
+          .filter((p) => p.id !== place?.id)
+          .map((p) => {
+            const c = parsePlaceCoords(p);
+            if (!c) return null;
+            return {
+              ...p,
+              distanceKm: haversineDistanceKm(placeCoords.lat, placeCoords.lng, c.lat, c.lng),
+            };
+          })
+          .filter((p): p is Place & { distanceKm: number } => p != null && Number.isFinite(p.distanceKm))
+          .sort((a, b) => a.distanceKm - b.distanceKm)
+          .slice(0, 4);
+        setNearbyPlaces(ranked);
+      })
+      .catch(() => {
+        if (!cancelled) setNearbyPlaces([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [place?.id, placeCoords?.lat, placeCoords?.lng, isItinerary]);
+
+  const visitorReviews = useMemo(
+    () => [...publishedReviews].sort((a, b) => b.at - a.at),
+    [publishedReviews]
+  );
 
   const reviewStats = useMemo(
     () => buildReviewStats(visitorReviews.map((r) => r.rating)),
     [visitorReviews]
   );
 
-  const handleReviewSubmitted = useCallback(
-    (review: PlaceReview) => {
-      if (!place?.id) return;
-      if (review.userId) {
-        setPublishedReviews((prev) => {
-          const without = prev.filter((r) => r.userId !== review.userId && r.id !== review.id);
-          return [review, ...without];
-        });
-        setSessionReviews((prev) => prev.filter((r) => r.userId !== review.userId));
-      } else {
-        setSessionReviews((prev) => {
-          const next = [review, ...prev.filter((r) => r.id !== review.id)];
-          void saveSessionReviews(place.id, next);
-          return next;
-        });
-      }
-    },
-    [place?.id]
-  );
+  const handleReviewSubmitted = useCallback(async () => {
+    if (!place?.id) return;
+    try {
+      const rows = await fetchPlaceReviews(supabase, place.id);
+      setPublishedReviews(rows);
+      setReviewsError('');
+    } catch (err) {
+      setReviewsError(err instanceof Error ? err.message : 'Could not load reviews.');
+    }
+  }, [place?.id]);
 
   const refreshSavedState = useCallback(async () => {
     if (!place || isItinerary) {
@@ -518,38 +515,14 @@ export default function AboutEstablishmentScreen() {
   const openArrivalCheckinOptions = useCallback(() => {
     if (!place) return;
     Alert.alert(
-      'Destination Reached',
-      `Confirm your visit at ${place.name}. Choose Tap QR to show the code on this page, Scan QR for a printed poster, or Enter Code.`,
-      [
-        {
-          text: 'Tap QR',
-          onPress: () => {
-            setTapQrReveal(true);
-            setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
-          },
-        },
-        {
-          text: 'Scan QR',
-          onPress: () => setScannerOpen(true),
-        },
-        {
-          text: 'Enter Code',
-          onPress: () => {
-            (navigation as { navigate: (name: string, params: object) => void }).navigate('Checkin', {
-              fromDestinationReached: true,
-              expectedPlaceId: place.id,
-              expectedPlaceName: place.name,
-            });
-          },
-        },
-        { text: 'Cancel', style: 'cancel' },
-      ]
+      'Destination reached',
+      `To record a visit at ${place.name}, use Scan on the bottom bar and scan the poster QR.`,
+      [{ text: 'OK' }]
     );
-  }, [navigation, place]);
+  }, [place]);
 
   useEffect(() => {
     confirmArrivalShownRef.current = false;
-    setTapQrReveal(false);
   }, [place?.id]);
 
   useEffect(() => {
@@ -610,35 +583,7 @@ export default function AboutEstablishmentScreen() {
     };
 
     const openGoogleMaps = async () => {
-      let originLat: number | null = null;
-      let originLng: number | null = null;
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const pos = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-          });
-          originLat = pos.coords.latitude;
-          originLng = pos.coords.longitude;
-        }
-      } catch {
-      }
-
-      const url = googleMapsDirectionsUrl(c.lat, c.lng, {
-        mode: 'driving',
-        originLat,
-        originLng,
-      });
-      if (!url) {
-        Alert.alert('Could not open Maps', 'Missing destination coordinates.');
-        goInApp();
-        return;
-      }
-      try {
-        await Linking.openURL(url);
-      } catch {
-        Alert.alert('Could not open Google Maps', 'Open the in-app trip instead, or install Google Maps.');
-      }
+      await launchGoogleMapsDrivingTo(c.lat, c.lng);
       goInApp();
     };
 
@@ -872,11 +817,18 @@ export default function AboutEstablishmentScreen() {
 
         <View style={styles.aboutPanel}>
           <View style={styles.aboutPanelInner}>
-            <Text style={styles.descriptionLabel}>About this establishment</Text>
+            <Text style={styles.descriptionLabel}>Overview</Text>
             {profileLoading ? (
               <ActivityIndicator style={{ marginTop: 12 }} color={GREEN} />
             ) : (
-              <Text style={styles.bodyText}>{bodyText}</Text>
+              <>
+                <Text style={styles.bodyText}>{overviewText}</Text>
+                {overviewNeedsToggle ? (
+                  <TouchableOpacity onPress={() => setOverviewExpanded((v) => !v)} accessibilityRole="button">
+                    <Text style={styles.readMore}>{overviewExpanded ? 'Read less' : 'Read more'}</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </>
             )}
             {place.hours?.trim() ? (
               <Text style={styles.hoursLine}>
@@ -952,22 +904,92 @@ export default function AboutEstablishmentScreen() {
           </View>
         </View>
 
+        {distanceLabel ? (
+          <View style={styles.sectionBlock}>
+            <Text style={styles.sectionEyebrow}>Distance</Text>
+            <Text style={styles.distanceValue}>{distanceLabel}</Text>
+          </View>
+        ) : null}
+
+        {highlightCards.length > 0 ? (
+          <View style={styles.sectionBlock}>
+            <Text style={styles.sectionHeading}>Highlights</Text>
+            <View style={styles.highlightRow}>
+              {highlightCards.map((item) => (
+                <View key={item.key} style={styles.highlightCard}>
+                  <Text style={styles.highlightLabel}>{item.label}</Text>
+                  <Text style={styles.highlightValue}>{item.value}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        {placeCoords ? (
+          <View style={styles.sectionBlock}>
+            <View style={styles.locationHead}>
+              <Text style={styles.sectionHeading}>Location</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  void launchGoogleMapsDrivingTo(placeCoords.lat, placeCoords.lng, userPt);
+                }}
+                style={styles.directionsChip}
+                accessibilityRole="button"
+                accessibilityLabel="Directions"
+              >
+                <Text style={styles.directionsChipText}>Directions</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.mapWrap}>
+              <LeafletMapView
+                markers={[{ id: place.id, name: place.name, lat: placeCoords.lat, lng: placeCoords.lng }]}
+                userLocation={userPt}
+                style={styles.mapInner}
+              />
+            </View>
+          </View>
+        ) : null}
+
+        {nearbyPlaces.length > 0 ? (
+          <View style={styles.sectionBlock}>
+            <Text style={styles.sectionHeading}>Nearby</Text>
+            <View style={styles.nearbyGrid}>
+              {nearbyPlaces.map((p) => {
+                const img = placeImageSource(p.image);
+                const dist = formatProximityKm(p.distanceKm);
+                return (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={styles.nearbyCard}
+                    onPress={() =>
+                      (navigation as { push?: (n: string, p: object) => void; navigate: (n: string, p: object) => void }).push
+                        ? (navigation as { push: (n: string, p: object) => void }).push('AboutEstablishment', { place: p })
+                        : (navigation as { navigate: (n: string, p: object) => void }).navigate('AboutEstablishment', { place: p })
+                    }
+                    accessibilityRole="button"
+                  >
+                    {img ? <Image source={img} style={styles.nearbyImg} /> : <View style={[styles.nearbyImg, styles.nearbyImgFallback]} />}
+                    <Text style={styles.nearbyName} numberOfLines={2}>
+                      {p.name}
+                    </Text>
+                    <Text style={styles.nearbyMeta} numberOfLines={1}>
+                      {dist ? `${dist} away` : p.city_mun || p.address}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
+
         {!isItinerary ? (
           <View style={styles.reviewsSection}>
             <Text style={styles.reviewsTitle}>Reviews</Text>
             <Text style={styles.reviewsSubtitle}>
-              Read what visitors shared — or add your own. Sample reviews show when no one has posted yet.
+              Reviews from visitors who posted about this establishment.
             </Text>
 
-            {isSupabasePlaceId(place.id) ? (
-              <PlaceReviewForm
-                placeId={place.id}
-                placeName={place.name}
-                signedIn={Boolean(authUser)}
-                defaultNickname={reviewNickname}
-                onSubmitted={handleReviewSubmitted}
-              />
-            ) : null}
+            {reviewsError ? <Text style={styles.reviewsError}>{reviewsError}</Text> : null}
 
             {reviewStats.total > 0 ? (
               <View style={styles.reviewStatsCard}>
@@ -1014,94 +1036,36 @@ export default function AboutEstablishmentScreen() {
                   placeName={place.name}
                   ntdpCategory={place.ntdp_category}
                   reviews={visitorReviews}
-                  emptyAsSamples
+                  emptyAsSamples={false}
                 />
               </View>
             )}
+
+            {isSupabasePlaceId(place.id) ? (
+              <View style={{ marginTop: 16 }}>
+                {canWriteReview ? (
+                  <PlaceReviewForm
+                    placeId={place.id}
+                    placeName={place.name}
+                    signedIn={Boolean(authUser)}
+                    defaultNickname={reviewNickname}
+                    onSubmitted={() => void handleReviewSubmitted()}
+                    onSignIn={() => navigation.navigate('SignIn' as never)}
+                  />
+                ) : (
+                  <View style={styles.visitReviewNote}>
+                    <Text style={styles.visitReviewTitle}>Visit to leave a review</Text>
+                    <Text style={styles.visitReviewBody}>
+                      Use Scan on the bottom bar to scan the poster QR. After your visit is counted, you can post a review.
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ) : null}
           </View>
         ) : null}
 
         <View style={styles.actionsBlock}>
-          {checkinInfo ? (
-            <View style={styles.qrCard}>
-              <Text style={styles.qrTitle}>
-                {routeParams.confirmArrival || tapQrReveal
-                  ? 'Confirm arrival — check in'
-                  : 'Check in at this place'}
-              </Text>
-              <Text style={styles.qrHint}>
-                {tapQrReveal
-                  ? 'Tap the QR code below to count your visit. You can also scan a printed poster or enter the code.'
-                  : routeParams.confirmArrival
-                    ? 'Use the Destination Reached options, or scan a printed poster / enter the code below.'
-                    : 'Tap the QR code to count your visit on this phone. Use Scan QR only for a printed poster.'}
-              </Text>
-              <TouchableOpacity
-                onPress={() => void onCheckinHere()}
-                disabled={checkinBusy}
-                activeOpacity={0.9}
-                accessibilityRole="button"
-                accessibilityLabel="Tap the QR code to check in"
-                style={{ alignSelf: 'center' }}
-              >
-                {checkinBusy ? (
-                  <ActivityIndicator style={{ marginVertical: 80 }} color={TEAL} />
-                ) : (
-                  <CheckinQrMark value={checkinInfo.qrValue} size={200} />
-                )}
-              </TouchableOpacity>
-              <Text style={styles.qrCodeText}>{checkinInfo.code}</Text>
-              <ScanCheckinButton onPress={() => setScannerOpen(true)} label="Scan QR" />
-              <TouchableOpacity
-                onPress={() => {
-                  (navigation as { navigate: (name: string, params: object) => void }).navigate('Checkin', {
-                    fromDestinationReached: Boolean(routeParams.confirmArrival || tapQrReveal),
-                    expectedPlaceId: place.id,
-                    expectedPlaceName: place.name,
-                  });
-                }}
-                style={[styles.checkinButton, { marginTop: 10 }]}
-                activeOpacity={0.92}
-                accessibilityRole="button"
-                accessibilityLabel="Enter Code"
-              >
-                <Text style={styles.checkinButtonLabel}>ENTER CODE</Text>
-              </TouchableOpacity>
-              {routeParams.confirmArrival ? (
-                <TouchableOpacity
-                  onPress={() => navigation.goBack()}
-                  style={{ marginTop: 12, alignSelf: 'center', padding: 10 }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Cancel"
-                >
-                  <Text style={{ fontFamily: 'Poppins_500Medium', color: MUTED }}>Cancel</Text>
-                </TouchableOpacity>
-              ) : null}
-            </View>
-          ) : (
-            <View style={styles.qrCard}>
-              <Text style={styles.qrTitle}>Check in with QR</Text>
-              <Text style={styles.qrHint}>
-                Point your camera at a printed establishment poster QR, or enter the code.
-              </Text>
-              <ScanCheckinButton onPress={() => setScannerOpen(true)} label="Scan QR" />
-              <TouchableOpacity
-                onPress={() => {
-                  (navigation as { navigate: (name: string, params: object) => void }).navigate('Checkin', {
-                    fromDestinationReached: Boolean(routeParams.confirmArrival),
-                    expectedPlaceId: place.id,
-                    expectedPlaceName: place.name,
-                  });
-                }}
-                style={[styles.checkinButton, { marginTop: 12 }]}
-                activeOpacity={0.92}
-                accessibilityRole="button"
-                accessibilityLabel="Enter Code"
-              >
-                <Text style={styles.checkinButtonLabel}>ENTER CODE</Text>
-              </TouchableOpacity>
-            </View>
-          )}
           <TouchableOpacity
             onPress={openStartCaviTrip}
             style={styles.caviTripButton}
@@ -1125,17 +1089,6 @@ export default function AboutEstablishmentScreen() {
         onCreateList={onCreateList}
         busyListId={saveListBusyId}
         countLabel={isItinerary ? 'items' : 'places'}
-      />
-      <CheckinScannerModal
-        visible={scannerOpen}
-        onClose={() => setScannerOpen(false)}
-        title={routeParams.confirmArrival ? 'Confirm arrival — scan QR' : 'Scan poster QR'}
-        checkinOptions={{
-          expectedPlaceId: place.id,
-          expectedPlaceName: place.name,
-          requireExpectedPlace: Boolean(routeParams.confirmArrival),
-          recordAsDestinationReached: true,
-        }}
       />
     </View>
   );
@@ -1322,6 +1275,124 @@ const styles = StyleSheet.create({
     color: '#404040',
     letterSpacing: 0.1,
   },
+  readMore: {
+    marginTop: 8,
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: GREEN,
+  },
+  sectionBlock: {
+    marginTop: 22,
+  },
+  sectionEyebrow: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 12,
+    color: '#A3A3A3',
+  },
+  distanceValue: {
+    marginTop: 4,
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    color: TITLE,
+  },
+  sectionHeading: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    color: TITLE,
+  },
+  highlightRow: {
+    marginTop: 12,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  highlightCard: {
+    flexGrow: 1,
+    flexBasis: '30%',
+    minWidth: 96,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    backgroundColor: WHITE,
+    padding: 12,
+  },
+  highlightLabel: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 11,
+    color: '#A3A3A3',
+  },
+  highlightValue: {
+    marginTop: 6,
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 13,
+    color: TITLE,
+  },
+  locationHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  directionsChip: {
+    backgroundColor: GREEN,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  directionsChipText: {
+    color: WHITE,
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 13,
+  },
+  mapWrap: {
+    marginTop: 12,
+    height: 220,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+  },
+  mapInner: {
+    flex: 1,
+  },
+  nearbyGrid: {
+    marginTop: 12,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  nearbyCard: {
+    width: '48%',
+    flexGrow: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    backgroundColor: WHITE,
+  },
+  nearbyImg: {
+    width: '100%',
+    height: 96,
+    backgroundColor: '#F3F4F6',
+  },
+  nearbyImgFallback: {
+    backgroundColor: '#E5E7EB',
+  },
+  nearbyName: {
+    paddingHorizontal: 8,
+    paddingTop: 8,
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 13,
+    color: TITLE,
+  },
+  nearbyMeta: {
+    paddingHorizontal: 8,
+    paddingBottom: 10,
+    marginTop: 2,
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 11,
+    color: MUTED,
+  },
   hoursLine: {
     marginTop: 16,
     fontFamily: 'Inter_400Regular',
@@ -1362,7 +1433,7 @@ const styles = StyleSheet.create({
   },
   contactLink: {
     fontFamily: 'Inter_400Regular',
-    color: '#6B8E23',
+    color: '#1B8A70',
     textDecorationLine: 'underline',
   },
   actionsBlock: {
@@ -1384,6 +1455,12 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: MUTED,
     marginBottom: 4,
+  },
+  reviewsError: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#B42318',
   },
   reviewStatsCard: {
     marginTop: 4,
@@ -1449,7 +1526,7 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(31, 79, 89, 0.2)',
+    borderColor: 'rgba(27, 138, 112, 0.2)',
     backgroundColor: '#F8FAFB',
     padding: 16,
     alignItems: 'center',
@@ -1495,6 +1572,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
     color: '#6b7280',
+  },
+  visitReviewNote: {
+    backgroundColor: WHITE,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(122, 120, 120, 0.18)',
+    padding: 18,
+  },
+  visitReviewTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 15,
+    color: TITLE,
+  },
+  visitReviewBody: {
+    marginTop: 6,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    color: MUTED,
   },
   checkinButton: {
     marginTop: 12,

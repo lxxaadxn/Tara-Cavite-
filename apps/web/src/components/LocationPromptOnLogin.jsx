@@ -118,8 +118,8 @@ export function LocationPromptOnLogin() {
       aria-labelledby="cavitour-location-title"
     >
       <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-[0_24px_60px_rgba(0,0,0,0.28)] sm:p-6">
-        <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-[#7EA00E]/15">
-          <svg className="h-5 w-5 text-[#7EA00E]" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+        <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-[#10A37F]/15">
+          <svg className="h-5 w-5 text-[#10A37F]" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
             <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z" />
           </svg>
         </div>
@@ -171,7 +171,7 @@ export function LocationPromptOnLogin() {
             type="button"
             onClick={handleAllow}
             disabled={busy}
-            className="rounded-xl bg-[#7EA00E] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#6d8c0c] disabled:opacity-60"
+            className="rounded-xl bg-[#10A37F] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#168F7A] disabled:opacity-60"
           >
             {busy ? 'Waiting for browser…' : permissionDenied ? 'Try again' : 'Allow location'}
           </button>

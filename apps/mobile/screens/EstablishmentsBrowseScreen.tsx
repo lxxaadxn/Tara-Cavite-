@@ -20,7 +20,7 @@ import { fetchAllPlacesFromSupabase, logPlacesFetchError } from '../lib/placesFr
 import { placeImageSource } from '../lib/placeImageSource';
 import { formatNtdpCategoryTagLabel } from '../lib/ntdpDisplayLabels';
 
-const TEAL = '#1F4F59';
+const TEAL = '#1B8A70';
 
 export default function EstablishmentsBrowseScreen() {
   const navigation = useNavigation();

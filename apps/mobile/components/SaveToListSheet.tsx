@@ -36,7 +36,7 @@ type Props = {
   countLabel?: string;
 };
 
-const GREEN = '#7EA00E';
+const GREEN = '#10A37F';
 const TITLE = '#241D13';
 const MUTED = '#6B7280';
 const WHITE = '#FFFFFF';
@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#EEF4DF',
+    backgroundColor: '#E4F3EE',
     alignItems: 'center',
     justifyContent: 'center',
   },

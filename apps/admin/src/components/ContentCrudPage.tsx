@@ -1,5 +1,25 @@
-import { useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
+import { Fragment, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
+import { ConfirmDialog } from './ConfirmDialog';
 import styles from './ContentCrudPage.module.css';
+
+function itemLabel<T extends { id: string }>(row: T): string {
+  const rec = row as Record<string, unknown>;
+  for (const key of ['name', 'ta_name', 'label', 'title']) {
+    const value = rec[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return '';
+}
+
+function itemNoun(title: string): string {
+  const t = title.trim().toLowerCase();
+  if (t === 'tourist attractions') return 'attraction';
+  if (t === 'cities/municipalities' || t === 'cities') return 'city';
+  if (t === 'municipalities') return 'municipality';
+  if (t.endsWith('ies')) return `${t.slice(0, -3)}y`;
+  if (t.endsWith('s')) return t.slice(0, -1);
+  return t || 'item';
+}
 
 export type CrudColumn<T> = {
   key: string;
@@ -52,12 +72,16 @@ type Props<T extends { id: string }> = {
   error?: string | null;
   /** Extra controls below standard fields (e.g. About + images). */
   renderExtraForm?: (ctx: CrudExtraFormCtx<T>) => ReactNode;
+  /** Extra UI after a named field (e.g. map under Google Maps link). */
+  renderAfterField?: (key: string, ctx: CrudExtraFormCtx<T>) => ReactNode;
   /** Called when the modal closes (cancel, overlay, or successful save). */
   onModalClose?: () => void;
   /** Called when the Add modal opens (reset staging state). */
   onOpenCreate?: () => void;
   /** Wide modal + 2-column form grid for denser edit UIs. */
   modalSize?: 'default' | 'wide';
+  /** Size to content when nested (e.g. landing page). */
+  embedded?: boolean;
 };
 
 function newId() {
@@ -66,7 +90,7 @@ function newId() {
 
 export function ContentCrudPage<T extends { id: string }>({
   title,
-  description,
+  description: _description,
   rows,
   columns,
   fields,
@@ -80,13 +104,15 @@ export function ContentCrudPage<T extends { id: string }>({
   addLabel = 'Add',
   toForm,
   fromForm,
-  persistenceNote,
+  persistenceNote: _persistenceNote,
   loading = false,
   error = null,
   renderExtraForm,
+  renderAfterField,
   onModalClose,
   onOpenCreate,
   modalSize = 'default',
+  embedded = false,
 }: Props<T>) {
   const isWide = modalSize === 'wide';
   const isLive = Boolean(onCreate || onUpdate || onDelete);
@@ -97,6 +123,9 @@ export function ContentCrudPage<T extends { id: string }>({
   const [form, setForm] = useState<Omit<T, 'id'>>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; label: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -106,14 +135,6 @@ export function ContentCrudPage<T extends { id: string }>({
       return searchKeys.some((key) => String(row[key] ?? '').toLowerCase().includes(q));
     });
   }, [rows, query, status, searchKeys, statusFilter]);
-
-  const note =
-    persistenceNote === null
-      ? null
-      : persistenceNote ??
-        (isLive
-          ? 'Live Supabase — changes update the public catalog.'
-          : 'Demo CRUD — changes stay in this session only.');
 
   const openCreate = () => {
     setEditingId(null);
@@ -177,74 +198,101 @@ export function ContentCrudPage<T extends { id: string }>({
     closeModal();
   };
 
-  const remove = async (id: string) => {
-    const confirmMsg = isLive
-      ? 'Delete this attraction from Supabase? This affects the public catalog.'
-      : 'Delete this item? (Demo only — local state.)';
-    if (!window.confirm(confirmMsg)) return;
+  const requestRemove = (row: T) => {
+    if (saving || deleting) return;
+    setDeleteError(null);
+    setPendingDelete({ id: row.id, label: itemLabel(row) });
+  };
+
+  const cancelRemove = () => {
+    if (deleting) return;
+    setPendingDelete(null);
+    setDeleteError(null);
+  };
+
+  const confirmRemove = async () => {
+    if (!pendingDelete) return;
+    const { id } = pendingDelete;
 
     if (isLive) {
       if (!onDelete) return;
+      setDeleting(true);
+      setDeleteError(null);
       try {
         await onDelete(id);
+        setPendingDelete(null);
       } catch (e) {
-        window.alert(e instanceof Error ? e.message : 'Delete failed');
+        setDeleteError(e instanceof Error ? e.message : 'Delete failed');
+      } finally {
+        setDeleting(false);
       }
       return;
     }
 
     onChange?.(rows.filter((r) => r.id !== id));
+    setPendingDelete(null);
   };
 
   const setField = (key: string, value: string | number | boolean) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
+  const searchAndAdd = (
+    <div className={styles.toolbarRight}>
+      <label className={styles.search}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </svg>
+        <input
+          type="search"
+          placeholder="Search…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </label>
+      <button type="button" className={styles.primaryBtn} onClick={openCreate} disabled={loading || saving}>
+        {addLabel}
+      </button>
+    </div>
+  );
+
   return (
-    <div className={styles.page}>
+    <div className={`${styles.page}${embedded ? ` ${styles.embedded}` : ''}`}>
       <header className={styles.header}>
-        <div>
-          <h1>{title}</h1>
-          {description ? <p>{description}</p> : null}
-          {note ? <p className={styles.demoNote}>{note}</p> : null}
-        </div>
-        <button type="button" className={styles.primaryBtn} onClick={openCreate} disabled={loading || saving}>
-          {addLabel}
-        </button>
+        {!statusFilter ? searchAndAdd : null}
       </header>
 
       {error ? <p className={styles.loadError}>{error}</p> : null}
-      {loading ? <p className={styles.loadState}>Loading…</p> : null}
 
-      <div className={styles.toolbar}>
-        <label className={styles.search}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.3-4.3" />
-          </svg>
-          <input
-            type="search"
-            placeholder="Search…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </label>
-        {statusFilter ? (
-          <select
-            className={styles.filter}
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            aria-label="Status filter"
-          >
-            <option value="all">All statuses</option>
+      {statusFilter ? (
+        <div className={styles.toolbar}>
+          <div className={styles.tabs} role="tablist" aria-label="Status filter">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={status === 'all'}
+              className={`${styles.tab} ${status === 'all' ? styles.tabActive : ''}`}
+              onClick={() => setStatus('all')}
+            >
+              All
+            </button>
             {statusFilter.options.map((o) => (
-              <option key={o.value} value={o.value}>
+              <button
+                key={o.value}
+                type="button"
+                role="tab"
+                aria-selected={status === o.value}
+                className={`${styles.tab} ${status === o.value ? styles.tabActive : ''}`}
+                onClick={() => setStatus(o.value)}
+              >
                 {o.label}
-              </option>
+              </button>
             ))}
-          </select>
-        ) : null}
-      </div>
+          </div>
+          {searchAndAdd}
+        </div>
+      ) : null}
 
       <div className={styles.tableWrap}>
         <table className={styles.table}>
@@ -258,14 +306,14 @@ export function ContentCrudPage<T extends { id: string }>({
           </thead>
           <tbody>
             {!loading && filtered.length === 0 ? (
-              <tr>
+              <tr className={styles.rowCard}>
                 <td colSpan={columns.length + 1} className={styles.empty}>
                   No records match your search.
                 </td>
               </tr>
             ) : (
               filtered.map((row) => (
-                <tr key={row.id}>
+                <tr key={row.id} className={styles.rowCard}>
                   {columns.map((col) => (
                     <td key={col.key}>{col.render(row)}</td>
                   ))}
@@ -282,8 +330,8 @@ export function ContentCrudPage<T extends { id: string }>({
                       <button
                         type="button"
                         className={`${styles.actionBtn} ${styles.danger}`}
-                        onClick={() => void remove(row.id)}
-                        disabled={saving}
+                        onClick={() => requestRemove(row)}
+                        disabled={saving || deleting}
                       >
                         Delete
                       </button>
@@ -314,10 +362,11 @@ export function ContentCrudPage<T extends { id: string }>({
                   field.type === 'textarea' ||
                   field.type === 'checkbox';
                 const fieldClass = `${styles.field}${spanFull && isWide ? ` ${styles.spanFull}` : ''}`;
+                const extraCtx = { form, setForm, editingId, saving };
+                let control: ReactNode;
                 if (field.type === 'checkbox') {
-                  return (
+                  control = (
                     <label
-                      key={field.key}
                       className={`${styles.checkLabel}${isWide ? ` ${styles.spanFull}` : ''}`}
                     >
                       <input
@@ -329,10 +378,9 @@ export function ContentCrudPage<T extends { id: string }>({
                       {field.label}
                     </label>
                   );
-                }
-                if (field.type === 'textarea') {
-                  return (
-                    <label key={field.key} className={fieldClass}>
+                } else if (field.type === 'textarea') {
+                  control = (
+                    <label className={fieldClass}>
                       {field.label}
                       <textarea
                         value={String(value ?? '')}
@@ -343,8 +391,7 @@ export function ContentCrudPage<T extends { id: string }>({
                       />
                     </label>
                   );
-                }
-                if (field.type === 'select') {
+                } else if (field.type === 'select') {
                   const current = String(value ?? '');
                   const options = [...(field.options ?? [])];
                   if (
@@ -353,8 +400,8 @@ export function ContentCrudPage<T extends { id: string }>({
                   ) {
                     options.push({ value: current, label: `${current} (not in lookup)` });
                   }
-                  return (
-                    <label key={field.key} className={fieldClass}>
+                  control = (
+                    <label className={fieldClass}>
                       {field.label}
                       <select
                         value={current}
@@ -369,24 +416,31 @@ export function ContentCrudPage<T extends { id: string }>({
                       </select>
                     </label>
                   );
+                } else {
+                  control = (
+                    <label className={fieldClass}>
+                      {field.label}
+                      <input
+                        type={field.type === 'number' ? 'number' : 'text'}
+                        value={value == null ? '' : String(value)}
+                        placeholder={field.placeholder}
+                        required={field.required}
+                        onChange={(e) =>
+                          setField(
+                            field.key,
+                            field.type === 'number' ? Number(e.target.value) : e.target.value
+                          )
+                        }
+                        disabled={saving}
+                      />
+                    </label>
+                  );
                 }
                 return (
-                  <label key={field.key} className={fieldClass}>
-                    {field.label}
-                    <input
-                      type={field.type === 'number' ? 'number' : 'text'}
-                      value={value == null ? '' : String(value)}
-                      placeholder={field.placeholder}
-                      required={field.required}
-                      onChange={(e) =>
-                        setField(
-                          field.key,
-                          field.type === 'number' ? Number(e.target.value) : e.target.value
-                        )
-                      }
-                      disabled={saving}
-                    />
-                  </label>
+                  <Fragment key={field.key}>
+                    {control}
+                    {renderAfterField?.(field.key, extraCtx)}
+                  </Fragment>
                 );
               })}
               {renderExtraForm ? (
@@ -407,6 +461,24 @@ export function ContentCrudPage<T extends { id: string }>({
           </div>
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        title={
+          pendingDelete?.label
+            ? `Delete “${pendingDelete.label}”?`
+            : `Delete this ${itemNoun(title)}?`
+        }
+        message={
+          isLive
+            ? 'This removes it from Supabase and the public catalog. This cannot be undone.'
+            : 'This only removes it from local demo state.'
+        }
+        confirming={deleting}
+        error={deleteError}
+        onConfirm={() => void confirmRemove()}
+        onCancel={cancelRemove}
+      />
     </div>
   );
 }

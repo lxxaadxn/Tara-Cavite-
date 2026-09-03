@@ -32,7 +32,7 @@ export async function withAuthRetry<T>(
   fn: () => Promise<T>,
   options: { retries?: number; delayMs?: number } = {}
 ): Promise<T> {
-  const { retries = 3, delayMs = 1500 } = options;
+  const { retries = 2, delayMs = 280 } = options;
   let lastError: unknown;
   for (let attempt = 0; attempt < retries; attempt++) {
     try {

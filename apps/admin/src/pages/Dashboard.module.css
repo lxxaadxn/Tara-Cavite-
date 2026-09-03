@@ -8,24 +8,73 @@
 .pageHead {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 16px;
 }
 
 .pageHead h1 {
   margin: 0;
-  font-size: 26px;
-  font-weight: 700;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
   color: var(--text);
 }
 
 .rangeSelect {
   padding: 8px 14px;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  border: 1px solid #e4eaf1;
   font-size: 13px;
   background: var(--card);
   color: var(--text-secondary);
+  box-shadow: var(--shadow-soft);
+}
+
+.live {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: auto;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+
+.liveDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #16a34a;
+  box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.55);
+  animation: livePulse 1.8s ease-out infinite;
+}
+
+@keyframes livePulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 8px rgba(22, 163, 74, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liveDot {
+    animation: none;
+  }
+}
+
+.loadError,
+.emptyNote {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.loadError {
+  color: #b91c1c;
 }
 
 /* KPI cards */

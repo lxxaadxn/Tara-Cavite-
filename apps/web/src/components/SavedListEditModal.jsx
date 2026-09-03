@@ -66,7 +66,7 @@ export function SavedListEditModal({ open, list, onClose, onSave, error = '' }) 
           id="edit-list-name"
           value={nameDraft}
           onChange={(e) => setNameDraft(e.target.value)}
-          className="mt-1.5 h-11 w-full rounded-xl border border-neutral-200 px-3 text-sm outline-none transition focus:border-[#7EA00E]/50 focus:ring-2 focus:ring-[rgba(126,160,14,0.2)]"
+          className="mt-1.5 h-11 w-full rounded-xl border border-neutral-200 px-3 text-sm outline-none transition focus:border-[#10A37F]/50 focus:ring-2 focus:ring-[rgba(16, 163, 127,0.2)]"
           autoFocus
         />
 
@@ -83,7 +83,7 @@ export function SavedListEditModal({ open, list, onClose, onSave, error = '' }) 
                   key={opt.value}
                   className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-3 transition ${
                     selected
-                      ? 'border-[#7EA00E] bg-[#f7faef] ring-1 ring-[#7EA00E]/25'
+                      ? 'border-[#10A37F] bg-[#F1F7F6] ring-1 ring-[#10A37F]/25'
                       : 'border-neutral-200 hover:border-neutral-300'
                   }`}
                 >
@@ -93,7 +93,7 @@ export function SavedListEditModal({ open, list, onClose, onSave, error = '' }) 
                     value={opt.value}
                     checked={selected}
                     onChange={() => setPrivacy(opt.value)}
-                    className="mt-1 accent-[#7EA00E]"
+                    className="mt-1 accent-[#10A37F]"
                   />
                   <span>
                     <span className="block text-sm font-semibold text-neutral-900">{opt.title}</span>
@@ -121,7 +121,7 @@ export function SavedListEditModal({ open, list, onClose, onSave, error = '' }) 
           </button>
           <button
             type="submit"
-            className="rounded-xl bg-[#7EA00E] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-95"
+            className="rounded-xl bg-[#10A37F] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-95"
           >
             Save changes
           </button>

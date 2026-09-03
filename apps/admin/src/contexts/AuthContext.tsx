@@ -29,7 +29,6 @@ async function normalizeSession(session: Session | null): Promise<Session | null
   }
 
   if (!email || !isAllowedAdminEmail(email)) {
-    await supabase.auth.signOut();
     return null;
   }
   return session;
@@ -42,17 +41,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
-    // Always start on the login screen (no sticky admin session across reloads / npm run dev).
-    void (async () => {
-      try {
-        await supabase.auth.signOut({ scope: 'local' });
-      } catch {
-        /* ignore */
-      }
-      if (!mounted) return;
-      setSession(null);
-      setLoading(false);
-    })();
+    void supabase.auth.getSession().then(({ data }) => {
+      void normalizeSession(data.session).then((next) => {
+        if (!mounted) return;
+        setSession(next);
+        setLoading(false);
+      });
+    });
 
     const {
       data: { subscription },

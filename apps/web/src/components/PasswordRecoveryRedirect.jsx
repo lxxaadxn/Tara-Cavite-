@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   storedVerifierLooksLikeRecovery,
+  urlLooksLikeInvite,
   urlLooksLikePasswordRecovery,
 } from '../lib/passwordRecovery';
 import { urlHasOAuthParams } from '../lib/oauthCallback';
@@ -17,13 +18,18 @@ export function PasswordRecoveryRedirect() {
 
   useEffect(() => {
     const path = location.pathname.replace(/\/+$/, '') || '/';
-    if (path === '/reset-password' || path.startsWith('/auth/')) {
+    if (path === '/reset-password' || path.startsWith('/auth/') || path.startsWith('/establishment')) {
       return;
     }
 
     const href = window.location.href;
     const search = window.location.search || '';
     const hash = window.location.hash || '';
+
+    if (urlLooksLikeInvite(href)) {
+      navigate(`/establishment/setup${search}${hash}`, { replace: true });
+      return;
+    }
 
     if (urlLooksLikePasswordRecovery(href)) {
       navigate(`/reset-password${search}${hash}`, { replace: true });

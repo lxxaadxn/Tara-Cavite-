@@ -9,22 +9,34 @@ import {
   StatusBar,
   Dimensions,
   Alert,
+  Linking,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Colors } from '../constants/Colors';
 import { JamIcon } from '../components/JamIcon';
+import { LeafletMapView } from '../components/LeafletMapView';
 import { SaveToListSheet, type SaveToListRow } from '../components/SaveToListSheet';
-import { publishedItineraries } from '../data/publishedItineraries';
+import type { PublishedItinerary } from '../data/publishedItineraries';
 import type { Place } from '../data/mockData';
 import { supabase } from '../lib/supabase';
 import { fetchDashboardPlacesPool, logPlacesFetchError } from '../lib/placesFromSupabase';
+import { fetchItineraryByIdOrSlug, subscribeItineraries } from 'cavitour-shared/itineraries';
 import { formatRouteLine } from '../lib/itineraryFormat';
 import {
   buildEnrichedItinerary,
+  type EnrichedStop,
+  itineraryMapPlaces,
+  itineraryPriceBadge,
+  itineraryStopsDurationLine,
   resolveEstablishment,
-  type EnrichedItinerary,
+  stopMapPoint,
+  stopMapsQuery,
+  stopVenueName,
 } from '../lib/itineraryPlaces';
+import { googleMapsItineraryUrl, googleMapsPlaceUrl } from '../lib/googleMapsDirections';
 import { placeImageSource } from '../lib/placeImageSource';
 import {
   addItineraryToSavedList,
@@ -38,11 +50,11 @@ import {
   SAVE_TO_LIST_CREATE_BUSY_ID,
 } from '../lib/saveToListModalHelpers';
 
-const HEADER_GREEN = '#7EA00E';
-const TEAL = '#1F4F59';
+const HEADER_GREEN = '#10A37F';
+const TEAL = '#1B8A70';
 const TITLE = '#241D13';
 const MUTED = '#7A7878';
-const PAGE_BG = '#F0F2EC';
+const PAGE_BG = '#F1F7F6';
 const WHITE = '#FFFFFF';
 const H_PAD = 16;
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -58,11 +70,8 @@ export default function ItineraryDetailScreen() {
   const route = useRoute();
   const { itineraryId } = route.params as ItineraryDetailParams;
 
-  const template = useMemo(
-    () => publishedItineraries.find((x) => x.id === itineraryId),
-    [itineraryId]
-  );
-
+  const [template, setTemplate] = useState<PublishedItinerary | null>(null);
+  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'missing'>('loading');
   const [catalogPlaces, setCatalogPlaces] = useState<Place[]>([]);
   const [saved, setSaved] = useState(false);
   const [checkingSaved, setCheckingSaved] = useState(true);
@@ -70,6 +79,38 @@ export default function ItineraryDetailScreen() {
   const [pickLists, setPickLists] = useState<SaveToListRow[]>([]);
   const [listNameDraft, setListNameDraft] = useState('My list');
   const [saveListBusyId, setSaveListBusyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadState('loading');
+    const load = () =>
+      fetchItineraryByIdOrSlug(supabase, itineraryId, { publishedOnly: true })
+        .then((row) => {
+          if (cancelled) return;
+          setTemplate((row ?? null) as PublishedItinerary | null);
+          setLoadState(row ? 'ready' : 'missing');
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setTemplate(null);
+            setLoadState('missing');
+          }
+        });
+    load();
+    const unsub = subscribeItineraries(supabase, () => {
+      fetchItineraryByIdOrSlug(supabase, itineraryId, { publishedOnly: true })
+        .then((row) => {
+          if (cancelled) return;
+          setTemplate((row ?? null) as PublishedItinerary | null);
+          setLoadState(row ? 'ready' : 'missing');
+        })
+        .catch(() => {});
+    });
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, [itineraryId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -94,14 +135,10 @@ export default function ItineraryDetailScreen() {
 
   const detail = enriched ?? template;
 
-  const stops = enriched?.stopList ?? [];
+  const stops: EnrichedStop[] = (enriched?.stopList ?? []) as EnrichedStop[];
+  const mapPlaces = useMemo(() => itineraryMapPlaces(stops), [stops]);
 
-  const linkedPlaces = useMemo(() => {
-    return stops
-      .map((stop) => stop.place)
-      .filter((place): place is NonNullable<typeof place> => Boolean(place?.id))
-      .filter((place, index, list) => list.findIndex((x) => x.id === place.id) === index);
-  }, [stops]);
+  const startItineraryUrl = useMemo(() => googleMapsItineraryUrl(mapPlaces), [mapPlaces]);
 
   const refreshSavedState = useCallback(async () => {
     if (!template) return;
@@ -138,6 +175,28 @@ export default function ItineraryDetailScreen() {
     } else {
       (navigation as { navigate: (n: string) => void }).navigate('ItinerariesMain');
     }
+  };
+
+  const startItinerary = () => {
+    if (!startItineraryUrl) {
+      Alert.alert('Maps', 'No map location is available for this itinerary yet.');
+      return;
+    }
+    Linking.openURL(startItineraryUrl).catch(() => {
+      Alert.alert('Maps', 'Could not open Google Maps.');
+    });
+  };
+
+  const openMaps = (stop: (typeof stops)[number]) => {
+    const point = stopMapPoint(stop);
+    const url = googleMapsPlaceUrl(point?.lat, point?.lng, stopMapsQuery(stop));
+    if (!url) {
+      Alert.alert('Maps', 'No map location is available for this stop yet.');
+      return;
+    }
+    Linking.openURL(url).catch(() => {
+      Alert.alert('Maps', 'Could not open Google Maps.');
+    });
   };
 
   const openPlace = (placeId: string) => {
@@ -234,6 +293,31 @@ export default function ItineraryDetailScreen() {
     }
   };
 
+  if (loadState === 'loading' && !template) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['bottom']}>
+        <StatusBar barStyle="light-content" backgroundColor={HEADER_GREEN} />
+        <View style={[styles.greenHeader, { paddingTop: insets.top + 8, paddingBottom: 14 }]}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity
+              onPress={onBack}
+              style={styles.headerSide}
+              accessibilityLabel="Go back"
+              accessibilityRole="button"
+            >
+              <JamIcon name="chevron-left" size={26} color={WHITE} />
+            </TouchableOpacity>
+            <Text style={styles.headerTitleCenter}>Itinerary</Text>
+            <View style={styles.headerSide} />
+          </View>
+        </View>
+        <View style={styles.emptyWrap}>
+          <ActivityIndicator color={HEADER_GREEN} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (!template) {
     return (
       <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -263,7 +347,8 @@ export default function ItineraryDetailScreen() {
     );
   }
 
-  const stopTotal = stops.length > 0 ? stops.length : detail?.stops;
+  const metaLine = itineraryStopsDurationLine(detail);
+  const priceBadge = itineraryPriceBadge(detail);
   const heroImg = placeImageSource(detail?.image);
 
   return (
@@ -315,7 +400,7 @@ export default function ItineraryDetailScreen() {
             pointerEvents="none"
           />
           <LinearGradient
-            colors={['#fbfcf7', '#f7faef', '#e8efd8']}
+            colors={['#F1F7F6', '#F1F7F6', '#AACBC4']}
             style={styles.heroCopy}
           >
             {detail?.tags?.length ? (
@@ -330,23 +415,21 @@ export default function ItineraryDetailScreen() {
             <Text style={styles.heroTitle}>{detail?.title}</Text>
             <Text style={styles.heroRoute}>{formatRouteLine(detail!)}</Text>
             <View style={styles.pillRow}>
-              {!!stopTotal && (
+              {metaLine ? (
                 <View style={[styles.heroPill, styles.heroPillDark]}>
-                  <Text style={styles.heroPillTextDark}>
-                    {stopTotal} {stopTotal === 1 ? 'stop' : 'stops'}
-                  </Text>
-                </View>
-              )}
-              {detail?.durationLabel ? (
-                <View style={styles.heroPill}>
-                  <Text style={styles.heroPillText}>{detail.durationLabel}</Text>
+                  <Text style={styles.heroPillTextDark}>{metaLine}</Text>
                 </View>
               ) : null}
               {detail?.bestTime ? (
                 <View style={styles.heroPill}>
-                  <Text style={styles.heroPillText} numberOfLines={1}>
+                  <Text style={styles.heroPillText} numberOfLines={2}>
                     {detail.bestTime}
                   </Text>
+                </View>
+              ) : null}
+              {priceBadge ? (
+                <View style={styles.heroPillPrice}>
+                  <Text style={styles.heroPillPriceText}>{priceBadge}</Text>
                 </View>
               ) : null}
             </View>
@@ -364,23 +447,6 @@ export default function ItineraryDetailScreen() {
           <Text style={styles.saveBtnText}>Save to list</Text>
         </TouchableOpacity>
 
-        {detail?.summary ? (
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Overview</Text>
-            <Text style={styles.body}>{detail.summary}</Text>
-            {detail.highlights?.length ? (
-              <View style={styles.highlightList}>
-                {detail.highlights.map((h) => (
-                  <View key={h} style={styles.highlightRow}>
-                    <JamIcon ionicon="checkmark" size={16} color={HEADER_GREEN} />
-                    <Text style={styles.highlightText}>{h}</Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-          </View>
-        ) : null}
-
         {stops.length > 0 ? (
           <View style={styles.card}>
             <View style={styles.sectionHead}>
@@ -395,41 +461,63 @@ export default function ItineraryDetailScreen() {
                     <Text style={styles.stopNumText}>{index + 1}</Text>
                   </View>
                   <View style={styles.stopContent}>
-                    <Text style={styles.stopName}>{stop.name}</Text>
-                    <Text style={styles.stopDesc}>{stop.description}</Text>
-                    {stop.place?.id ? (
-                      <TouchableOpacity
-                        style={styles.featuredRow}
-                        activeOpacity={0.88}
-                        onPress={() => openPlace(stop.place!.id)}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Open ${stop.place.name}`}
-                      >
-                        {stop.place.image ? (
-                          <Image
-                            source={placeImageSource(stop.place.image)!}
-                            style={styles.featuredThumb}
-                            resizeMode="cover"
-                          />
-                        ) : (
-                          <View style={[styles.featuredThumb, styles.featuredThumbPlaceholder]}>
-                            <JamIcon ionicon="location" size={22} color={TEAL} />
-                          </View>
-                        )}
-                        <View style={styles.featuredTextCol}>
-                          <Text style={styles.featuredLabel}>Featured spot</Text>
-                          <Text style={styles.featuredName} numberOfLines={2}>
-                            {stop.place.name}
-                          </Text>
-                          {stop.place.address ? (
-                            <Text style={styles.featuredAddr} numberOfLines={2}>
-                              {stop.place.address}
-                            </Text>
-                          ) : null}
-                        </View>
-                        <JamIcon ionicon="chevron-forward" size={18} color={MUTED} />
-                      </TouchableOpacity>
+                    <Text style={styles.stopName}>
+                      {stop.name}
+                      {stopVenueName(stop) ? ` — ${stopVenueName(stop)}` : ''}
+                    </Text>
+                    {stop.timeWindow || stop.durationHint ? (
+                      <Text style={styles.stopTime}>
+                        {[stop.timeWindow, stop.durationHint].filter(Boolean).join(' · ')}
+                      </Text>
                     ) : null}
+                    {stop.costType || stop.expectTag ? (
+                      <View style={styles.stopTagRow}>
+                        {stop.costType ? (
+                          <View style={styles.stopTag}>
+                            <Text style={styles.stopTagText}>{stop.costType}</Text>
+                          </View>
+                        ) : null}
+                        {stop.expectTag ? (
+                          <View style={styles.stopTag}>
+                            <Text style={styles.stopTagText}>{stop.expectTag}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    ) : null}
+                    {stop.highlights?.length ? (
+                      <View style={styles.stopHighlights}>
+                        {stop.highlights.map((item) => (
+                          <View key={item} style={styles.highlightRow}>
+                            <JamIcon ionicon="checkmark" size={16} color={HEADER_GREEN} />
+                            <Text style={styles.highlightText}>{item}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : (
+                      <Text style={styles.stopDesc}>{stop.description}</Text>
+                    )}
+                    <View style={styles.stopActions}>
+                      <TouchableOpacity
+                        style={styles.mapsBtn}
+                        activeOpacity={0.88}
+                        onPress={() => openMaps(stop)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Open ${stopVenueName(stop) || stop.name} in Google Maps`}
+                      >
+                        <Text style={styles.mapsBtnText}>Open in Google Maps</Text>
+                      </TouchableOpacity>
+                      {stop.place?.id ? (
+                        <TouchableOpacity
+                          style={styles.appLinkBtn}
+                          activeOpacity={0.88}
+                          onPress={() => openPlace(stop.place!.id)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`View ${stop.place.name} in app`}
+                        >
+                          <Text style={styles.appLinkBtnText}>View in app</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
                   </View>
                 </View>
               ))}
@@ -437,46 +525,32 @@ export default function ItineraryDetailScreen() {
           </View>
         ) : null}
 
-        {detail?.tips?.length ? (
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Tips</Text>
-            {detail.tips.map((tip) => (
-              <View key={tip} style={styles.tipRow}>
-                <View style={styles.tipDot} />
-                <Text style={styles.tipText}>{tip}</Text>
-              </View>
-            ))}
+        {mapPlaces.length ? (
+          <View style={styles.mapCard}>
+            <LeafletMapView
+              markers={mapPlaces}
+              userLocation={null}
+              onMarkerPress={(placeId) => {
+                if (placeId && !placeId.startsWith('stop-')) openPlace(placeId);
+              }}
+            />
           </View>
-        ) : null}
+        ) : (
+          <View style={styles.mapEmpty}>
+            <Text style={styles.mapEmptyText}>Map loads when locations are available</Text>
+          </View>
+        )}
 
-        {linkedPlaces.length > 0 ? (
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Places on this route</Text>
-            <Text style={styles.sectionSub}>Quick list of named stops with addresses.</Text>
-            {linkedPlaces.map((place) => (
-              <TouchableOpacity
-                key={place.id}
-                style={styles.placeRow}
-                activeOpacity={0.85}
-                onPress={() => openPlace(place.id)}
-                accessibilityRole="button"
-                accessibilityLabel={place.name}
-              >
-                <View style={styles.placeDot} />
-                <View style={styles.placeTextCol}>
-                  <Text style={styles.placeName} numberOfLines={2}>
-                    {place.name}
-                  </Text>
-                  {place.address ? (
-                    <Text style={styles.placeAddr} numberOfLines={2}>
-                      {place.address}
-                    </Text>
-                  ) : null}
-                </View>
-                <JamIcon ionicon="chevron-forward" size={18} color={MUTED} />
-              </TouchableOpacity>
-            ))}
-          </View>
+        {startItineraryUrl ? (
+          <TouchableOpacity
+            style={styles.startBtn}
+            onPress={startItinerary}
+            activeOpacity={0.88}
+            accessibilityRole="button"
+            accessibilityLabel="Start itinerary in Google Maps"
+          >
+            <Text style={styles.startBtnText}>Start itinerary</Text>
+          </TouchableOpacity>
         ) : null}
       </ScrollView>
 
@@ -543,9 +617,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: WHITE,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#dfe8d3',
-    shadowColor: '#1F4F59',
+    borderWidth: 0,
+    shadowColor: '#1B8A70',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.08,
     shadowRadius: 24,
@@ -597,7 +670,7 @@ const styles = StyleSheet.create({
   heroPill: {
     backgroundColor: WHITE,
     borderWidth: 1,
-    borderColor: 'rgba(31,79,89,0.12)',
+    borderColor: 'rgba(27, 138, 112,0.12)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
@@ -605,6 +678,17 @@ const styles = StyleSheet.create({
   heroPillDark: {
     backgroundColor: TEAL,
     borderColor: TEAL,
+  },
+  heroPillPrice: {
+    backgroundColor: 'rgba(16, 163, 127, 0.16)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  heroPillPriceText: {
+    fontSize: 12,
+    color: HEADER_GREEN,
+    fontFamily: 'Poppins_700Bold',
   },
   heroPillText: {
     fontSize: 12,
@@ -641,12 +725,62 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 18,
     marginBottom: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(31,79,89,0.1)',
+    borderWidth: 0,
+    shadowColor: '#1B8A70',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  mapCard: {
+    height: 280,
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: WHITE,
+    marginBottom: 14,
+    shadowColor: '#1B8A70',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  mapEmpty: {
+    minHeight: 160,
+    borderRadius: 20,
+    backgroundColor: WHITE,
+    marginBottom: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapEmptyText: {
+    fontSize: 14,
+    color: MUTED,
+    textAlign: 'center',
+    fontFamily: 'Inter_400Regular',
+  },
+  startBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: TEAL,
+    paddingVertical: 14,
+    borderRadius: 999,
+    marginBottom: 16,
+    shadowColor: TEAL,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  startBtnText: {
+    color: WHITE,
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 15,
   },
   sectionHead: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(31,79,89,0.08)',
+    borderBottomColor: 'rgba(27, 138, 112,0.08)',
     paddingBottom: 12,
     marginBottom: 16,
   },
@@ -662,7 +796,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   body: { fontSize: 14, lineHeight: 22, color: MUTED, fontFamily: 'Inter_400Regular' },
-  highlightList: { marginTop: 16, paddingTop: 16, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(31,79,89,0.08)' },
+  highlightList: { marginTop: 16, paddingTop: 16, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(27, 138, 112,0.08)' },
   highlightRow: { flexDirection: 'row', gap: 10, marginBottom: 10, alignItems: 'flex-start' },
   highlightText: { flex: 1, fontSize: 14, color: TITLE, lineHeight: 20, fontFamily: 'Inter_400Regular' },
   timeline: { position: 'relative' },
@@ -672,7 +806,7 @@ const styles = StyleSheet.create({
     top: 8,
     bottom: 8,
     width: 2,
-    backgroundColor: 'rgba(126, 160, 14, 0.35)',
+    backgroundColor: 'rgba(16, 163, 127, 0.35)',
   },
   stopRow: {
     flexDirection: 'row',
@@ -696,6 +830,38 @@ const styles = StyleSheet.create({
   stopNumText: { color: WHITE, fontFamily: 'Poppins_700Bold', fontSize: 14 },
   stopContent: { flex: 1, minWidth: 0, paddingTop: 2 },
   stopName: { fontFamily: 'Poppins_700Bold', fontSize: 17, color: TITLE },
+  stopTime: {
+    marginTop: 6,
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+    color: '#525252',
+  },
+  stopTagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  stopTag: {
+    backgroundColor: 'rgba(16, 163, 127, 0.16)',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  stopTagText: { fontSize: 11, fontFamily: 'Inter_500Medium', color: Colors.cta },
+  stopHighlights: { marginTop: 10 },
+  stopActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  mapsBtn: {
+    backgroundColor: HEADER_GREEN,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  mapsBtnText: { color: WHITE, fontFamily: 'Poppins_700Bold', fontSize: 12 },
+  appLinkBtn: {
+    borderWidth: 1,
+    borderColor: '#AACBC4',
+    backgroundColor: WHITE,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  appLinkBtnText: { color: TEAL, fontFamily: 'Poppins_700Bold', fontSize: 12 },
   stopDesc: {
     fontSize: 14,
     color: MUTED,
@@ -712,13 +878,13 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: PAGE_BG,
     borderWidth: 1,
-    borderColor: 'rgba(31,79,89,0.1)',
+    borderColor: 'rgba(27, 138, 112,0.1)',
   },
   featuredThumb: {
     width: 56,
     height: 56,
     borderRadius: 12,
-    backgroundColor: 'rgba(31,79,89,0.08)',
+    backgroundColor: 'rgba(27, 138, 112,0.08)',
   },
   featuredThumbPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   featuredTextCol: { flex: 1, minWidth: 0 },
@@ -747,13 +913,13 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(31,79,89,0.1)',
+    borderTopColor: 'rgba(27, 138, 112,0.1)',
   },
   placeDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: 'rgba(126, 160, 14, 0.7)',
+    backgroundColor: 'rgba(16, 163, 127, 0.7)',
     marginTop: 4,
   },
   placeTextCol: { flex: 1 },

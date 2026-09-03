@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Modal, Pressable } from 'react-native';
 import { JamIcon } from './JamIcon';
 import { getPreviewReviewEntries } from '../lib/ntdpDisplayLabels';
 import type { PlaceReview } from '../lib/placeReviews';
 
-const GREEN = '#7EA00E';
+const GREEN = '#10A37F';
 const TITLE = '#241D13';
 const MUTED = '#868686';
 const WHITE = '#FFFFFF';
@@ -19,6 +19,7 @@ export type ReviewCardItem = {
   rating: number;
   metaLine: string;
   body: string;
+  photoUrls: string[];
 };
 
 function buildMockReviews(placeName: string, ntdpCategory?: string | null): ReviewCardItem[] {
@@ -29,6 +30,7 @@ function buildMockReviews(placeName: string, ntdpCategory?: string | null): Revi
     rating: e.rating,
     metaLine: i === 0 ? 'Sample · reviews coming soon' : 'Sample · not from guests',
     body: e.text,
+    photoUrls: [],
   }));
 }
 
@@ -51,6 +53,7 @@ export function mapPlaceReviewsToCards(reviews: PlaceReview[]): ReviewCardItem[]
     rating: r.rating,
     metaLine: formatReviewMeta(r.at),
     body: r.text,
+    photoUrls: Array.isArray(r.photoUrls) ? r.photoUrls : [],
   }));
 }
 
@@ -65,9 +68,10 @@ export function ReviewCardsList({
   placeName = 'This place',
   ntdpCategory,
   reviews,
-  emptyAsSamples = true,
+  emptyAsSamples = false,
 }: ReviewCardsListProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [viewer, setViewer] = useState<{ images: string[]; index: number } | null>(null);
   const cards = useMemo(() => {
     if (reviews && reviews.length > 0) return mapPlaceReviewsToCards(reviews);
     if (emptyAsSamples) return buildMockReviews(placeName, ntdpCategory);
@@ -108,6 +112,20 @@ export function ReviewCardsList({
             <Text style={styles.reviewBody} numberOfLines={isOpen ? undefined : 5}>
               {rev.body}
             </Text>
+            {rev.photoUrls.length > 0 ? (
+              <View style={styles.photoRow}>
+                {rev.photoUrls.map((url, photoIndex) => (
+                  <TouchableOpacity
+                    key={`${rev.id}-${url}`}
+                    onPress={() => setViewer({ images: rev.photoUrls, index: photoIndex })}
+                    accessibilityRole="button"
+                    accessibilityLabel="Open review photo"
+                  >
+                    <Image source={{ uri: url }} style={styles.photoThumb} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : null}
             <TouchableOpacity
               onPress={() => setExpanded((prev) => ({ ...prev, [rev.id]: !prev[rev.id] }))}
               accessibilityRole="button"
@@ -119,6 +137,13 @@ export function ReviewCardsList({
           </View>
         );
       })}
+      <Modal visible={Boolean(viewer)} transparent animationType="fade" onRequestClose={() => setViewer(null)}>
+        <Pressable style={styles.viewerBackdrop} onPress={() => setViewer(null)}>
+          {viewer?.images[viewer.index] ? (
+            <Image source={{ uri: viewer.images[viewer.index] }} style={styles.viewerImage} resizeMode="contain" />
+          ) : null}
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -196,5 +221,28 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     color: GREEN,
+  },
+  photoRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 10,
+  },
+  photoThumb: {
+    width: 64,
+    height: 64,
+    borderRadius: 10,
+    backgroundColor: '#F3F3F3',
+  },
+  viewerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.88)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  viewerImage: {
+    width: '100%',
+    height: '80%',
   },
 });

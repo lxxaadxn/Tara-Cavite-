@@ -1,49 +1,46 @@
 /**
- * Design system colors - Tara, Cavite!
- * Dark teal #2D545E, lime green #9ACD32, off-white #F8F8F8
+ * Design system colors — Tara, Cavite!
+ * Jade / emerald on Anti-Flash White.
  */
 export const Colors = {
-  primary: '#1F4F59', // Dark teal-green (rgba(31, 79, 89, 1)) - main content, headers
-  primaryLight: '#1B4D4D', // Slightly darker teal
-  accent: '#7EA00E', // Lime green (rgba(126, 160, 14, 1)) - Cavi in logo, pins
-  cta: '#7EA00E', // Lime green for CTA buttons
-  background: '#F8F8F8', // Off-white background
+  primary: '#1B8A70',
+  primaryLight: '#168F7A',
+  accent: '#39A98F',
+  cta: '#10A37F',
+  background: '#F1F7F6',
   white: '#FFFFFF',
-  black: '#000000',
+  black: '#16352E',
   text: {
-    primary: '#1F4F59', // Dark teal
-    secondary: '#7A7878', // rgba(122, 120, 120, 1)
-    light: '#AFA7A7', // rgba(175, 167, 167, 1)
+    primary: '#16352E',
+    secondary: '#707D7D',
+    light: '#AACBC4',
   },
   card: {
     background: '#FFFFFF',
-    shadow: 'rgba(0, 0, 0, 0.1)',
+    shadow: 'rgba(22, 53, 46, 0.1)',
   },
-  // Purple-blue gradient (legacy accent)
   gradient: {
-    start: '#6B2D8A',
-    end: '#4169E1',
+    start: '#1B8A70',
+    end: '#10A37F',
   },
-  // Get Direction button gradient
   directionButton: {
-    start: '#61D0EC',
-    end: '#35B0D0',
+    start: '#10A37F',
+    end: '#168F7A',
   },
-  // For useThemeColor and light/dark mode components (app template)
   light: {
-    text: '#2D545E',
-    background: '#F8F8F8',
-    tint: '#2D545E',
-    icon: '#2D545E',
-    tabIconDefault: '#999999',
-    tabIconSelected: '#2D545E',
+    text: '#16352E',
+    background: '#F1F7F6',
+    tint: '#1B8A70',
+    icon: '#1B8A70',
+    tabIconDefault: '#707D7D',
+    tabIconSelected: '#1B8A70',
   },
   dark: {
-    text: '#FFFFFF',
-    background: '#1a1a1a',
-    tint: '#9ACD32',
-    icon: '#9ACD32',
-    tabIconDefault: '#666666',
-    tabIconSelected: '#9ACD32',
+    text: '#F1F7F6',
+    background: '#16352E',
+    tint: '#39A98F',
+    icon: '#39A98F',
+    tabIconDefault: '#707D7D',
+    tabIconSelected: '#39A98F',
   },
 };

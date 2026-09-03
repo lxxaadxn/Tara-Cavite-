@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -14,11 +14,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons } from '@expo/vector-icons';
-import { JamIcon } from '../components/JamIcon';
 import { GoogleLogoMark } from '../components/GoogleLogoMark';
-import { GoogleConsentModal } from '../components/GoogleConsentModal';
+import { JamIcon } from '../components/JamIcon';
+import { LogoWordmark } from '../components/LogoWordmark';
 import { Colors } from '../constants/theme';
 import { Button } from '../components/Button';
 import {
@@ -26,15 +26,17 @@ import {
   SUPABASE_ENV_MISSING_MESSAGE,
   supabase,
 } from '../lib/supabase';
-import { withAuthRetry, isNetworkErrorMsg, NETWORK_ERROR_USER_MESSAGE } from '../lib/authHelpers';
+import { isNetworkErrorMsg, NETWORK_ERROR_USER_MESSAGE } from '../lib/authHelpers';
 import { signInWithGoogleMobile } from '../lib/googleAuth';
 import { getAdminReservedEmailMessage, isAdminReservedEmail } from '../lib/adminReservedEmail';
 
-const MUTED = '#6B7280';
-const BORDER = 'rgba(17, 24, 39, 0.1)';
-const FIELD_BG = '#F9FAFB';
+const MUTED = '#737373';
+const BORDER = '#E5E5E5';
+const CREAM = '#F1F7F6';
+const TEAL = '#1B8A70';
+const INK = '#16352E';
 
-const MIN_PASSWORD_LENGTH = 6;
+const MIN_PASSWORD_LENGTH = 8;
 
 function toFriendlySignupError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error ?? '');
@@ -48,17 +50,25 @@ function toFriendlySignupError(error: unknown): string {
 const SignUpScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showGoogleConsent, setShowGoogleConsent] = useState(false);
   const [googleAuthInProgress, setGoogleAuthInProgress] = useState(false);
   const [googlePhase, setGooglePhase] = useState<'starting' | 'google' | 'finishing' | 'done'>(
     'starting'
   );
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+
+  useEffect(() => {
+    void WebBrowser.warmUpAsync().catch(() => undefined);
+    return () => {
+      void WebBrowser.coolDownAsync().catch(() => undefined);
+    };
+  }, []);
 
   const handleSignUp = async () => {
     setFormError(null);
@@ -83,23 +93,26 @@ const SignUpScreen: React.FC = () => {
       return;
     }
     if (password.length < MIN_PASSWORD_LENGTH) {
-      setFormError('Password must be at least 6 characters.');
+      setFormError('Password must be at least 8 characters.');
       return;
     }
     if (password !== confirmPassword) {
       setConfirmPasswordError('Passwords do not match.');
       return;
     }
+    if (!acceptedTerms) {
+      setFormError('Agree to the Terms of Use to create an account.');
+      return;
+    }
     setLoading(true);
     try {
+      const trimmedName = name.trim() || trimmedEmail.split('@')[0];
       const emailRedirectTo = Linking.createURL('auth/callback');
-      const { data, error } = await withAuthRetry(() =>
-        supabase.auth.signUp({
-          email: trimmedEmail,
-          password,
-          options: { emailRedirectTo },
-        })
-      );
+      const { data, error } = await supabase.auth.signUp({
+        email: trimmedEmail,
+        password,
+        options: { data: { username: trimmedName }, emailRedirectTo },
+      });
       if (error) throw error;
       const identities = data.user?.identities ?? [];
       if (data.user && identities.length === 0) {
@@ -142,17 +155,14 @@ const SignUpScreen: React.FC = () => {
         },
       });
       setGooglePhase('done');
-      setGoogleAuthInProgress(true);
-      await AsyncStorage.setItem('isAuthenticated', 'true');
+      setGoogleAuthInProgress(false);
+      void AsyncStorage.setItem('isAuthenticated', 'true');
       setFormError(null);
-      await new Promise((r) => setTimeout(r, 400));
     } catch (error: unknown) {
       const { data } = await supabase.auth.getSession();
       if (data.session) {
-        setGoogleAuthInProgress(true);
-        await AsyncStorage.setItem('isAuthenticated', 'true');
+        void AsyncStorage.setItem('isAuthenticated', 'true');
         setFormError(null);
-        await new Promise((r) => setTimeout(r, 400));
         return;
       }
       const message =
@@ -171,21 +181,15 @@ const SignUpScreen: React.FC = () => {
       setFormError(SUPABASE_ENV_MISSING_MESSAGE);
       return;
     }
-    setShowGoogleConsent(true);
+    if (!acceptedTerms) {
+      setFormError('Agree to the Terms of Use before continuing.');
+      return;
+    }
+    void runGoogleSignUp();
   };
 
   return (
     <View style={styles.root}>
-      <GoogleConsentModal
-        visible={showGoogleConsent}
-        mode="sign-up"
-        onCancel={() => setShowGoogleConsent(false)}
-        onContinue={() => {
-          setShowGoogleConsent(false);
-          void runGoogleSignUp();
-        }}
-      />
-
       <Modal visible={googleAuthInProgress} transparent animationType="fade" statusBarTranslucent>
         <View style={styles.authOverlay}>
           <View style={styles.authCard}>
@@ -213,80 +217,91 @@ const SignUpScreen: React.FC = () => {
         <ScrollView
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingTop: insets.top + 12, paddingBottom: Math.max(insets.bottom, 24) },
+            { paddingTop: insets.top + 20, paddingBottom: Math.max(insets.bottom, 24) },
           ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <TouchableOpacity
-            style={styles.backBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Back to sign in"
-            onPress={() => navigation.goBack()}
-          >
-            <JamIcon ionicon="chevron-back" size={22} color={Colors.text.primary} />
-          </TouchableOpacity>
-
-          <View style={styles.brandBlock}>
-            <Text style={styles.brandMark}>Create account</Text>
-            <Text style={styles.brandTagline}>Join Tara, Cavite! to save places and plan trips.</Text>
-          </View>
-
-          <View style={styles.card}>
-            <Text style={styles.title}>Sign up</Text>
-            <Text style={styles.subtitle}>Email and password, or Google.</Text>
-
-            <View style={styles.fieldsBlock}>
-              <Text style={styles.fieldLabel}>Email</Text>
-              <View style={styles.field}>
-                <Ionicons name="mail-outline" size={18} color={MUTED} style={styles.fieldIcon} />
-                <TextInput
-                  style={styles.fieldInput}
-                  placeholder="you@example.com"
-                  placeholderTextColor={MUTED}
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  accessibilityLabel="Email"
-                />
-              </View>
-
-              <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>Password</Text>
-              <View style={styles.field}>
-                <Ionicons name="lock-closed-outline" size={18} color={MUTED} style={styles.fieldIcon} />
-                <TextInput
-                  style={styles.fieldInput}
-                  placeholder="At least 6 characters"
-                  placeholderTextColor={MUTED}
-                  value={password}
-                  onChangeText={(text) => {
-                    setPassword(text);
-                    setConfirmPasswordError('');
-                  }}
-                  secureTextEntry
-                  accessibilityLabel="Password"
-                />
-              </View>
-
-              <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>Confirm password</Text>
-              <View style={styles.field}>
-                <Ionicons name="lock-closed-outline" size={18} color={MUTED} style={styles.fieldIcon} />
-                <TextInput
-                  style={styles.fieldInput}
-                  placeholder="Repeat password"
-                  placeholderTextColor={MUTED}
-                  value={confirmPassword}
-                  onChangeText={(text) => {
-                    setConfirmPassword(text);
-                    setConfirmPasswordError('');
-                  }}
-                  secureTextEntry
-                  accessibilityLabel="Confirm password"
-                />
-              </View>
+          <View style={styles.form}>
+            <View style={styles.brandWrap}>
+              <LogoWordmark />
             </View>
+            <Text style={styles.title}>Create your account</Text>
+            <Text style={styles.subtitle}>Enter your details to get started with Tara, Cavite!</Text>
+
+            <Text style={styles.fieldLabel}>Name</Text>
+            <TextInput
+              style={styles.pillInput}
+              placeholder="Enter your name"
+              placeholderTextColor={MUTED}
+              value={name}
+              onChangeText={setName}
+              autoCapitalize="words"
+              accessibilityLabel="Name"
+            />
+
+            <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>Email</Text>
+            <TextInput
+              style={styles.pillInput}
+              placeholder="Enter your email"
+              placeholderTextColor={MUTED}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              accessibilityLabel="Email"
+            />
+
+            <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>Password</Text>
+            <TextInput
+              style={styles.pillInput}
+              placeholder="Create your password"
+              placeholderTextColor={MUTED}
+              value={password}
+              onChangeText={(text) => {
+                setPassword(text);
+                setConfirmPasswordError('');
+              }}
+              secureTextEntry
+              accessibilityLabel="Password"
+            />
+            <Text style={styles.hint}>Must be at least 8 characters.</Text>
+
+            <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>Confirm password</Text>
+            <TextInput
+              style={styles.pillInput}
+              placeholder="Repeat password"
+              placeholderTextColor={MUTED}
+              value={confirmPassword}
+              onChangeText={(text) => {
+                setConfirmPassword(text);
+                setConfirmPasswordError('');
+              }}
+              secureTextEntry
+              accessibilityLabel="Confirm password"
+            />
+
+            <TouchableOpacity
+              style={styles.termsRow}
+              onPress={() => setAcceptedTerms((v) => !v)}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: acceptedTerms }}
+            >
+              <View style={[styles.checkbox, acceptedTerms && styles.checkboxOn]}>
+                {acceptedTerms ? <JamIcon ionicon="checkmark" size={14} color="#fff" /> : null}
+              </View>
+              <Text style={styles.legalText}>
+                I agree to the{' '}
+                <Text
+                  style={styles.legalLink}
+                  onPress={() => (navigation as { navigate: (name: string) => void }).navigate('Terms')}
+                >
+                  Terms of Use
+                </Text>
+                .
+              </Text>
+            </TouchableOpacity>
 
             {confirmPasswordError ? (
               <Text style={styles.inlineErrorText} accessibilityRole="alert">
@@ -301,10 +316,10 @@ const SignUpScreen: React.FC = () => {
             ) : null}
 
             <Button
-              title="Create account"
+              title={loading ? 'Creating account...' : 'Create account'}
               onPress={handleSignUp}
               loading={loading}
-              disabled={loading}
+              disabled={loading || !acceptedTerms}
               accessibilityLabel="Create your Tara, Cavite! account"
               style={styles.primaryBtn}
               textStyle={styles.primaryBtnText}
@@ -312,28 +327,28 @@ const SignUpScreen: React.FC = () => {
 
             <View style={styles.dividerRow}>
               <View style={styles.dividerLine} />
-              <Text style={styles.dividerLabel}>or</Text>
+              <Text style={styles.dividerLabel}>Or continue with</Text>
               <View style={styles.dividerLine} />
             </View>
 
             <TouchableOpacity
               style={styles.googleBtn}
               onPress={handleGoogleSignUp}
-              disabled={loading}
+              disabled={loading || !acceptedTerms}
               activeOpacity={0.85}
               accessibilityRole="button"
-              accessibilityLabel="Continue with Google"
+              accessibilityLabel="Sign up with Google"
             >
               <GoogleLogoMark size={20} />
               <Text style={styles.googleBtnText}>Sign up with Google</Text>
             </TouchableOpacity>
-          </View>
 
-          <View style={styles.footerRow}>
-            <Text style={styles.footerMuted}>Already have an account? </Text>
-            <TouchableOpacity onPress={() => navigation.goBack()} accessibilityRole="button">
-              <Text style={styles.footerLink}>Sign in</Text>
-            </TouchableOpacity>
+            <View style={styles.footerRow}>
+              <Text style={styles.footerMuted}>Already have an account? </Text>
+              <TouchableOpacity onPress={() => navigation.goBack()} accessibilityRole="button">
+                <Text style={styles.footerLink}>Log in</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -344,137 +359,141 @@ const SignUpScreen: React.FC = () => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: CREAM,
   },
   flex: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
+    justifyContent: 'center',
     paddingHorizontal: 24,
   },
-  backBtn: {
-    width: 40,
-    height: 40,
+  form: {
+    width: '100%',
+  },
+  brandWrap: {
     alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: -8,
-    marginBottom: 8,
-  },
-  brandBlock: {
-    marginBottom: 24,
-  },
-  brandMark: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 28,
-    lineHeight: 34,
-    color: Colors.text.primary,
-    letterSpacing: -0.4,
-  },
-  brandTagline: {
-    marginTop: 6,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 15,
-    lineHeight: 22,
-    color: MUTED,
-  },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: BORDER,
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.04,
-    shadowRadius: 24,
-    elevation: 2,
+    marginBottom: 20,
   },
   title: {
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 22,
-    lineHeight: 28,
-    color: Colors.text.primary,
+    lineHeight: 30,
+    color: INK,
+    textAlign: 'center',
+    width: '100%',
   },
   subtitle: {
-    marginTop: 4,
-    marginBottom: 20,
-    fontFamily: 'Inter_400Regular',
+    marginTop: 8,
+    marginBottom: 24,
+    fontFamily: 'Poppins_400Regular',
     fontSize: 14,
-    lineHeight: 20,
+    lineHeight: 22,
     color: MUTED,
-  },
-  fieldsBlock: {
-    marginBottom: 4,
+    textAlign: 'center',
+    width: '100%',
   },
   fieldLabel: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 13,
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 14,
     lineHeight: 18,
-    color: Colors.text.primary,
-    marginBottom: 6,
+    color: MUTED,
+    marginBottom: 8,
   },
   fieldLabelSpaced: {
     marginTop: 14,
   },
-  field: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  pillInput: {
+    height: 44,
+    borderRadius: 999,
     borderWidth: 1,
     borderColor: BORDER,
-    borderRadius: 12,
+    paddingHorizontal: 16,
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 14,
+    color: INK,
+    backgroundColor: '#FFFFFF',
+  },
+  hint: {
+    marginTop: 6,
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+    color: MUTED,
+  },
+  termsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginTop: 16,
     paddingHorizontal: 12,
-    minHeight: 48,
-    backgroundColor: FIELD_BG,
-  },
-  fieldIcon: {
-    marginRight: 10,
-  },
-  fieldInput: {
-    flex: 1,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 15,
-    color: Colors.text.primary,
     paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: '#f7fbfa',
+  },
+  checkbox: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: BORDER,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  checkboxOn: {
+    backgroundColor: TEAL,
+    borderColor: TEAL,
+  },
+  legalText: {
+    flex: 1,
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+    lineHeight: 18,
+    color: MUTED,
+  },
+  legalLink: {
+    fontFamily: 'Poppins_600SemiBold',
+    color: TEAL,
   },
   inlineErrorText: {
     fontSize: 13,
-    color: '#B91C1C',
-    fontFamily: 'Inter_400Regular',
+    color: '#DC2626',
+    fontFamily: 'Poppins_400Regular',
     marginTop: 10,
     lineHeight: 18,
   },
   errorText: {
     fontSize: 13,
-    color: '#B91C1C',
-    fontFamily: 'Inter_400Regular',
+    color: '#DC2626',
+    fontFamily: 'Poppins_400Regular',
     marginTop: 12,
-    marginBottom: 4,
     lineHeight: 18,
   },
   primaryBtn: {
     width: '100%',
-    marginTop: 20,
-    height: 50,
-    minHeight: 50,
-    borderRadius: 12,
+    marginTop: 18,
+    height: 44,
+    minHeight: 44,
+    borderRadius: 999,
     paddingVertical: 0,
-    backgroundColor: Colors.accent,
+    backgroundColor: TEAL,
   },
   primaryBtnText: {
     fontFamily: 'Poppins_600SemiBold',
-    fontSize: 16,
+    fontSize: 14,
     textTransform: 'none',
     letterSpacing: 0,
   },
   dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 22,
     marginBottom: 16,
-    gap: 12,
+    gap: 10,
   },
   dividerLine: {
     flex: 1,
@@ -482,43 +501,42 @@ const styles = StyleSheet.create({
     backgroundColor: BORDER,
   },
   dividerLabel: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    color: MUTED,
-    textTransform: 'lowercase',
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+    color: '#A3A3A3',
   },
   googleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    minHeight: 50,
-    borderRadius: 12,
+    height: 44,
+    borderRadius: 999,
     borderWidth: 1,
     borderColor: BORDER,
     backgroundColor: '#FFFFFF',
   },
   googleBtnText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 15,
-    color: Colors.text.primary,
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: '#262626',
   },
   footerRow: {
+    marginTop: 22,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 24,
     flexWrap: 'wrap',
   },
   footerMuted: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'Poppins_400Regular',
     fontSize: 14,
     color: MUTED,
   },
   footerLink: {
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: 'Poppins_600SemiBold',
     fontSize: 14,
-    color: Colors.accent,
+    color: TEAL,
   },
   authOverlay: {
     flex: 1,
@@ -548,7 +566,7 @@ const styles = StyleSheet.create({
   },
   authSubtitle: {
     marginTop: 6,
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'Poppins_400Regular',
     fontSize: 13,
     color: MUTED,
     textAlign: 'center',

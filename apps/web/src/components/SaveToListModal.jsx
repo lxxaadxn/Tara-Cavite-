@@ -1,6 +1,6 @@
 ﻿import { useEffect, useId } from 'react';
 
-const DEFAULT_PRIMARY = '#7EA00E';
+const DEFAULT_PRIMARY = '#10A37F';
 
 function IconBookmarkSmall(props) {
   return (
@@ -138,7 +138,7 @@ export function SaveToListModal({
                       className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left transition hover:bg-neutral-50 active:scale-[0.99]"
                     >
                       <span
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#eef4df] text-[#7EA00E]"
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#E4F3EE] text-[#10A37F]"
                         aria-hidden
                       >
                         <IconBookmarkSmall />
@@ -177,7 +177,7 @@ export function SaveToListModal({
             onKeyDown={handleInputKeyDown}
             placeholder="List name"
             autoFocus={!hasLists}
-            className="h-11 w-full rounded-xl border border-neutral-200 px-3.5 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(126,160,14,0.22)]"
+            className="h-11 w-full rounded-xl border border-neutral-200 px-3.5 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(16, 163, 127,0.22)]"
           />
         </div>
 

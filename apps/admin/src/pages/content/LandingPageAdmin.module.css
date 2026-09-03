@@ -1,0 +1,16 @@
+.stack {
+  display: block;
+  width: 100%;
+  max-width: none;
+  padding-bottom: 32px;
+  flex: 0 0 auto;
+  min-height: auto;
+  overflow: visible;
+  color: #16352e;
+}
+
+.section {
+  display: block;
+  width: 100%;
+  margin-bottom: 28px;
+}

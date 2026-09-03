@@ -21,11 +21,24 @@ export function storedVerifierLooksLikeRecovery() {
   return false;
 }
 
+export function urlLooksLikeInvite(href = typeof window !== 'undefined' ? window.location.href : '') {
+  const params = getPasswordRecoveryParams(href);
+  if ((params.get('type') || '').toLowerCase() === 'invite') return true;
+  try {
+    const path = new URL(href).pathname.replace(/\/+$/, '') || '/';
+    if (path === '/establishment/setup' && (params.get('code') || params.get('access_token'))) return true;
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
 /**
  * Detect password-recovery links without stealing Google OAuth `?code=` callbacks.
  * OAuth returns to `/auth/callback`; recovery should use `/reset-password` (or Site URL `/` with a recovery verifier).
  */
 export function urlLooksLikePasswordRecovery(href = typeof window !== 'undefined' ? window.location.href : '') {
+  if (urlLooksLikeInvite(href)) return false;
   const params = getPasswordRecoveryParams(href);
   if (params.get('type') === 'recovery') return true;
   if (params.get('access_token') && params.get('type') === 'recovery') return true;
@@ -44,7 +57,7 @@ export function urlLooksLikePasswordRecovery(href = typeof window !== 'undefined
 }
 
 /**
- * Exchange recovery link params for a session so the user can set a new password.
+ * Exchange recovery or invite link params for a session so the user can set a password.
  * @param {import('@supabase/supabase-js').SupabaseClient} supabase
  * @param {string} [href]
  */
@@ -69,7 +82,8 @@ export async function completePasswordRecoveryFromUrl(supabase, href = window.lo
 
   const accessToken = params.get('access_token');
   const refreshToken = params.get('refresh_token');
-  if (params.get('type') === 'recovery' && accessToken && refreshToken) {
+  const type = (params.get('type') || '').toLowerCase();
+  if ((type === 'recovery' || type === 'invite' || type === 'signup' || type === 'magiclink') && accessToken && refreshToken) {
     const { error } = await supabase.auth.setSession({
       access_token: accessToken,
       refresh_token: refreshToken,

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { submitPlaceReview } from '../lib/placeReviews';
+import { submitPlaceReview, MAX_REVIEW_PHOTOS } from '../lib/placeReviews';
 
-const olive = '#7ea00e';
+const olive = '#10A37F';
 
 function ReviewStarPicker({ value, onChange, disabled }) {
   const [hover, setHover] = useState(0);
@@ -26,12 +26,12 @@ function ReviewStarPicker({ value, onChange, disabled }) {
             disabled={disabled}
             onMouseEnter={() => setHover(star)}
             onClick={() => onChange(star)}
-            className="rounded p-0.5 transition hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7ea00e] focus-visible:ring-offset-1 disabled:opacity-50"
+            className="rounded p-0.5 transition hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#10A37F] focus-visible:ring-offset-1 disabled:opacity-50"
             aria-label={`${star} star${star === 1 ? '' : 's'}`}
             aria-pressed={value === star}
           >
             <svg
-              className="h-7 w-7 sm:h-8 sm:w-8"
+              className="h-6 w-6"
               viewBox="0 0 20 20"
               fill="currentColor"
               style={{ color: active ? '#f4c430' : '#f4e2a1' }}
@@ -52,32 +52,58 @@ function ReviewStarPicker({ value, onChange, disabled }) {
  * @param {string} [props.placeName]
  * @param {boolean} props.signedIn
  * @param {string | null} [props.defaultNickname]
+ * @param {boolean} [props.plain]
  * @param {(review: { id: string, nickname: string, rating: number, text: string, at: number }) => void} props.onSubmitted
  */
-export function PlaceReviewForm({ placeId, placeName, signedIn, defaultNickname = '', onSubmitted }) {
+export function PlaceReviewForm({ placeId, placeName, signedIn, onSubmitted, plain = false }) {
   const [rating, setRating] = useState(5);
   const [body, setBody] = useState('');
-  const [nickname, setNickname] = useState(defaultNickname);
+  const [photos, setPhotos] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
   useEffect(() => {
-    setNickname(defaultNickname || '');
-  }, [defaultNickname, placeId]);
-
-  useEffect(() => {
     setRating(5);
     setBody('');
+    setPhotos((prev) => {
+      prev.forEach((p) => URL.revokeObjectURL(p.preview));
+      return [];
+    });
     setError('');
     setSuccess('');
   }, [placeId]);
+
+  const handlePhotosChange = useCallback((e) => {
+    const files = Array.from(e.target.files || []).filter((f) => f.type.startsWith('image/'));
+    e.target.value = '';
+    if (!files.length) return;
+    setPhotos((prev) => {
+      const room = Math.max(0, MAX_REVIEW_PHOTOS - prev.length);
+      const next = files.slice(0, room).map((file) => ({ file, preview: URL.createObjectURL(file) }));
+      return [...prev, ...next];
+    });
+  }, []);
+
+  const removePhoto = useCallback((index) => {
+    setPhotos((prev) => {
+      const copy = [...prev];
+      const [removed] = copy.splice(index, 1);
+      if (removed?.preview) URL.revokeObjectURL(removed.preview);
+      return copy;
+    });
+  }, []);
 
   const handleSubmit = useCallback(
     async (e) => {
       e.preventDefault();
       setError('');
       setSuccess('');
+
+      if (!signedIn) {
+        setError('Sign in to leave a review.');
+        return;
+      }
 
       const trimmedBody = body.trim();
       if (!trimmedBody) {
@@ -87,35 +113,26 @@ export function PlaceReviewForm({ placeId, placeName, signedIn, defaultNickname 
 
       setSubmitting(true);
       try {
-        if (signedIn) {
-          const saved = await submitPlaceReview(supabase, {
-            placeId,
-            rating,
-            body: trimmedBody,
-          });
-          onSubmitted(saved);
-          setBody('');
-          setSuccess('Thanks — your review was posted.');
-        } else {
-          const nick = String(nickname ?? '').trim() || 'Guest';
-          const review = {
-            id: `session-${Date.now()}`,
-            nickname: nick,
-            rating,
-            text: trimmedBody,
-            at: Date.now(),
-          };
-          onSubmitted(review);
-          setBody('');
-          setSuccess('Thanks — your review is saved for this browser session.');
-        }
+        const saved = await submitPlaceReview(supabase, {
+          placeId,
+          rating,
+          body: trimmedBody,
+          photos: photos.map((p) => p.file),
+        });
+        onSubmitted(saved);
+        setBody('');
+        setPhotos((prev) => {
+          prev.forEach((p) => URL.revokeObjectURL(p.preview));
+          return [];
+        });
+        setSuccess('Thanks — your review was posted.');
       } catch (err) {
         setError(err?.message || 'Could not post your review. Try again.');
       } finally {
         setSubmitting(false);
       }
     },
-    [body, nickname, onSubmitted, placeId, rating, signedIn]
+    [body, onSubmitted, photos, placeId, rating, signedIn]
   );
 
   const loginReturn = encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname : '/search');
@@ -123,56 +140,79 @@ export function PlaceReviewForm({ placeId, placeName, signedIn, defaultNickname 
   return (
     <form
       onSubmit={handleSubmit}
-      className="overflow-hidden rounded-xl border border-neutral-200 bg-white p-5 shadow-sm sm:p-6"
+      className={plain ? '' : 'overflow-hidden rounded-2xl border border-neutral-200 bg-white p-4 sm:p-5'}
     >
-      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-400">Write a review</p>
-      <p className="mt-1 text-sm text-neutral-600">
+      {plain ? null : (
+        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-400">Write a review</p>
+      )}
+      <p className={`${plain ? '' : 'mt-1 '}text-sm text-neutral-600`}>
         {signedIn
           ? `Share your experience at ${placeName || 'this place'}.`
-          : 'Post as a guest for this session, or sign in to save your review to your account.'}
+          : 'Sign in to post a review that other visitors can read.'}
       </p>
 
-      <div className="mt-4">
-        <p className="mb-2 text-xs font-medium text-neutral-700">Your rating</p>
-        <ReviewStarPicker value={rating} onChange={setRating} disabled={submitting} />
+      <div className="mt-3 flex items-center gap-2.5">
+        <p className="shrink-0 text-sm font-medium text-neutral-700">Rating</p>
+        <ReviewStarPicker value={rating} onChange={setRating} disabled={submitting || !signedIn} />
       </div>
 
-      {!signedIn ? (
-        <label className="mt-4 block">
-          <span className="text-xs font-medium text-neutral-700">Display name</span>
-          <input
-            type="text"
-            value={nickname}
-            onChange={(e) => setNickname(e.target.value)}
-            maxLength={80}
-            placeholder="Your name"
-            className="mt-1 h-10 w-full rounded-lg border border-neutral-200 px-3 text-sm outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(126,160,14,0.22)]"
-            disabled={submitting}
-          />
-        </label>
-      ) : null}
-
-      <label className="mt-4 block">
-        <span className="text-xs font-medium text-neutral-700">Your review</span>
+      <label className="mt-3 block">
+        <span className="sr-only">Your review</span>
         <textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
           rows={4}
           maxLength={4000}
           placeholder="What stood out during your visit?"
-          className="mt-1 w-full resize-y rounded-lg border border-neutral-200 px-3 py-2.5 text-sm leading-relaxed outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(126,160,14,0.22)]"
-          disabled={submitting}
+          className="w-full resize-none rounded-xl border border-neutral-200 px-3 py-2.5 text-sm leading-relaxed outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(16, 163, 127,0.22)]"
+          disabled={submitting || !signedIn}
         />
       </label>
 
-      {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
-      {success ? <p className="mt-3 text-sm font-medium text-emerald-700">{success}</p> : null}
+      <div className="mt-3">
+        <p className="text-sm font-medium text-neutral-700">Photos (optional)</p>
+        <p className="mt-0.5 text-xs text-neutral-500">Up to {MAX_REVIEW_PHOTOS} photos from your visit.</p>
+        {photos.length > 0 ? (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {photos.map((p, index) => (
+              <div key={p.preview} className="relative h-16 w-16 overflow-hidden rounded-lg border border-neutral-200">
+                <img src={p.preview} alt="" className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => removePhoto(index)}
+                  className="absolute right-0.5 top-0.5 rounded bg-black/60 px-1 text-[10px] font-semibold text-white"
+                  aria-label="Remove photo"
+                  disabled={submitting}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {photos.length < MAX_REVIEW_PHOTOS && signedIn ? (
+          <label className="mt-2 inline-flex cursor-pointer items-center rounded-lg border border-neutral-200 px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50">
+            Add photos
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+              className="sr-only"
+              disabled={submitting || !signedIn}
+              onChange={handlePhotosChange}
+            />
+          </label>
+        ) : null}
+      </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-3">
+      {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
+      {success ? <p className="mt-2 text-sm font-medium text-emerald-700">{success}</p> : null}
+
+      <div className="mt-3 flex flex-wrap items-center gap-3">
         <button
           type="submit"
-          disabled={submitting}
-          className="rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 disabled:opacity-60"
+          disabled={submitting || !signedIn}
+          className="rounded-full px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 disabled:opacity-60"
           style={{ backgroundColor: olive }}
         >
           {submitting ? 'Posting…' : 'Post review'}
@@ -180,9 +220,9 @@ export function PlaceReviewForm({ placeId, placeName, signedIn, defaultNickname 
         {!signedIn ? (
           <Link
             to={`/login?next=${loginReturn}`}
-            className="text-sm font-semibold text-[#6B8E23] hover:underline"
+            className="text-sm font-semibold text-[#1B8A70] hover:underline"
           >
-            Sign in to save permanently
+            Sign in to post a review
           </Link>
         ) : null}
       </div>

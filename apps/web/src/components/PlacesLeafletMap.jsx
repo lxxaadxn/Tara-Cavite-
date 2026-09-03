@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
@@ -10,9 +10,12 @@ import {
   lockMapToCaviteViewport,
 } from '../lib/caviteMapBounds';
 import { CAVITOUR_USER_DOT_GREEN, greenLeafletPinIcon, greenUserDotOptions } from '../lib/leafletGreenPin';
+import { leafletPinIconOptions, resolveMapPinUrlForLabel } from 'cavitour-shared/mapPins';
+import { useSiteContent } from '../lib/useSiteContent';
+import { supabase } from '../lib/supabase';
 
 /**
- * @param {{ id: string; name: string; lat: number; lng: number }[]} places
+ * @param {{ id: string; name: string; lat: number; lng: number; ntdp_category?: string | null }[]} places
  * @param {{ lat: number; lng: number } | null} [userLocation]
  * @param {(p: { id: string; name: string; lat: number; lng: number }) => void} [onMarkerClick]
  * @param {(p: { id: string; name: string; lat: number; lng: number }) => void} [onMarkerHover]
@@ -23,6 +26,27 @@ export function PlacesLeafletMap({ places, userLocation, onMarkerClick, onMarker
   const clickRef = useRef(onMarkerClick);
   const hoverRef = useRef(onMarkerHover);
   const hoverEndRef = useRef(onMarkerHoverEnd);
+  const cms = useSiteContent();
+  const [lookups, setLookups] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    supabase
+      .from('ntdp_categories')
+      .select('ntdp_category_id, ntdp_category_name')
+      .then(({ data }) => {
+        if (cancelled) return;
+        setLookups(
+          (data ?? []).map((r) => ({
+            tableId: r.ntdp_category_id,
+            label: r.ntdp_category_name,
+          }))
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     clickRef.current = onMarkerClick;
@@ -54,6 +78,7 @@ export function PlacesLeafletMap({ places, userLocation, onMarkerClick, onMarker
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
     const layer = L.layerGroup().addTo(map);
+    const iconCache = new Map();
 
     const hasUserLocation =
       userLocation?.lat != null &&
@@ -65,7 +90,15 @@ export function PlacesLeafletMap({ places, userLocation, onMarkerClick, onMarker
       map.setView(CAVITE_MAP_CENTER, CAVITE_MAP_DEFAULT_ZOOM);
     } else {
       valid.forEach((p) => {
-        const m = L.marker([p.lat, p.lng], { icon: greenLeafletPinIcon }).addTo(layer);
+        const label = p.ntdp_category || '';
+        const cacheKey = label || '_default';
+        let icon = iconCache.get(cacheKey);
+        if (!icon) {
+          const url = resolveMapPinUrlForLabel(cms, lookups, label);
+          icon = url ? L.icon(leafletPinIconOptions(url, label)) : greenLeafletPinIcon;
+          iconCache.set(cacheKey, icon);
+        }
+        const m = L.marker([p.lat, p.lng], { icon }).addTo(layer);
         m.bindPopup(String(p.name || 'Establishment'));
         m.on('click', () => clickRef.current?.(p));
         m.on('mouseover', () => hoverRef.current?.(p));
@@ -95,12 +128,21 @@ export function PlacesLeafletMap({ places, userLocation, onMarkerClick, onMarker
     }
 
     const unlockViewport = lockMapToCaviteViewport(map);
+    const el = containerRef.current;
+    const ro =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => {
+            map.invalidateSize(true);
+          })
+        : null;
+    if (el && ro) ro.observe(el);
 
     return () => {
+      ro?.disconnect();
       unlockViewport();
       map.remove();
     };
-  }, [places, userLocation]);
+  }, [places, userLocation, cms, lookups]);
 
   return <div ref={containerRef} className="absolute inset-0 z-0 h-full w-full min-h-[320px]" />;
 }

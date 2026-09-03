@@ -5,8 +5,8 @@ import { useNavigation } from '@react-navigation/native';
 import { JamIcon } from '../components/JamIcon';
 import { mockRoutes, Route } from '../data/mockData';
 
-const GREEN = '#7EA00E';
-const TEAL = '#1F4F59';
+const GREEN = '#10A37F';
+const TEAL = '#1B8A70';
 const TITLE = '#241D13';
 const MUTED = '#7A7878';
 const WHITE = '#FFFFFF';

@@ -29,6 +29,7 @@ export function SignupPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [showGoogleConsent, setShowGoogleConsent] = useState(false);
   const [showConfirmEmailNotice, setShowConfirmEmailNotice] = useState(false);
   const [error, setError] = useState('');
@@ -39,6 +40,10 @@ export function SignupPage() {
   };
   const handleGoogleAuth = async () => {
     setError('');
+    if (!acceptedTerms) {
+      setError('Agree to the Terms of Use before continuing.');
+      return;
+    }
     setLoading(true);
     try {
       await startGoogleOAuth({ next: '/search' });
@@ -64,6 +69,10 @@ export function SignupPage() {
 
     if (password.length < MIN_PASSWORD_LENGTH) {
       setError('Password must be at least 8 characters.');
+      return;
+    }
+    if (!acceptedTerms) {
+      setError('Agree to the Terms of Use to create an account.');
       return;
     }
 
@@ -103,7 +112,7 @@ export function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen px-4 py-6 font-['Inter',sans-serif] sm:px-8 sm:py-8" style={{ backgroundColor: cream }}>
+    <div className="flex min-h-screen items-center justify-center px-4 py-8 font-['Poppins',sans-serif]" style={{ backgroundColor: cream }}>
       {showConfirmEmailNotice ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4"
@@ -115,7 +124,7 @@ export function SignupPage() {
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-[0_24px_60px_rgba(0,0,0,0.18)]">
             <div
               className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full"
-              style={{ backgroundColor: 'rgba(31, 79, 89, 0.1)' }}
+              style={{ backgroundColor: 'rgba(27, 138, 112, 0.1)' }}
             >
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path
@@ -210,7 +219,7 @@ export function SignupPage() {
                   placeholder="Enter your name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="h-11 w-full rounded-full border border-neutral-200 px-4 text-sm outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(126,160,14,0.22)]"
+                  className="h-11 w-full rounded-full border border-neutral-200 px-4 text-sm outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(16, 163, 127,0.22)]"
                   style={{ boxShadow: 'none' }}
                 />
               </div>
@@ -222,7 +231,7 @@ export function SignupPage() {
                   placeholder="Enter your email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="h-11 w-full rounded-full border border-neutral-200 px-4 text-sm outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(126,160,14,0.22)]"
+                  className="h-11 w-full rounded-full border border-neutral-200 px-4 text-sm outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(16, 163, 127,0.22)]"
                   style={{ boxShadow: 'none' }}
                   required
                 />
@@ -235,7 +244,7 @@ export function SignupPage() {
                   placeholder="Create your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="h-11 w-full rounded-full border border-neutral-200 px-4 text-sm outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(126,160,14,0.22)]"
+                  className="h-11 w-full rounded-full border border-neutral-200 px-4 text-sm outline-none transition focus:border-neutral-300 focus:ring-2 focus:ring-[rgba(16, 163, 127,0.22)]"
                   style={{ boxShadow: 'none' }}
                   required
                   minLength={MIN_PASSWORD_LENGTH}
@@ -245,9 +254,25 @@ export function SignupPage() {
 
               {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
+              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-neutral-200 bg-[#f7fbfa] px-3 py-3">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-[#1B8A70]"
+                  checked={acceptedTerms}
+                  onChange={(e) => setAcceptedTerms(e.target.checked)}
+                />
+                <span className="text-xs leading-relaxed text-neutral-600">
+                  I agree to the{' '}
+                  <Link to="/terms" className="font-semibold hover:underline" style={{ color: teal }}>
+                    Terms of Use
+                  </Link>
+                  .
+                </span>
+              </label>
+
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || !acceptedTerms}
                 className="mt-2 h-11 w-full rounded-full text-sm font-semibold text-white transition disabled:opacity-60"
                 style={{ backgroundColor: teal }}
               >
@@ -264,8 +289,14 @@ export function SignupPage() {
             <div className="space-y-3">
               <GoogleAuthButton
                 mode="sign-up"
-                disabled={loading}
-                onClick={() => setShowGoogleConsent(true)}
+                disabled={loading || !acceptedTerms}
+                onClick={() => {
+                  if (!acceptedTerms) {
+                    setError('Agree to the Terms of Use before continuing.');
+                    return;
+                  }
+                  setShowGoogleConsent(true);
+                }}
               />
             </div>
 

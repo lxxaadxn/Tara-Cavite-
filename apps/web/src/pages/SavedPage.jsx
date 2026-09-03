@@ -2,12 +2,14 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AppHeader } from '../components/AppHeader';
 import { SavedListEditModal } from '../components/SavedListEditModal';
+import { lookupLocalEstablishmentUrls } from '../lib/establishmentLocalImages';
+import { SAVED_LISTS_UPDATED_EVENT } from '../lib/savedPlaces';
 import {
-  readSavedLists,
-  removeItemFromList,
-  updateSavedList,
-  SAVED_LISTS_UPDATED_EVENT,
-} from '../lib/savedPlaces';
+  fetchSavedListsForUser,
+  removeItemFromListRemote,
+  updateSavedListRemote,
+} from '../lib/savedPlacesSupabase';
+import { supabase } from '../lib/supabase';
 
 const savedTabs = ['Saved', 'Itineraries'];
 const PLACEHOLDER_IMG = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80';
@@ -58,7 +60,7 @@ function SavedEmptyState({ activeTab, variant = 'global' }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-neutral-200 bg-white/60 px-6 py-14 text-center">
       <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-neutral-200">
-        <svg className="h-7 w-7 text-[#7EA00E]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+        <svg className="h-7 w-7 text-[#10A37F]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -77,7 +79,7 @@ function PrivacyTag({ privacy }) {
   return (
     <span
       className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold leading-none ${
-        isPublic ? 'bg-[#e8f4fc] text-[#1f4f59] ring-1 ring-[#1f4f59]/15' : 'bg-neutral-100 text-neutral-600 ring-1 ring-neutral-200/80'
+        isPublic ? 'bg-[#e8f4fc] text-[#1B8A70] ring-1 ring-[#1B8A70]/15' : 'bg-neutral-100 text-neutral-600 ring-1 ring-neutral-200/80'
       }`}
     >
       {privacyLabel(privacy)}
@@ -111,7 +113,7 @@ function SavedListNav({ folders, selectedKey, onSelect, onEditList }) {
               <li key={key}>
                 <div
                   className={`flex items-center rounded-lg transition ${
-                    isActive ? 'bg-[#7EA00E]/10' : 'hover:bg-neutral-50'
+                    isActive ? 'bg-[#10A37F]/10' : 'hover:bg-neutral-50'
                   }`}
                 >
                   <button
@@ -161,7 +163,7 @@ function SavedListNav({ folders, selectedKey, onSelect, onEditList }) {
               aria-selected={isActive}
               onClick={() => onSelect(key)}
               className={`shrink-0 rounded-full px-3.5 py-2 text-sm font-semibold transition ${
-                isActive ? 'bg-[#7EA00E] text-white' : 'bg-white text-neutral-700 ring-1 ring-neutral-200'
+                isActive ? 'bg-[#10A37F] text-white' : 'bg-white text-neutral-700 ring-1 ring-neutral-200'
               }`}
             >
               {folder.name}
@@ -181,30 +183,36 @@ function SavedItemCard({ card, onOpen, onRemove }) {
   const seed = savedCardSeed(card.id);
   const rating = cardRating(seed);
   const reviewCount = cardReviewCount(seed);
-  const tagLabel = isItin ? 'Itinerary' : card.establishmentTag || '';
 
   return (
-    <article className="group flex h-full min-h-[260px] flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white p-2 sm:min-h-[280px] sm:p-2.5">
-      <div className="relative overflow-hidden rounded-xl bg-neutral-100">
-        <img src={card.image} alt="" className="h-36 w-full object-cover sm:h-40" />
-        {tagLabel ? (
-          <span
-            className={`absolute bottom-2 left-2 max-w-[85%] truncate rounded-full px-2.5 py-0.5 text-[10px] font-medium shadow-sm backdrop-blur-sm ${
-              isItin
-                ? 'bg-[#7EA00E]/90 font-semibold uppercase tracking-wide text-white'
-                : 'bg-white/95 text-neutral-700'
-            }`}
-          >
-            {tagLabel}
-          </span>
-        ) : null}
+    <article
+      role="link"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-[16px] bg-white text-left shadow-[0_8px_24px_rgba(22,53,46,0.06)] ring-1 ring-[#16352E]/[0.06] transition hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(22,53,46,0.1)]"
+    >
+      <div className="relative overflow-hidden bg-neutral-100">
+        <img
+          src={card.image}
+          alt={card.name}
+          className="h-36 w-full object-cover transition duration-300 group-hover:scale-[1.03] sm:h-40"
+        />
         <button
           type="button"
-          onClick={onRemove}
-          className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-neutral-500 opacity-0 shadow-sm ring-1 ring-neutral-200/80 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-neutral-500 shadow-sm ring-1 ring-neutral-200/80 transition hover:bg-red-50 hover:text-red-600 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 sm:focus-visible:opacity-100"
           aria-label={`Remove ${card.name}`}
         >
-          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -213,36 +221,22 @@ function SavedItemCard({ card, onOpen, onRemove }) {
           </svg>
         </button>
       </div>
-      <div className="flex flex-1 flex-col px-1 pb-1 pt-2">
-        <p className="line-clamp-2 font-['Poppins',sans-serif] text-sm font-semibold text-neutral-900">{card.name}</p>
-
-        <div className="mt-auto space-y-2 pt-3">
-          <p className="line-clamp-2 text-[11px] text-neutral-500">
-            <svg className="-mt-0.5 mr-1 inline h-3.5 w-3.5 text-neutral-400" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-              <path
-                fillRule="evenodd"
-                d="M12 2.25a7.5 7.5 0 00-7.5 7.5c0 5.25 7.5 12 7.5 12s7.5-6.75 7.5-12a7.5 7.5 0 00-7.5-7.5zm0 10.5a3 3 0 100-6 3 3 0 000 6z"
-                clipRule="evenodd"
-              />
-            </svg>
-            {card.subtitle}
-          </p>
-          <div className="flex items-center justify-between gap-2">
-            <p className="flex min-w-0 items-center gap-0.5 text-[11px] text-neutral-400">
-              <svg className="h-3 w-3 shrink-0 text-[#f4c430]" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
-                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-              </svg>
-              {rating} ({reviewCount.toLocaleString()} Reviews)
-            </p>
-            <button
-              type="button"
-              onClick={onOpen}
-              className="shrink-0 rounded-full border border-neutral-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
-            >
-              See more
-            </button>
-          </div>
-        </div>
+      <div className="flex flex-1 flex-col px-3.5 pb-3.5 pt-3">
+        <p className="line-clamp-1 text-sm font-semibold leading-snug text-[#16352E]">{card.name}</p>
+        <p className="mt-1.5 flex items-start gap-1.5 text-xs leading-snug text-[#707D7D]">
+          <svg className="mt-px h-3.5 w-3.5 shrink-0 text-[#39A98F]" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+            <path
+              fillRule="evenodd"
+              d="M12 2.25a7.5 7.5 0 00-7.5 7.5c0 5.25 7.5 12 7.5 12s7.5-6.75 7.5-12a7.5 7.5 0 00-7.5-7.5zm0 10.5a3 3 0 100-6 3 3 0 000 6z"
+              clipRule="evenodd"
+            />
+          </svg>
+          <span className="line-clamp-1">{card.subtitle}</span>
+        </p>
+        <p className="mt-1.5 text-xs text-[#707D7D]">
+          <span className="mr-1 text-[#f4c430]">★</span>
+          {isItin ? 'Itinerary' : `${rating} (${reviewCount.toLocaleString()} Reviews)`}
+        </p>
       </div>
     </article>
   );
@@ -253,23 +247,51 @@ export function SavedPage() {
   const [searchParams] = useSearchParams();
   const listFromUrl = searchParams.get('list');
   const [activeTab, setActiveTab] = useState('Saved');
+  const [authUserId, setAuthUserId] = useState(undefined);
   const [savedLists, setSavedLists] = useState([]);
   const [selectedListKey, setSelectedListKey] = useState(null);
   const [editList, setEditList] = useState(null);
   const [editError, setEditError] = useState('');
 
-  const loadSavedLists = useCallback(() => {
-    const lists = readSavedLists().map((list) => ({
-      ...list,
-      name: list.name || 'My list',
-      privacy: normalizePrivacy(list.privacy),
-      items: Array.isArray(list.items) ? list.items : [],
-    }));
-    setSavedLists(lists);
+  useEffect(() => {
+    let cancelled = false;
+    supabase.auth.getUser().then(({ data }) => {
+      if (!cancelled) setAuthUserId(data?.user?.id ?? null);
+    });
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!cancelled) setAuthUserId(session?.user?.id ?? null);
+    });
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
+  const loadSavedLists = useCallback(async () => {
+    if (authUserId === undefined) return;
+    if (!authUserId) {
+      setSavedLists([]);
+      return;
+    }
+    try {
+      const lists = await fetchSavedListsForUser(authUserId);
+      setSavedLists(
+        lists.map((list) => ({
+          ...list,
+          name: list.name || 'My list',
+          privacy: normalizePrivacy(list.privacy),
+          items: Array.isArray(list.items) ? list.items : [],
+        })),
+      );
+    } catch {
+      setSavedLists([]);
+    }
+  }, [authUserId]);
+
   useEffect(() => {
-    loadSavedLists();
+    void loadSavedLists();
     window.addEventListener(SAVED_LISTS_UPDATED_EVENT, loadSavedLists);
     window.addEventListener('focus', loadSavedLists);
     return () => {
@@ -284,7 +306,7 @@ export function SavedPage() {
         const items = list.items
           .map((item) => ({
             ...item,
-            image: item.image || PLACEHOLDER_IMG,
+            image: item.image || lookupLocalEstablishmentUrls(item.name)?.[0] || PLACEHOLDER_IMG,
             subtitle: item.subtitle || 'Cavite, Philippines',
           }))
           .filter((item) => {
@@ -294,8 +316,7 @@ export function SavedPage() {
             return true;
           });
         return { ...list, items };
-      })
-      .filter((list) => list.items.length > 0);
+      });
   }, [activeTab, savedLists]);
 
   useEffect(() => {
@@ -348,7 +369,8 @@ export function SavedPage() {
   };
 
   const handleRemove = (listId, card) => {
-    removeItemFromList(listId, card.id);
+    if (!authUserId) return;
+    void removeItemFromListRemote(authUserId, listId, card.id).catch(() => {});
   };
 
   const handleEditList = (folder) => {
@@ -360,24 +382,28 @@ export function SavedPage() {
     });
   };
 
-  const handleSaveListEdit = (patch) => {
-    if (!editList?.id) return;
-    const result = updateSavedList(editList.id, patch);
-    if (!result.ok) {
-      setEditError(
-        result.reason === 'duplicate_name'
-          ? 'A list with that name already exists.'
-          : 'Could not update this list. Try again.',
-      );
-      return;
+  const handleSaveListEdit = async (patch) => {
+    if (!editList?.id || !authUserId) return;
+    try {
+      const result = await updateSavedListRemote(authUserId, editList.id, patch);
+      if (!result.ok) {
+        setEditError(
+          result.reason === 'duplicate_name'
+            ? 'A list with that name already exists.'
+            : 'Could not update this list. Try again.',
+        );
+        return;
+      }
+      setEditList(null);
+      setEditError('');
+      await loadSavedLists();
+    } catch {
+      setEditError('Could not update this list. Try again.');
     }
-    setEditList(null);
-    setEditError('');
-    loadSavedLists();
   };
 
   return (
-    <div className="min-h-screen bg-[#efefec] font-['Inter',sans-serif] text-neutral-900">
+    <div className="min-h-screen bg-[#efefec] font-['Poppins',sans-serif] text-neutral-900">
       <AppHeader />
 
       <div className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8">
@@ -390,8 +416,8 @@ export function SavedPage() {
                 onClick={() => setActiveTab(tab)}
                 className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
                   activeTab === tab
-                    ? 'bg-neutral-900 text-white shadow-[0_6px_16px_rgba(17,24,39,0.16)]'
-                    : 'text-neutral-600 hover:text-neutral-900'
+                    ? 'bg-[#1B8A70] text-white shadow-[0_6px_16px_rgba(27,138,112,0.28)]'
+                    : 'text-[#707D7D] hover:text-[#16352E]'
                 }`}
               >
                 {tab}
@@ -445,7 +471,7 @@ export function SavedPage() {
           setEditList(null);
           setEditError('');
         }}
-        onSave={handleSaveListEdit}
+        onSave={(patch) => void handleSaveListEdit(patch)}
       />
     </div>
   );
