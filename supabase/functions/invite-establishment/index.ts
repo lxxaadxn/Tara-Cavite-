@@ -15,6 +15,7 @@ type InviteBody = {
   lgu?: string;
   address?: string;
   phone?: string;
+  googleMapsLink?: string;
   redirectTo?: string;
   resend?: boolean;
 };
@@ -86,6 +87,7 @@ Deno.serve(async (req) => {
   const lgu = trim(body.lgu);
   const address = trim(body.address);
   const phone = trim(body.phone);
+  const googleMapsLink = trim(body.googleMapsLink);
   const redirectTo = safeRedirectTo(body.redirectTo);
   const resend = body.resend === true;
 
@@ -178,6 +180,7 @@ Deno.serve(async (req) => {
       business_type: businessType || null,
       lgu: lgu || null,
       address: address || null,
+      google_maps_link: googleMapsLink || null,
       auth_provider: 'email',
       verification_status: 'invited',
       account_status: 'active',
@@ -191,7 +194,20 @@ Deno.serve(async (req) => {
     return json(400, { error: upsertErr.message });
   }
 
-  return json(200, { ok: true, ownerId: userId });
+  // Ensure a STA catalog row + QR check-in code exist for this owner.
+  // The DB trigger (establishment_owners_auto_sta_qr) fires on INSERT but not
+  // on upsert-as-update, so we call the helper explicitly to be safe.
+  let staPlaceId: string | null = null;
+  try {
+    const { data: staData } = await admin.rpc('ensure_establishment_owner_sta_row', {
+      p_owner_id: userId,
+    });
+    staPlaceId = staData ? String(staData) : null;
+  } catch {
+    // Non-fatal: QR can be generated later from the Establishments admin panel.
+  }
+
+  return json(200, { ok: true, ownerId: userId, staPlaceId });
 });
 
 async function findAuthUserByEmail(
