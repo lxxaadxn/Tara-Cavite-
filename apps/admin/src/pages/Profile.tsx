@@ -164,7 +164,7 @@ export function Profile() {
           displayName={account.displayName}
           department={account.department}
           email={user?.email ?? ''}
-          avatarUrl={account.avatarUrl}
+          avatarUrl={account.avatarUrl ?? ''}
           initials={account.initials}
           onClose={() => setEditOpen(false)}
         />

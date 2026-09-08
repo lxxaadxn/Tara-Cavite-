@@ -119,11 +119,11 @@ function joinHref(prefix: string, path: string) {
 /** Longest matching sidebar (or profile/settings) label for the current URL. */
 export function navLabelForPath(pathname: string, prefix: string): string | null {
   const path = pathname.replace(/\/+$/, '') || '/';
-  let best: { len: number; label: string } | null = null;
+  const matches: { len: number; label: string }[] = [];
   const consider = (to: string, label: string) => {
     const full = joinHref(prefix, to).replace(/\/+$/, '') || '/';
     if (path === full || path.startsWith(`${full}/`)) {
-      if (!best || full.length >= best.len) best = { len: full.length, label };
+      matches.push({ len: full.length, label });
     }
   };
   const walk = (nodes: AdminNavNode[]) => {
@@ -134,5 +134,7 @@ export function navLabelForPath(pathname: string, prefix: string): string | null
   };
   walk(ADMIN_NAV);
   for (const extra of EXTRA_TITLES) consider(extra.to, extra.label);
-  return best?.label ?? null;
+  if (!matches.length) return null;
+  // Longest match wins; the last entry wins a tie, as the sidebar order implies.
+  return matches.reduce((best, item) => (item.len >= best.len ? item : best)).label;
 }

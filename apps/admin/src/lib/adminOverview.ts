@@ -100,7 +100,6 @@ export async function fetchAnalyticsOverview(
 
   const visitsNow = visits.filter((v) => inRange(String(v.created_at), from, to));
   const visitsPrev = visits.filter((v) => inRange(String(v.created_at), prevFrom, prevTo));
-  const reviewsNow = reviews.filter((r) => inRange(String(r.created_at), from, to));
   const newUsersNow = profiles.filter((p) => inRange(String(p.created_at), from, to)).length;
   const newUsersPrev = profiles.filter((p) => inRange(String(p.created_at), prevFrom, prevTo)).length;
 

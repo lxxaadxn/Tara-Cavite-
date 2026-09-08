@@ -302,7 +302,8 @@ async function selectOwners(client: SupabaseClient) {
 export async function fetchAdminEstablishments(client: SupabaseClient): Promise<AdminEstablishment[]> {
   const { data, error } = await selectOwners(client);
   if (error) throw friendlyAdminError(error, 'Failed to load establishments');
-  return (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
+  // The select list is built at runtime, so PostgREST can't type the rows.
+  return (data ?? []).map((row) => mapRow(row as unknown as Record<string, unknown>));
 }
 
 export async function fetchAdminEstablishment(

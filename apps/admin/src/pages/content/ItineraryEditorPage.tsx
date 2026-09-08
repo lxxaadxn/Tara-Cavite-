@@ -62,7 +62,6 @@ function CategoryMultiSelect({
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const extra = selected.filter((s) => !options.includes(s));
   const matches = useMemo(() => {
     const all = [...options, ...selected.filter((s) => !options.includes(s))];
     const needle = q.trim().toLowerCase();

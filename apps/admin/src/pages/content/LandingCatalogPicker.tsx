@@ -61,7 +61,7 @@ export function LandingCatalogPicker({
   useEffect(() => {
     fetchSiteContent(supabase)
       .then(loadIds)
-      .catch((e) => toast(e instanceof Error ? e.message : 'Could not load selection', 'error'));
+      .catch((e: unknown) => toast(e instanceof Error ? e.message : 'Could not load selection', 'error'));
     return subscribeSiteContent(supabase, () => {
       fetchSiteContent(supabase).then(loadIds).catch(() => {});
     });

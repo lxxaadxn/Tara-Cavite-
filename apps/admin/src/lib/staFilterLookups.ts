@@ -145,7 +145,8 @@ async function nextLookupId(
 ): Promise<number> {
   const { data, error } = await client.from(table).select(idCol).order(idCol, { ascending: false }).limit(1);
   if (error) throw friendlyWriteError(error, 'create');
-  const max = Number((data?.[0] as Record<string, unknown> | undefined)?.[idCol] ?? 0);
+  // `idCol` is chosen at runtime, so PostgREST can't type the returned row.
+  const max = Number((data?.[0] as unknown as Record<string, unknown> | undefined)?.[idCol] ?? 0);
   return Number.isFinite(max) && max > 0 ? max + 1 : 1;
 }
 
@@ -158,10 +159,11 @@ export async function createFilterLookup(
   const meta = KIND_META[form.kind];
   // category_id / ntdp_category_id / type_code_id may be NOT NULL without a DEFAULT sequence.
   const nextId = await nextLookupId(client, meta.table, meta.idCol);
+  // Column names come from KIND_META, so the payload can't match a static row type.
   const { error } = await client.from(meta.table).insert({
     [meta.idCol]: nextId,
     [meta.labelCol]: label,
-  });
+  } as never);
   if (error) throw friendlyWriteError(error, 'create');
 }
 

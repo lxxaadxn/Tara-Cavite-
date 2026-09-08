@@ -338,7 +338,7 @@ function asItinerary(raw: unknown): AdminItinerary | null {
 }
 
 export async function fetchAdminItineraries(): Promise<AdminItinerary[]> {
-  const rows = await fetchAllItineraries(supabase);
+  const rows: unknown[] = await fetchAllItineraries(supabase);
   return rows.map((row) => persistableItinerary(asItinerary(row) ?? (row as AdminItinerary)));
 }
 

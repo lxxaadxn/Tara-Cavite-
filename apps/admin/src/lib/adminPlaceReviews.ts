@@ -68,13 +68,15 @@ async function loadReviewerNames(client: SupabaseClient, userIds: string[]): Pro
 }
 
 export async function fetchAdminPlaceReviews(client: SupabaseClient): Promise<AdminPlaceReview[]> {
-  let { data, error } = await client.from('place_reviews').select(REVIEW_SELECT).order('created_at', { ascending: false });
-  if (error && isMissingColumnError(error)) {
-    ({ data, error } = await client.from('place_reviews').select(REVIEW_SELECT_BASE).order('created_at', { ascending: false }));
-  }
-  if (error) throw friendly(error, 'Failed to load reviews');
+  const withPhotos = await client.from('place_reviews').select(REVIEW_SELECT).order('created_at', { ascending: false });
+  // Databases that predate the photo_urls column fall back to the narrower select.
+  const result =
+    withPhotos.error && isMissingColumnError(withPhotos.error)
+      ? await client.from('place_reviews').select(REVIEW_SELECT_BASE).order('created_at', { ascending: false })
+      : withPhotos;
+  if (result.error) throw friendly(result.error, 'Failed to load reviews');
 
-  const rows = data ?? [];
+  const rows: Record<string, unknown>[] = result.data ?? [];
   const names = await fetchPlaceNamesById(
     client,
     rows.map((r) => String(r.place_id ?? ''))

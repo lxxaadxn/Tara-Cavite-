@@ -29,8 +29,8 @@ type Props<T> = {
   emptyMessage?: string;
 };
 
+/** The page title comes from the nav chrome, so only the copy is rendered here. */
 export function AdminListPage<T extends { id: string }>({
-  title,
   description,
   rows,
   columns,

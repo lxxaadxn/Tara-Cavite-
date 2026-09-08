@@ -124,12 +124,12 @@ export function SiteContentEditor({
 
   const load = () =>
     fetchSiteContent(supabase)
-      .then((map) => {
+      .then((map: Record<string, unknown>) => {
         const next: Record<string, string> = {};
         for (const key of fieldKeys(fields)) next[key] = String(map[key] ?? '');
         setValues(next);
       })
-      .catch((e) => toast(e instanceof Error ? e.message : 'Could not load content', 'error'))
+      .catch((e: unknown) => toast(e instanceof Error ? e.message : 'Could not load content', 'error'))
       .finally(() => setLoading(false));
 
   useEffect(() => {
@@ -137,7 +137,7 @@ export function SiteContentEditor({
     void load();
     return subscribeSiteContent(supabase, () => {
       fetchSiteContent(supabase)
-        .then((map) => {
+        .then((map: Record<string, unknown>) => {
           const next: Record<string, string> = {};
           for (const key of fieldKeys(fields)) next[key] = String(map[key] ?? '');
           setValues(next);

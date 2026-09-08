@@ -6,7 +6,8 @@ type Props = {
   bullets: string[];
 };
 
-export function AdminPlaceholder({ title, description, bullets }: Props) {
+/** The page title comes from the nav chrome, so only the copy is rendered here. */
+export function AdminPlaceholder({ description, bullets }: Props) {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
