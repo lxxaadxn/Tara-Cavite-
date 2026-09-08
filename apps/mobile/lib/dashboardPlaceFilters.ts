@@ -1,3 +1,4 @@
+import { foldLguName } from 'cavitour-shared/lguKind';
 import { ntdpCategoriesMatch } from 'cavitour-shared/ntdpFilterMeta';
 import type { Place } from '../data/mockData';
 import { FILTER_OPTION_LABEL_BY_KEY } from './dashboardFilterOptions';
@@ -52,25 +53,17 @@ export function placeSearchBlob(place: Place): string {
   );
 }
 
-/** Match filter labels: drop trailing "City" for comparison. */
-function normalizeAreaLabel(label: string): string {
-  return label.replace(/\s+City\s*$/i, '').trim().toLowerCase();
-}
-
 function placeMatchesLocationKeys(place: Place, keys: string[]): boolean {
-  const cmRaw = (place.city_mun ?? '').trim().toLowerCase();
-  const cm = fold(place.city_mun ?? '');
-  const addr = fold(place.address ?? '');
+  const cm = foldLguName(place.city_mun ?? '');
+  const addr = foldLguName(place.address ?? '');
   const hay = `${cm} ${addr}`;
   return keys.some((key) => {
     const label = EXTRA_LOCATION_LABELS[key] || FILTER_OPTION_LABEL_BY_KEY[key] || key;
     if (!label) return false;
-    const core = fold(normalizeAreaLabel(label));
+    const core = foldLguName(label);
     if (!core) return false;
     if (hay.includes(core)) return true;
-    if (cm.includes(core) || core.includes(cm)) return true;
-    const rawFold = fold(cmRaw);
-    return rawFold.includes(core) || core.includes(rawFold);
+    return cm.includes(core) || core.includes(cm);
   });
 }
 

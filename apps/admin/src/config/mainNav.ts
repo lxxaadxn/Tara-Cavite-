@@ -36,24 +36,14 @@ export const ADMIN_NAV: AdminNavNode[] = [
     key: 'users',
     label: 'User Management',
     icon: 'users',
-    children: [
-      { key: 'users-all', label: 'All Users', to: '/web/users' },
-      { key: 'users-active', label: 'Active Users', to: '/web/users/active' },
-      { key: 'users-reported', label: 'Reported Users', to: '/web/users/reported' },
-    ],
+    children: [{ key: 'users-all', label: 'All Users', to: '/web/users' }],
   },
   {
     key: 'establishments',
     label: 'Establishment Management',
     icon: 'briefcase',
     to: '/web/establishments',
-    children: [
-      { key: 'est-all', label: 'All Establishments', to: '/web/establishments' },
-      { key: 'est-add', label: 'Add Establishment', to: '/web/establishments/add' },
-      { key: 'est-import', label: 'Import', to: '/web/establishments/import' },
-      { key: 'est-pending', label: 'Pending Setup', to: '/web/establishments/pending' },
-      { key: 'est-deactivated', label: 'Deactivated', to: '/web/establishments/deactivated' },
-    ],
+    children: [{ key: 'est-all', label: 'All Establishments', to: '/web/establishments' }],
   },
   {
     key: 'tourism',
@@ -63,7 +53,6 @@ export const ADMIN_NAV: AdminNavNode[] = [
       { key: 'tourism-attractions', label: 'Tourist Attractions', to: '/web/tourism/attractions' },
       { key: 'tourism-announcements', label: 'Announcements', to: '/web/tourism/announcements' },
       { key: 'tourism-categories', label: 'Categories', to: '/web/tourism/categories' },
-      { key: 'tourism-filters', label: 'Filters', to: '/web/tourism/filters' },
       { key: 'tourism-cities', label: 'Cities', to: '/web/tourism/cities' },
       { key: 'tourism-municipalities', label: 'Municipalities', to: '/web/tourism/municipalities' },
       { key: 'tourism-reviews', label: 'Reviews', to: '/web/tourism/reviews' },
@@ -75,19 +64,19 @@ export const ADMIN_NAV: AdminNavNode[] = [
     icon: 'content',
     children: [
       {
+        key: 'content-filters',
+        label: 'App/Web Filter',
+        to: '/web/content/filters',
+      },
+      {
         key: 'content-landing',
         label: 'Landing Page',
         to: '/web/content/landing',
       },
       {
         key: 'content-auth',
-        label: 'Authentication Pages',
+        label: 'Brand & Auth',
         to: '/web/content/auth',
-      },
-      {
-        key: 'content-brand',
-        label: 'Brand Assets',
-        to: '/web/content/brand',
       },
     ],
   },
@@ -97,7 +86,7 @@ export const ADMIN_NAV: AdminNavNode[] = [
     icon: 'itinerary',
     children: [
       { key: 'itin-created', label: 'Itineraries', to: '/web/itineraries/created' },
-      { key: 'itin-create', label: 'Create Itineraries', to: '/web/itineraries/created/new' },
+      { key: 'itin-ai', label: 'AI Generator', to: '/web/itineraries/ai' },
     ],
   },
   {

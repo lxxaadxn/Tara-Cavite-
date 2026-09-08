@@ -51,6 +51,8 @@ export function LandingCatalogPicker({
   const [busy, setBusy] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [dragOver, setDragOver] = useState<number | null>(null);
 
   const loadIds = (map: Record<string, string>) => {
     setIds(parseSiteContentIdList(siteContentValue(map, contentKey)));
@@ -129,11 +131,11 @@ export function LandingCatalogPicker({
     void persist(ids.filter((item) => item !== id));
   };
 
-  const move = (index: number, dir: -1 | 1) => {
+  const reorder = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0 || from >= ids.length || to >= ids.length) return;
     const next = [...ids];
-    const target = index + dir;
-    if (target < 0 || target >= next.length) return;
-    [next[index], next[target]] = [next[target], next[index]];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
     void persist(next);
   };
 
@@ -174,6 +176,7 @@ export function LandingCatalogPicker({
           <table className={styles.table}>
             <thead>
               <tr>
+                <th className={styles.num} aria-label="Reorder" />
                 <th className={styles.num}>#</th>
                 <th>{nameHeader}</th>
                 <th>{detailHeader}</th>
@@ -182,23 +185,59 @@ export function LandingCatalogPicker({
             </thead>
             <tbody>
               {selected.map((row, index) => (
-                <tr key={row.id}>
+                <tr
+                  key={row.id}
+                  className={`${dragFrom === index ? styles.rowDragging : ''} ${
+                    dragOver === index && dragFrom !== null && dragFrom !== index ? styles.rowDrop : ''
+                  }`}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    if (dragOver !== index) setDragOver(index);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const from = Number(e.dataTransfer.getData('text/plain'));
+                    if (Number.isFinite(from)) reorder(from, index);
+                    setDragFrom(null);
+                    setDragOver(null);
+                  }}
+                >
+                  <td className={styles.gripCell}>
+                    <button
+                      type="button"
+                      className={styles.grip}
+                      draggable={!busy}
+                      disabled={busy}
+                      aria-label={`Drag to reorder ${row.title}`}
+                      onDragStart={(e) => {
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', String(index));
+                        const tr = e.currentTarget.closest('tr');
+                        if (tr) e.dataTransfer.setDragImage(tr, 24, 16);
+                        setDragFrom(index);
+                      }}
+                      onDragEnd={() => {
+                        setDragFrom(null);
+                        setDragOver(null);
+                      }}
+                    >
+                      <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor" aria-hidden>
+                        <circle cx="3" cy="3" r="1.4" />
+                        <circle cx="9" cy="3" r="1.4" />
+                        <circle cx="3" cy="8" r="1.4" />
+                        <circle cx="9" cy="8" r="1.4" />
+                        <circle cx="3" cy="13" r="1.4" />
+                        <circle cx="9" cy="13" r="1.4" />
+                      </svg>
+                    </button>
+                  </td>
                   <td className={styles.num}>{index + 1}</td>
                   <td>
                     <strong>{row.title}</strong>
                   </td>
                   <td className={styles.detail}>{row.subtitle || '—'}</td>
                   <td className={styles.actions}>
-                    <button type="button" disabled={busy || index === 0} onClick={() => move(index, -1)}>
-                      Up
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy || index === selected.length - 1}
-                      onClick={() => move(index, 1)}
-                    >
-                      Down
-                    </button>
                     <button type="button" disabled={busy} onClick={() => removeId(row.id)}>
                       Remove
                     </button>

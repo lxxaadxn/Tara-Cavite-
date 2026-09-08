@@ -2,6 +2,8 @@
  * Place reviews backed by public.place_reviews (Supabase).
  */
 
+import { resolveAvatarUrl } from 'cavitour-shared/defaultAvatar';
+
 export const MAX_REVIEW_PHOTOS = 4;
 export const REVIEW_PHOTOS_BUCKET = 'review-photos';
 
@@ -13,14 +15,22 @@ function normalizePhotoUrls(raw) {
   return raw.map((u) => String(u ?? '').trim()).filter(Boolean).slice(0, MAX_REVIEW_PHOTOS);
 }
 
-function rowToReview(row, usernameByUserId) {
+function rowToReview(row, profileByUserId) {
+  const profile = profileByUserId?.[row.user_id];
+  const nameFromMap =
+    typeof profile === 'string'
+      ? profile
+      : profile?.username;
   const name =
-    usernameByUserId?.[row.user_id] ||
+    nameFromMap ||
     (typeof row.username === 'string' && row.username.trim() ? row.username.trim() : null) ||
     'Traveler';
+  const avatarUrl =
+    typeof profile === 'object' && profile?.avatarUrl ? profile.avatarUrl : null;
   return {
     id: row.id,
     nickname: name,
+    avatarUrl,
     rating: Number(row.rating),
     text: row.body,
     at: new Date(row.created_at).getTime(),
@@ -52,9 +62,25 @@ export function formatPlaceReviewError(error, fallback = 'Could not post your re
   return msg || fallback;
 }
 
-async function loadUsernames(client, userIds) {
+async function loadReviewerProfiles(client, userIds) {
   const ids = [...new Set(userIds.filter(Boolean))];
   if (!ids.length) return {};
+
+  const fromTraveler = await client
+    .from('traveler_public_profiles')
+    .select('id, username, avatar_url')
+    .in('id', ids);
+  if (!fromTraveler.error) {
+    return Object.fromEntries(
+      (fromTraveler.data ?? []).map((p) => [
+        p.id,
+        {
+          username: p.username?.trim() || 'Traveler',
+          avatarUrl: resolveAvatarUrl(p.avatar_url),
+        },
+      ])
+    );
+  }
 
   const fromView = await client
     .from('reviewer_public_profiles')
@@ -62,16 +88,25 @@ async function loadUsernames(client, userIds) {
     .in('id', ids);
   if (!fromView.error) {
     return Object.fromEntries(
-      (fromView.data ?? []).map((p) => [p.id, p.username?.trim() || 'Traveler'])
+      (fromView.data ?? []).map((p) => [
+        p.id,
+        {
+          username: p.username?.trim() || 'Traveler',
+          avatarUrl: resolveAvatarUrl(null),
+        },
+      ])
     );
   }
 
-  const { data, error } = await client.from('user_profiles').select('id, username, display_name').in('id', ids);
+  const { data, error } = await client.from('user_profiles').select('id, username, display_name, avatar_url').in('id', ids);
   if (error) return {};
   return Object.fromEntries(
     (data ?? []).map((p) => [
       p.id,
-      p.username?.trim() || p.display_name?.trim() || 'Traveler',
+      {
+        username: p.username?.trim() || p.display_name?.trim() || 'Traveler',
+        avatarUrl: resolveAvatarUrl(p.avatar_url),
+      },
     ])
   );
 }
@@ -130,7 +165,7 @@ export async function fetchPlaceReviews(client, placeId) {
       throw new Error(formatPlaceReviewError(retry.error, 'Could not load reviews.'));
     }
     const rows = retry.data ?? [];
-    const names = await loadUsernames(
+    const names = await loadReviewerProfiles(
       client,
       rows.map((r) => r.user_id)
     );
@@ -142,7 +177,7 @@ export async function fetchPlaceReviews(client, placeId) {
   }
 
   const rows = data ?? [];
-  const names = await loadUsernames(
+  const names = await loadReviewerProfiles(
     client,
     rows.map((r) => r.user_id)
   );
@@ -268,7 +303,7 @@ export async function submitPlaceReview(client, { placeId, rating, body, photos 
     row = data;
   }
 
-  const names = await loadUsernames(client, [user.id]);
-  const fallback = user.email?.split('@')[0] || 'You';
+  const names = await loadReviewerProfiles(client, [user.id]);
+  const fallback = { username: user.email?.split('@')[0] || 'You', avatarUrl: resolveAvatarUrl(null) };
   return rowToReview(row, { [user.id]: names[user.id] || fallback });
 }

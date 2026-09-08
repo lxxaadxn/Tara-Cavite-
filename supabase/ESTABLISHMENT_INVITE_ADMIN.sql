@@ -8,11 +8,20 @@
 --   http://localhost:5173/establishment/setup
 --   https://<your-web-host>/establishment/setup
 --
--- Auth → Email Templates → Invite user (recommended copy):
---   You've been invited to join Tara, Cavite!
---   Your establishment has been registered by the Cavite Tourism Administration.
---   Click here to set up your account:
---   {{ .ConfirmationURL }}
+-- Auth → Email Templates → Invite user. Paste this so the admin's optional note
+-- from the Add Establishment modal shows up in the email:
+--
+--   <h2>You've been invited to join Tara, Cavite!</h2>
+--   <p>Your establishment has been registered by the Cavite Tourism Administration.</p>
+--   {{ if .Data.custom_message }}
+--     <blockquote style="margin:16px 0;padding:12px 16px;border-left:4px solid #6b8e23;background:#f6f8f2;">
+--       {{ .Data.custom_message }}
+--     </blockquote>
+--   {{ end }}
+--   <p><a href="{{ .ConfirmationURL }}">Set up your account</a></p>
+--
+-- The note is sent as user metadata (`custom_message`) by the Edge Function, so
+-- redeploy the function after changing it.
 
 -- ---------------------------------------------------------------------------
 -- 1) Invite / public-visibility columns + invited status

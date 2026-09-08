@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  StatusBar,
   Dimensions,
   Alert,
   Linking,
@@ -16,6 +15,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../constants/Colors';
+import { Header, HeaderAction } from '../components/Header';
 import { JamIcon } from '../components/JamIcon';
 import { LeafletMapView } from '../components/LeafletMapView';
 import { SaveToListSheet, type SaveToListRow } from '../components/SaveToListSheet';
@@ -29,7 +29,6 @@ import {
   buildEnrichedItinerary,
   type EnrichedStop,
   itineraryMapPlaces,
-  itineraryPriceBadge,
   itineraryStopsDurationLine,
   resolveEstablishment,
   stopMapPoint,
@@ -49,6 +48,7 @@ import {
   alertAfterSaveToList,
   SAVE_TO_LIST_CREATE_BUSY_ID,
 } from '../lib/saveToListModalHelpers';
+import { recordItineraryStart } from '../lib/itineraryStartsActivity';
 
 const HEADER_GREEN = '#10A37F';
 const TEAL = '#1B8A70';
@@ -177,7 +177,19 @@ export default function ItineraryDetailScreen() {
     }
   };
 
-  const startItinerary = () => {
+  const startItinerary = async () => {
+    if (!template) return;
+    // Feed the profile's "Itineraries used" stat before opening Maps (best-effort).
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        await recordItineraryStart(user.id, { id: template.id, title: detail?.title ?? template.title });
+      }
+    } catch {
+      /* stat recording is best-effort */
+    }
     if (!startItineraryUrl) {
       Alert.alert('Maps', 'No map location is available for this itinerary yet.');
       return;
@@ -296,21 +308,7 @@ export default function ItineraryDetailScreen() {
   if (loadState === 'loading' && !template) {
     return (
       <SafeAreaView style={styles.safe} edges={['bottom']}>
-        <StatusBar barStyle="light-content" backgroundColor={HEADER_GREEN} />
-        <View style={[styles.greenHeader, { paddingTop: insets.top + 8, paddingBottom: 14 }]}>
-          <View style={styles.headerRow}>
-            <TouchableOpacity
-              onPress={onBack}
-              style={styles.headerSide}
-              accessibilityLabel="Go back"
-              accessibilityRole="button"
-            >
-              <JamIcon name="chevron-left" size={26} color={WHITE} />
-            </TouchableOpacity>
-            <Text style={styles.headerTitleCenter}>Itinerary</Text>
-            <View style={styles.headerSide} />
-          </View>
-        </View>
+        <Header title="Itinerary" showBack darkBackground onBackPress={onBack} />
         <View style={styles.emptyWrap}>
           <ActivityIndicator color={HEADER_GREEN} />
         </View>
@@ -321,21 +319,7 @@ export default function ItineraryDetailScreen() {
   if (!template) {
     return (
       <SafeAreaView style={styles.safe} edges={['bottom']}>
-        <StatusBar barStyle="light-content" backgroundColor={HEADER_GREEN} />
-        <View style={[styles.greenHeader, { paddingTop: insets.top + 8, paddingBottom: 14 }]}>
-          <View style={styles.headerRow}>
-            <TouchableOpacity
-              onPress={onBack}
-              style={styles.headerSide}
-              accessibilityLabel="Go back"
-              accessibilityRole="button"
-            >
-              <JamIcon name="chevron-left" size={26} color={WHITE} />
-            </TouchableOpacity>
-            <Text style={styles.headerTitleCenter}>Itinerary</Text>
-            <View style={styles.headerSide} />
-          </View>
-        </View>
+        <Header title="Itinerary" showBack darkBackground onBackPress={onBack} />
         <View style={styles.emptyWrap}>
           <Text style={styles.emptyTitle}>Not found</Text>
           <Text style={styles.emptyBody}>This itinerary is no longer available.</Text>
@@ -348,40 +332,25 @@ export default function ItineraryDetailScreen() {
   }
 
   const metaLine = itineraryStopsDurationLine(detail);
-  const priceBadge = itineraryPriceBadge(detail);
   const heroImg = placeImageSource(detail?.image);
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <StatusBar barStyle="light-content" backgroundColor={HEADER_GREEN} />
-      <View style={[styles.greenHeader, { paddingTop: insets.top + 8, paddingBottom: 10 }]}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            onPress={onBack}
-            style={styles.headerSide}
-            accessibilityLabel="Back to itineraries"
-            accessibilityRole="button"
-          >
-            <JamIcon name="chevron-left" size={26} color={WHITE} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitleCenter} numberOfLines={1}>
-            Itineraries
-          </Text>
-          <TouchableOpacity
+      <Header
+        title="Itineraries"
+        showBack
+        darkBackground
+        onBackPress={onBack}
+        right={
+          <HeaderAction
             onPress={saved ? onConfirmRemoveSave : openSaveToListPicker}
-            style={styles.headerSide}
             disabled={checkingSaved}
             accessibilityLabel={saved ? 'Remove from saved lists' : 'Save to list'}
-            accessibilityRole="button"
           >
-            <JamIcon
-              ionicon={saved ? 'bookmark' : 'bookmark-outline'}
-              size={24}
-              color={WHITE}
-            />
-          </TouchableOpacity>
-        </View>
-      </View>
+            <JamIcon ionicon={saved ? 'bookmark' : 'bookmark-outline'} size={24} color={WHITE} />
+          </HeaderAction>
+        }
+      />
 
       <ScrollView
         style={styles.scroll}
@@ -403,6 +372,13 @@ export default function ItineraryDetailScreen() {
             colors={['#F1F7F6', '#F1F7F6', '#AACBC4']}
             style={styles.heroCopy}
           >
+            {metaLine ? (
+              <View style={[styles.heroPill, styles.heroPillDark, styles.heroMetaPill]}>
+                <Text style={styles.heroPillTextDark}>{metaLine}</Text>
+              </View>
+            ) : null}
+            <Text style={styles.heroTitle}>{detail?.title}</Text>
+            <Text style={styles.heroRoute}>{formatRouteLine(detail!)}</Text>
             {detail?.tags?.length ? (
               <View style={styles.tagRow}>
                 {detail.tags.map((tag) => (
@@ -412,40 +388,8 @@ export default function ItineraryDetailScreen() {
                 ))}
               </View>
             ) : null}
-            <Text style={styles.heroTitle}>{detail?.title}</Text>
-            <Text style={styles.heroRoute}>{formatRouteLine(detail!)}</Text>
-            <View style={styles.pillRow}>
-              {metaLine ? (
-                <View style={[styles.heroPill, styles.heroPillDark]}>
-                  <Text style={styles.heroPillTextDark}>{metaLine}</Text>
-                </View>
-              ) : null}
-              {detail?.bestTime ? (
-                <View style={styles.heroPill}>
-                  <Text style={styles.heroPillText} numberOfLines={2}>
-                    {detail.bestTime}
-                  </Text>
-                </View>
-              ) : null}
-              {priceBadge ? (
-                <View style={styles.heroPillPrice}>
-                  <Text style={styles.heroPillPriceText}>{priceBadge}</Text>
-                </View>
-              ) : null}
-            </View>
           </LinearGradient>
         </View>
-
-        <TouchableOpacity
-          style={styles.saveBtn}
-          onPress={saved ? onConfirmRemoveSave : openSaveToListPicker}
-          disabled={checkingSaved}
-          accessibilityRole="button"
-          accessibilityLabel="Save itinerary to list"
-        >
-          <JamIcon ionicon="bookmark-outline" size={18} color={WHITE} />
-          <Text style={styles.saveBtnText}>Save to list</Text>
-        </TouchableOpacity>
 
         {stops.length > 0 ? (
           <View style={styles.card}>
@@ -461,10 +405,7 @@ export default function ItineraryDetailScreen() {
                     <Text style={styles.stopNumText}>{index + 1}</Text>
                   </View>
                   <View style={styles.stopContent}>
-                    <Text style={styles.stopName}>
-                      {stop.name}
-                      {stopVenueName(stop) ? ` — ${stopVenueName(stop)}` : ''}
-                    </Text>
+                    <Text style={styles.stopName}>{stopVenueName(stop) || stop.name}</Text>
                     {stop.timeWindow || stop.durationHint ? (
                       <Text style={styles.stopTime}>
                         {[stop.timeWindow, stop.durationHint].filter(Boolean).join(' · ')}
@@ -484,18 +425,6 @@ export default function ItineraryDetailScreen() {
                         ) : null}
                       </View>
                     ) : null}
-                    {stop.highlights?.length ? (
-                      <View style={styles.stopHighlights}>
-                        {stop.highlights.map((item) => (
-                          <View key={item} style={styles.highlightRow}>
-                            <JamIcon ionicon="checkmark" size={16} color={HEADER_GREEN} />
-                            <Text style={styles.highlightText}>{item}</Text>
-                          </View>
-                        ))}
-                      </View>
-                    ) : (
-                      <Text style={styles.stopDesc}>{stop.description}</Text>
-                    )}
                     <View style={styles.stopActions}>
                       <TouchableOpacity
                         style={styles.mapsBtn}
@@ -575,23 +504,6 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: PAGE_BG },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: H_PAD, paddingTop: 12 },
-  greenHeader: {
-    backgroundColor: HEADER_GREEN,
-    paddingHorizontal: H_PAD,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerSide: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  headerTitleCenter: {
-    flex: 1,
-    textAlign: 'center',
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 17,
-    color: WHITE,
-  },
   emptyWrap: {
     flex: 1,
     paddingHorizontal: H_PAD,
@@ -637,7 +549,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 18,
   },
-  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
+  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
   heroTag: {
     backgroundColor: 'rgba(255,255,255,0.9)',
     borderWidth: 1,
@@ -666,7 +578,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontFamily: 'Inter_400Regular',
   },
-  pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
+  heroMetaPill: { alignSelf: 'flex-start', marginBottom: 10 },
   heroPill: {
     backgroundColor: WHITE,
     borderWidth: 1,
@@ -679,46 +591,10 @@ const styles = StyleSheet.create({
     backgroundColor: TEAL,
     borderColor: TEAL,
   },
-  heroPillPrice: {
-    backgroundColor: 'rgba(16, 163, 127, 0.16)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
-  heroPillPriceText: {
-    fontSize: 12,
-    color: HEADER_GREEN,
-    fontFamily: 'Poppins_700Bold',
-  },
-  heroPillText: {
-    fontSize: 12,
-    color: TITLE,
-    fontFamily: 'Poppins_600SemiBold',
-  },
   heroPillTextDark: {
     fontSize: 12,
     color: WHITE,
     fontFamily: 'Poppins_600SemiBold',
-  },
-  saveBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: TEAL,
-    paddingVertical: 14,
-    borderRadius: 999,
-    marginBottom: 16,
-    shadowColor: TEAL,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  saveBtnText: {
-    color: WHITE,
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 15,
   },
   card: {
     backgroundColor: WHITE,
@@ -796,9 +672,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   body: { fontSize: 14, lineHeight: 22, color: MUTED, fontFamily: 'Inter_400Regular' },
-  highlightList: { marginTop: 16, paddingTop: 16, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(27, 138, 112,0.08)' },
-  highlightRow: { flexDirection: 'row', gap: 10, marginBottom: 10, alignItems: 'flex-start' },
-  highlightText: { flex: 1, fontSize: 14, color: TITLE, lineHeight: 20, fontFamily: 'Inter_400Regular' },
   timeline: { position: 'relative' },
   timelineLine: {
     position: 'absolute',
@@ -844,7 +717,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   stopTagText: { fontSize: 11, fontFamily: 'Inter_500Medium', color: Colors.cta },
-  stopHighlights: { marginTop: 10 },
   stopActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   mapsBtn: {
     backgroundColor: HEADER_GREEN,
@@ -862,67 +734,4 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   appLinkBtnText: { color: TEAL, fontFamily: 'Poppins_700Bold', fontSize: 12 },
-  stopDesc: {
-    fontSize: 14,
-    color: MUTED,
-    lineHeight: 21,
-    marginTop: 6,
-    fontFamily: 'Inter_400Regular',
-  },
-  featuredRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginTop: 12,
-    padding: 10,
-    borderRadius: 14,
-    backgroundColor: PAGE_BG,
-    borderWidth: 1,
-    borderColor: 'rgba(27, 138, 112,0.1)',
-  },
-  featuredThumb: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
-    backgroundColor: 'rgba(27, 138, 112,0.08)',
-  },
-  featuredThumbPlaceholder: { alignItems: 'center', justifyContent: 'center' },
-  featuredTextCol: { flex: 1, minWidth: 0 },
-  featuredLabel: {
-    fontSize: 10,
-    fontFamily: 'Poppins_700Bold',
-    color: HEADER_GREEN,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    marginBottom: 2,
-  },
-  featuredName: { fontFamily: 'Poppins_600SemiBold', fontSize: 15, color: TITLE },
-  featuredAddr: { fontSize: 12, color: MUTED, marginTop: 2, fontFamily: 'Inter_400Regular' },
-  tipRow: { flexDirection: 'row', gap: 10, marginBottom: 10, alignItems: 'flex-start' },
-  tipDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: HEADER_GREEN,
-    marginTop: 7,
-  },
-  tipText: { flex: 1, fontSize: 14, color: TITLE, lineHeight: 21, fontFamily: 'Inter_400Regular' },
-  placeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(27, 138, 112,0.1)',
-  },
-  placeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(16, 163, 127, 0.7)',
-    marginTop: 4,
-  },
-  placeTextCol: { flex: 1 },
-  placeName: { fontFamily: 'Poppins_600SemiBold', fontSize: 15, color: TITLE },
-  placeAddr: { fontSize: 12, color: MUTED, marginTop: 2, fontFamily: 'Inter_400Regular' },
 });

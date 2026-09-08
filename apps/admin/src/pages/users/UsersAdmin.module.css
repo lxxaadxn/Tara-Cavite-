@@ -282,6 +282,18 @@
   border-color: rgba(107, 142, 35, 0.2);
 }
 
+.primaryAction {
+  background: var(--primary, #1b8a70);
+  color: #fff;
+  border-color: transparent;
+}
+
+.primaryAction:hover {
+  background: var(--primary-dark, #167a63);
+  color: #fff;
+  border-color: transparent;
+}
+
 .danger:hover {
   background: rgba(239, 68, 68, 0.1);
   color: #dc2626;
@@ -397,7 +409,9 @@
 }
 
 .label {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   font-size: 13px;
   font-weight: 500;
   color: var(--text-secondary);
@@ -489,6 +503,74 @@
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 80;
+}
+
+.modal {
+  width: 100%;
+  max-width: 420px;
+  background: var(--card, #fff);
+  border-radius: 16px;
+  padding: 24px;
+  border: 1px solid #e8edf3;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.1);
+}
+
+.modal h2 {
+  margin: 0 0 8px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.modalHint {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.modalError {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #b91c1c;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.secondaryBtn {
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.secondaryBtn:hover {
+  background: #f8fafc;
+}
+
+.secondaryBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .hint {

@@ -96,6 +96,7 @@ export function shortLabelForNtdpCategory(raw) {
   if (key.includes('cultural')) return 'Culture';
   if (key.includes('mice') || key.includes('conference') || key.includes('exhibition')) return 'MICE';
   if (key.includes('health') || key.includes('wellness') || key.includes('retirement')) return 'Wellness';
+  if (key.includes('culin')) return 'Culinary';
   if (key.includes('food') || key.includes('gastronom') || key.includes('restaurant')) return 'Food';
   if (key.includes('education')) return 'Education';
   if (key.includes('shopping')) return 'Shopping';

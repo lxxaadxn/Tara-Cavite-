@@ -3,6 +3,7 @@ declare module 'cavitour-shared/ntdpFilterMeta';
 declare module 'cavitour-shared/placeCheckin';
 declare module 'cavitour-shared/lguKind';
 declare module 'cavitour-shared/announcements';
+declare module 'cavitour-shared/changePassword';
 declare module 'cavitour-shared/itineraries';
 declare module 'cavitour-shared/siteContent';
 declare module 'cavitour-shared/mapPins';

@@ -185,7 +185,7 @@ function ensureCrypto() {
     }
   }
   try {
-    (global as typeof globalThis & { crypto?: Crypto }).crypto = stub;
+    (globalThis as typeof globalThis & { crypto?: Crypto }).crypto = stub;
   } catch {
   }
 }

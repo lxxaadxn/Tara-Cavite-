@@ -21,6 +21,10 @@ config.resolver.extraNodeModules = {
 
 config.resolver.sourceExts = [...(config.resolver.sourceExts || []), 'js', 'jsx', 'ts', 'tsx'];
 
+// Vendored Leaflet sources live as assets (assets/leaflet/*.txt) and are inlined into the
+// WebView HTML at runtime — 'txt' keeps them out of the module resolver.
+config.resolver.assetExts = [...(config.resolver.assetExts || []), 'txt'];
+
 // Faster startup + smaller initial evaluate; assets load when screens need them.
 config.transformer = {
   ...config.transformer,

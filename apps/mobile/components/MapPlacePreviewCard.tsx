@@ -21,15 +21,13 @@ const TAG_PILL: Record<MapPreviewTagVariant, { bg: string; text: string }> = {
 export type MapPlacePreviewCardProps = {
   place: Place;
   flipBelow?: boolean;
-  onExplore: () => void;
-  onDirections: () => void;
+  onSeeMore: () => void;
 };
 
 export function MapPlacePreviewCard({
   place,
   flipBelow = false,
-  onExplore,
-  onDirections,
+  onSeeMore,
 }: MapPlacePreviewCardProps) {
   const tags = useMemo(() => getMapPlacePreviewTags(place), [place]);
   const address = useMemo(() => sanitizeAddress(place.address, place.name), [place.address, place.name]);
@@ -65,24 +63,14 @@ export function MapPlacePreviewCard({
               })}
             </View>
           ) : null}
-          <View style={styles.actions}>
-            <TouchableOpacity
-              style={styles.exploreBtn}
-              onPress={onExplore}
-              accessibilityRole="button"
-              accessibilityLabel={`Explore ${place.name}`}
-            >
-              <Text style={styles.exploreLabel}>Explore</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.directionsBtn}
-              onPress={onDirections}
-              accessibilityRole="button"
-              accessibilityLabel={`Directions to ${place.name}`}
-            >
-              <Text style={styles.directionsLabel}>Directions</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.seeMoreBtn}
+            onPress={onSeeMore}
+            accessibilityRole="button"
+            accessibilityLabel={`See more about ${place.name}`}
+          >
+            <Text style={styles.seeMoreLabel}>See more</Text>
+          </TouchableOpacity>
         </View>
       </View>
       {!flipBelow ? <View style={[styles.pointer, styles.pointerAbove]} /> : null}
@@ -159,31 +147,13 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     fontSize: 10,
   },
-  actions: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  exploreBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(27, 138, 112, 0.35)',
-    alignItems: 'center',
-  },
-  exploreLabel: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 11,
-    color: TEAL,
-  },
-  directionsBtn: {
-    flex: 1,
+  seeMoreBtn: {
     paddingVertical: 8,
     borderRadius: 999,
     backgroundColor: GREEN,
     alignItems: 'center',
   },
-  directionsLabel: {
+  seeMoreLabel: {
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 11,
     color: '#FFFFFF',

@@ -3,50 +3,54 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  FlatList,
   ActivityIndicator,
+  Linking,
+  RefreshControl,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRoute } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { fetchPublishedAnnouncements } from 'cavitour-shared/announcements';
 import {
-  fetchPublishedAnnouncements,
-  formatAnnouncementDateLabel,
-} from 'cavitour-shared/announcements';
-import { JamIcon } from '../components/JamIcon';
+  AnnouncementCard,
+  AnnouncementDetailModal,
+  type AnnouncementCardItem,
+} from '../components/announcementCards';
+import { Header } from '../components/Header';
 import { supabase } from '../lib/supabase';
-import { getFloatingTabBarScrollPadding } from '../lib/mainTabBarStyle';
 
-const PAGE_BG = '#F1F7F6';
+const PAGE_BG = '#FAFAFA';
 const TEAL = '#1B8A70';
-const INK = '#171717';
-const MUTED = '#737373';
-const ALERT_AMBER = '#C47B17';
+const MUTED = '#7A7878';
+const H_PAD = 16;
 
-type AnnouncementItem = {
-  id: string;
-  kind: string;
-  title: string;
-  place: string;
-  body: string;
-  publishedAt?: string;
-};
+/** Deep link target from a notification row. */
+export type AnnouncementsParams = { focusId?: string };
 
+/** Card grid from the web announcements page, stacked one-up for phones. */
 const AnnouncementsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
-  const [items, setItems] = useState<AnnouncementItem[]>([]);
+  const route = useRoute();
+  const { focusId } = (route.params ?? {}) as AnnouncementsParams;
+  const [items, setItems] = useState<AnnouncementCardItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [detail, setDetail] = useState<AnnouncementCardItem | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
     setError('');
     try {
-      const rows = (await fetchPublishedAnnouncements(supabase)) as AnnouncementItem[];
+      const rows = (await fetchPublishedAnnouncements(supabase)) as AnnouncementCardItem[];
       setItems(rows);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load announcements.');
       setItems([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
@@ -54,54 +58,60 @@ const AnnouncementsScreen: React.FC = () => {
     void load();
   }, [load]);
 
+  // Opening from a notification row lands straight on that announcement.
+  useEffect(() => {
+    if (!focusId || !items.length) return;
+    const match = items.find((item) => item.id === focusId);
+    if (match) setDetail(match);
+  }, [focusId, items]);
+
+  const onRegister = useCallback((item: AnnouncementCardItem) => {
+    if (item.actionUrl) void Linking.openURL(item.actionUrl);
+  }, []);
+
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.pageHeader}>
-        <Text style={styles.title}>Announcements</Text>
-        <Text style={styles.subtitle}>
-          Events and travel notices from Cavite LGUs and tourism partners.
-        </Text>
-      </View>
+    <View style={styles.safe}>
+      <Header title="Announcements" showBack darkBackground />
+
       {loading ? (
         <View style={styles.centered}>
           <ActivityIndicator color={TEAL} />
         </View>
       ) : (
-        <ScrollView
+        <FlatList
+          data={items}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={[
             styles.list,
-            { paddingBottom: getFloatingTabBarScrollPadding(insets.bottom) },
+            { paddingBottom: Math.max(insets.bottom, 16) + 24 },
           ]}
           showsVerticalScrollIndicator={false}
-        >
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          {!error && items.length === 0 ? (
-            <Text style={styles.empty}>No announcements yet. Check back soon.</Text>
-          ) : null}
-          {items.map((item) => (
-            <View key={item.id} style={styles.card}>
-              <View style={styles.glyph}>
-                <JamIcon
-                  name={item.kind === 'advisory' ? 'alert' : 'bell'}
-                  size={20}
-                  color={item.kind === 'advisory' ? ALERT_AMBER : TEAL}
-                />
-              </View>
-              <View style={styles.cardBody}>
-                <View style={styles.cardTop}>
-                  <Text style={styles.cardTitle}>{item.title}</Text>
-                  {item.publishedAt ? (
-                    <Text style={styles.cardDate}>{formatAnnouncementDateLabel(item.publishedAt)}</Text>
-                  ) : null}
-                </View>
-                {item.place ? <Text style={styles.cardPlace}>{item.place}</Text> : null}
-                <Text style={styles.cardCopy}>{item.body}</Text>
-              </View>
-            </View>
-          ))}
-        </ScrollView>
+          renderItem={({ item }) => (
+            <AnnouncementCard item={item} onSeeMore={setDetail} onRegister={onRegister} />
+          )}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => void load(true)}
+              tintColor={TEAL}
+              colors={[TEAL]}
+            />
+          }
+          ListHeaderComponent={error ? <Text style={styles.error}>{error}</Text> : null}
+          ListEmptyComponent={
+            error ? null : (
+              <Text style={styles.empty}>No announcements yet. Check back soon.</Text>
+            )
+          }
+        />
       )}
-    </SafeAreaView>
+
+      <AnnouncementDetailModal
+        item={detail}
+        onClose={() => setDetail(null)}
+        onRegister={onRegister}
+      />
+    </View>
   );
 };
 
@@ -110,93 +120,27 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: PAGE_BG,
   },
-  pageHeader: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 12,
-  },
-  title: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 24,
-    color: INK,
-  },
-  subtitle: {
-    marginTop: 6,
-    fontFamily: 'Poppins_400Regular',
-    fontSize: 14,
-    lineHeight: 20,
-    color: MUTED,
-  },
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   list: {
-    paddingHorizontal: 16,
-    gap: 12,
+    paddingHorizontal: H_PAD,
+    paddingTop: 14,
+    gap: 14,
   },
   error: {
     color: '#DC2626',
     fontFamily: 'Poppins_400Regular',
     fontSize: 14,
+    paddingVertical: 12,
   },
   empty: {
     color: MUTED,
     fontFamily: 'Poppins_400Regular',
     fontSize: 14,
-  },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(23,23,23,0.08)',
-  },
-  glyph: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: PAGE_BG,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  cardTop: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  cardTitle: {
-    flex: 1,
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 15,
-    color: INK,
-  },
-  cardDate: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 11,
-    color: '#A3A3A3',
-  },
-  cardPlace: {
-    marginTop: 4,
-    fontFamily: 'Poppins_400Regular',
-    fontSize: 13,
-    color: '#525252',
-  },
-  cardCopy: {
-    marginTop: 8,
-    fontFamily: 'Poppins_400Regular',
-    fontSize: 13,
-    lineHeight: 20,
-    color: MUTED,
+    paddingVertical: 12,
   },
 });
 

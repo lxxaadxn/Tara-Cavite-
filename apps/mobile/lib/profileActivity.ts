@@ -172,6 +172,89 @@ export async function fetchProfileActivity(
   };
 }
 
+export type PublicListPreview = {
+  id: string;
+  name: string;
+  description: string;
+  iconName: string;
+  itemCount: number;
+  placeCount: number;
+  itineraryCount: number;
+  cover: string;
+};
+
+/**
+ * Lists the traveler has marked shared — the "Public lists" card on the profile.
+ * `saved_lists.type = 'shared'` is the mobile spelling of web's `privacy: 'public'`.
+ * The cover is the first saved place that has a catalog picture.
+ */
+export async function fetchPublicListsPreview(
+  client: SupabaseClient,
+  userId: string
+): Promise<PublicListPreview[]> {
+  const uid = String(userId ?? '').trim();
+  if (!uid) return [];
+
+  const { data: listRows, error: listErr } = await client
+    .from('saved_lists')
+    .select('id, name, description, icon_name, updated_at, created_at')
+    .eq('user_id', uid)
+    .eq('type', 'shared')
+    .order('updated_at', { ascending: false })
+    .limit(12);
+  if (listErr || !listRows?.length) return [];
+
+  const listIds = listRows.map((l) => String(l.id));
+  const [placeLinksRes, itinLinksRes] = await Promise.all([
+    client.from('saved_list_items').select('list_id, place_id, created_at').in('list_id', listIds),
+    client.from('saved_list_itinerary_items').select('list_id').in('list_id', listIds),
+  ]);
+
+  const placeLinks = placeLinksRes.error
+    ? []
+    : ((placeLinksRes.data ?? []) as Array<{ list_id: string; place_id: string; created_at?: string }>);
+  const itinLinks = itinLinksRes.error
+    ? []
+    : ((itinLinksRes.data ?? []) as Array<{ list_id: string }>);
+
+  const meta = await placeMetaById(
+    client,
+    placeLinks.map((l) => String(l.place_id ?? ''))
+  );
+
+  const placeCounts = new Map<string, number>();
+  const itineraryCounts = new Map<string, number>();
+  const covers = new Map<string, string>();
+  for (const link of placeLinks) {
+    const listId = String(link.list_id);
+    placeCounts.set(listId, (placeCounts.get(listId) ?? 0) + 1);
+    if (!covers.get(listId)) {
+      const image = meta.get(String(link.place_id ?? ''))?.image ?? '';
+      if (image) covers.set(listId, image);
+    }
+  }
+  for (const link of itinLinks) {
+    const listId = String(link.list_id);
+    itineraryCounts.set(listId, (itineraryCounts.get(listId) ?? 0) + 1);
+  }
+
+  return listRows.map((row) => {
+    const id = String(row.id);
+    const placeCount = placeCounts.get(id) ?? 0;
+    const itineraryCount = itineraryCounts.get(id) ?? 0;
+    return {
+      id,
+      name: String(row.name ?? '').trim() || 'Saved list',
+      description: String(row.description ?? '').trim(),
+      iconName: String(row.icon_name ?? 'bookmark-outline'),
+      itemCount: placeCount + itineraryCount,
+      placeCount,
+      itineraryCount,
+      cover: covers.get(id) ?? '',
+    };
+  });
+}
+
 export async function fetchProfileSavedPreview(
   client: SupabaseClient,
   userId: string
@@ -230,13 +313,17 @@ export async function fetchProfileSavedPreview(
     const itineraryId = String(link.itinerary_ref ?? '').trim();
     if (!itineraryId || seenItin.has(itineraryId)) continue;
     seenItin.add(itineraryId);
-    const publishedRow = matchItinerary(published, itineraryId);
+    const publishedRow = matchItinerary(published, itineraryId) as {
+      title?: unknown;
+      image?: unknown;
+      subtitle?: unknown;
+    } | null;
     itineraries.push({
       id: `itinerary-${itineraryId}`,
       itineraryId,
-      name: publishedRow?.title || 'Itinerary',
-      image: publishedRow?.image || '',
-      subtitle: publishedRow?.subtitle || 'Saved itinerary',
+      name: String(publishedRow?.title ?? '') || 'Itinerary',
+      image: String(publishedRow?.image ?? ''),
+      subtitle: String(publishedRow?.subtitle ?? '') || 'Saved itinerary',
       savedAt: link.created_at ? String(link.created_at) : null,
     });
   }

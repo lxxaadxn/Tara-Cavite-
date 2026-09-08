@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -6,25 +6,28 @@ import {
   TextInput,
   TouchableOpacity,
   Pressable,
-  Image,
   Dimensions,
   ScrollView,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
+import { setStatusBarStyle } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
-import { useNavigation } from '@react-navigation/native';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { JamIcon } from '../components/JamIcon';
 import { MapPlacePreviewCard } from '../components/MapPlacePreviewCard';
 import { LeafletMapView } from '../components/LeafletMapView';
 import type { LeafletMarker } from '../components/LeafletMapView';
 import type { LeafletPreviewPoint } from '../components/leafletMapTypes';
-import { placeToMapSpot, type CommuteLegKind } from '../data/mapBrowseSpots';
-import { getMainFloatingTabBarStyle } from '../lib/mainTabBarStyle';
+import { getMainFloatingTabBarStyle, tabBarShowsLabels } from '../lib/mainTabBarStyle';
 import { supabase } from '../lib/supabase';
 import { fetchTrendingPlacesFromSupabase, logPlacesFetchError } from '../lib/placesFromSupabase';
+import { placeMatchesSearchQuery } from '../lib/dashboardPlaceFilters';
+import { placeImageSource } from '../lib/placeImageSource';
+import { usePlaceRatingSummary } from '../lib/usePlaceReviewStats';
 import { launchGoogleMapsDrivingTo } from '../lib/launchGoogleMapsDirections';
 import { fetchSiteContent } from 'cavitour-shared/siteContent';
-import { resolveMapPinUrlForLabel } from 'cavitour-shared/mapPins';
+import { leafletPinIconOptions, resolveMapPinUrlForLabel } from 'cavitour-shared/mapPins';
 import type { Place } from '../data/mockData';
 
 const H_PAD = 16;
@@ -36,27 +39,12 @@ const MAP_BG = '#E8E8E8';
 const TITLE = '#241D13';
 const STAR = '#FFC012';
 
-const { height: SCREEN_H } = Dimensions.get('window');
+const { height: SCREEN_H, width: SCREEN_W } = Dimensions.get('window');
 const SHEET_PEEK_RATIO = 0.6;
-const SHEET_ROUTE_RATIO = 0.6;
 const PREVIEW_CARD_HALF_W = 144;
 const PREVIEW_ABOVE_OFFSET = 168;
 const PREVIEW_BELOW_OFFSET = 14;
 const PREVIEW_FLIP_TOP_THRESHOLD = 170;
-
-function legIonicon(kind: CommuteLegKind): string {
-  switch (kind) {
-    case 'bus':
-      return 'bus-outline';
-    case 'tricycle':
-      return 'bicycle';
-    case 'walk':
-      return 'walk-outline';
-    case 'destination':
-    default:
-      return 'location-outline';
-  }
-}
 
 export default function MapScreen() {
   const navigation = useNavigation();
@@ -64,22 +52,23 @@ export default function MapScreen() {
   const [query, setQuery] = useState('');
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [sheetMode, setSheetMode] = useState<'preview' | 'routes'>('preview');
   const [previewSpotId, setPreviewSpotId] = useState<string | null>(null);
   const [previewPoint, setPreviewPoint] = useState<LeafletPreviewPoint | null>(null);
   const [dbMarkers, setDbMarkers] = useState<LeafletMarker[]>([]);
   const [dbPlaces, setDbPlaces] = useState<Place[]>([]);
 
-  const selectedSpot = useMemo(() => {
-    if (!selectedId) return undefined;
-    const place = dbPlaces.find((p) => p.id === selectedId);
-    return place ? placeToMapSpot(place) : undefined;
-  }, [selectedId, dbPlaces]);
+  const selectedSpot = useMemo(
+    () => (selectedId ? dbPlaces.find((p) => p.id === selectedId) : undefined),
+    [selectedId, dbPlaces]
+  );
 
   const previewPlace = useMemo(() => {
     if (!previewSpotId) return undefined;
     return dbPlaces.find((p) => p.id === previewSpotId);
   }, [previewSpotId, dbPlaces]);
+
+  /** Reads published reviews for the open place and follows later review writes. */
+  const rating = usePlaceRatingSummary(selectedId);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,13 +84,19 @@ export default function MapScreen() {
           tableId: r.ntdp_category_id,
           label: r.ntdp_category_name,
         }));
-        const m: LeafletMarker[] = places.map((p) => ({
-          id: p.id,
-          name: p.name,
-          lat: p.latitude,
-          lng: p.longitude,
-          iconUrl: resolveMapPinUrlForLabel(cms as Record<string, string>, lookups, p.ntdp_category ?? ''),
-        }));
+        const m: LeafletMarker[] = places.map((p) => {
+          const label = p.ntdp_category ?? '';
+          const url = resolveMapPinUrlForLabel(cms as Record<string, string>, lookups, label);
+          const opts = leafletPinIconOptions(url, label);
+          return {
+            id: p.id,
+            name: p.name,
+            lat: p.latitude,
+            lng: p.longitude,
+            iconUrl: opts.iconUrl,
+            iconRetinaUrl: opts.iconRetinaUrl,
+          };
+        });
         if (!cancelled) setDbMarkers(m);
       } catch (err) {
         logPlacesFetchError('fetchTrendingPlacesFromSupabase', err);
@@ -116,14 +111,17 @@ export default function MapScreen() {
     };
   }, []);
 
-  const combinedMarkers = dbMarkers;
+  /** The search pill narrows the pins on the map rather than leaving the screen. */
+  const combinedMarkers = useMemo(() => {
+    const q = query.trim();
+    if (!q) return dbMarkers;
+    const matchIds = new Set(
+      dbPlaces.filter((p) => placeMatchesSearchQuery(p, q)).map((p) => p.id)
+    );
+    return dbMarkers.filter((m) => matchIds.has(m.id));
+  }, [dbMarkers, dbPlaces, query]);
 
-  const sheetHeight =
-    selectedSpot == null
-      ? 0
-      : sheetMode === 'preview'
-        ? Math.round(SCREEN_H * SHEET_PEEK_RATIO)
-        : Math.round(SCREEN_H * SHEET_ROUTE_RATIO);
+  const sheetHeight = selectedSpot == null ? 0 : Math.round(SCREEN_H * SHEET_PEEK_RATIO);
 
   useEffect(() => {
     let subscription: Location.LocationSubscription | null = null;
@@ -162,33 +160,35 @@ export default function MapScreen() {
     };
   }, []);
 
-  const hideTabWhileSheetOpen = selectedSpot != null;
-  const insetsBottomRef = useRef(insets.bottom);
-  insetsBottomRef.current = insets.bottom;
-
+  /**
+   * The sheet covers the pill, so hide it while it is open. This writes the Map
+   * tab's own options, which outrank the route-based rule in App.tsx — so it has
+   * to keep the bar hidden whenever the map isn't the screen on top, otherwise
+   * the pill leaks onto pushed screens like About establishment.
+   */
+  const isFocused = useIsFocused();
   useLayoutEffect(() => {
     const tabNav = navigation.getParent();
     if (!tabNav) return;
+    const hide = selectedSpot != null || !isFocused;
+    tabNav.setOptions({
+      tabBarStyle: hide
+        ? { display: 'none' }
+        : getMainFloatingTabBarStyle(insets.bottom, tabBarShowsLabels(SCREEN_W)),
+    });
+  }, [selectedSpot, isFocused, navigation, insets.bottom]);
 
-    if (hideTabWhileSheetOpen) {
-      tabNav.setOptions({ tabBarStyle: { display: 'none' } });
-    } else {
-      tabNav.setOptions({ tabBarStyle: getMainFloatingTabBarStyle(insets.bottom) });
-    }
-  }, [hideTabWhileSheetOpen, navigation, insets.bottom]);
-
+  /** No teal app bar here, so the status bar reads against the map tiles. */
   useEffect(() => {
-    return () => {
-      navigation.getParent()?.setOptions({
-        tabBarStyle: getMainFloatingTabBarStyle(insetsBottomRef.current),
-      });
-    };
-  }, [navigation]);
+    if (isFocused) setStatusBarStyle('dark');
+  }, [isFocused]);
 
   const clearPreview = () => {
     setPreviewSpotId(null);
     setPreviewPoint(null);
   };
+
+  const sheetImage = selectedSpot ? placeImageSource(selectedSpot.image) : undefined;
 
   const openGoogleDirections = (place: Place) => {
     void launchGoogleMapsDrivingTo(place.latitude, place.longitude, userLocation);
@@ -196,22 +196,6 @@ export default function MapScreen() {
 
   const closeSheet = () => {
     setSelectedId(null);
-    setSheetMode('preview');
-  };
-
-  const openCommuteDetail = () => {
-    if (!selectedSpot) return;
-    navigation.navigate(
-      'MapCommuteDetail' as never,
-      {
-        destinationName: selectedSpot.name,
-        detailSteps: selectedSpot.mapCommute.detailSteps,
-        destLat: selectedSpot.latitude,
-        destLng: selectedSpot.longitude,
-        userLat: userLocation?.lat ?? null,
-        userLng: userLocation?.lng ?? null,
-      } as never
-    );
   };
 
   return (
@@ -252,11 +236,10 @@ export default function MapScreen() {
               <MapPlacePreviewCard
                 place={previewPlace}
                 flipBelow={previewPoint.y < PREVIEW_FLIP_TOP_THRESHOLD}
-                onExplore={() => {
+                onSeeMore={() => {
                   clearPreview();
-                  navigation.navigate('AboutEstablishment' as never, { place: previewPlace } as never);
+                  setSelectedId(previewPlace.id);
                 }}
-                onDirections={() => openGoogleDirections(previewPlace)}
               />
             </View>
           ) : null}
@@ -289,13 +272,23 @@ export default function MapScreen() {
                   style={styles.searchInput}
                   accessibilityLabel="Search map destinations"
                   returnKeyType="search"
-                  onSubmitEditing={() => {
-                    if (query.trim()) {
-                      navigation.navigate('PlaceDetail' as never, { query: query.trim() } as never);
-                    }
-                  }}
                 />
+                {query.length > 0 ? (
+                  <TouchableOpacity
+                    onPress={() => setQuery('')}
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel="Clear map search"
+                  >
+                    <JamIcon ionicon="close-circle" size={18} color={MUTED} />
+                  </TouchableOpacity>
+                ) : null}
               </View>
+              {query.trim() && combinedMarkers.length === 0 ? (
+                <Text style={styles.searchEmptyHint}>
+                  No pins match “{query.trim()}”.
+                </Text>
+              ) : null}
             </View>
           </View>
 
@@ -315,116 +308,62 @@ export default function MapScreen() {
             >
               <View style={styles.sheetHandle} accessibilityLabel="Sheet" />
 
-              {sheetMode === 'preview' ? (
-                <ScrollView
-                  style={styles.sheetScroll}
-                  contentContainerStyle={styles.sheetScrollContent}
-                  showsVerticalScrollIndicator={false}
-                  keyboardShouldPersistTaps="handled"
-                >
-                  {selectedSpot.image ? (
-                    <Image
-                      source={selectedSpot.image}
-                      style={styles.previewImage}
-                      resizeMode="cover"
-                      accessibilityLabel={`${selectedSpot.name} photo`}
-                    />
-                  ) : (
-                    <View style={[styles.previewImage, styles.previewImagePh]}>
-                      <JamIcon ionicon="image-outline" size={40} color={MUTED} />
-                    </View>
-                  )}
-                  <Text style={styles.previewTitle}>{selectedSpot.name}</Text>
-                  <View style={styles.previewRatingRow}>
-                    <JamIcon ionicon="star" size={16} color={STAR} />
-                    <Text style={styles.previewRatingText}>
-                      {selectedSpot.rating ?? '—'}
-                      {selectedSpot.ratingCount ? ` (${selectedSpot.ratingCount})` : ''}
-                    </Text>
+              <ScrollView
+                style={styles.sheetScroll}
+                contentContainerStyle={styles.sheetScrollContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
+                {sheetImage ? (
+                  <ExpoImage
+                    source={sheetImage}
+                    style={styles.previewImage}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
+                    transition={180}
+                    accessibilityLabel={`${selectedSpot.name} photo`}
+                  />
+                ) : (
+                  <View style={[styles.previewImage, styles.previewImagePh]}>
+                    <JamIcon ionicon="image-outline" size={40} color={MUTED} />
                   </View>
-                  <Text style={styles.previewAddress}>{selectedSpot.address}</Text>
-                  <View style={styles.previewStatusRow}>
-                    <View style={styles.openPill}>
-                      <Text style={styles.openPillText}>Open</Text>
-                    </View>
-                    <Text style={styles.closesText}>{selectedSpot.closesAtLabel ?? selectedSpot.hours}</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.aboutCta}
-                    onPress={() => {
-                      closeSheet();
-                      navigation.navigate('AboutEstablishment' as never, { place: selectedSpot } as never);
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel="About establishment"
-                  >
-                    <Text style={styles.aboutCtaLabel}>ABOUT ESTABLISHMENT</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.directionsCta}
-                    onPress={() => openGoogleDirections(selectedSpot)}
-                    accessibilityRole="button"
-                    accessibilityLabel="Directions"
-                  >
-                    <Text style={styles.directionsCtaLabel}>DIRECTIONS</Text>
-                  </TouchableOpacity>
-                </ScrollView>
-              ) : (
-                <View style={styles.sheetRoutesBody}>
-                  <TouchableOpacity
-                    style={styles.sheetBackRow}
-                    onPress={() => setSheetMode('preview')}
-                    accessibilityRole="button"
-                    accessibilityLabel="Back to place details"
-                  >
-                    <Text style={styles.sheetBackChevron}>{'>'}</Text>
-                    <Text style={styles.sheetBackText}>Back</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.routeSheetTitle}>Route steps</Text>
-                  <ScrollView
-                    style={styles.sheetScrollRoutes}
-                    contentContainerStyle={styles.sheetScrollRoutesContent}
-                    showsVerticalScrollIndicator={false}
-                    keyboardShouldPersistTaps="handled"
-                  >
-                    <View style={styles.timeline}>
-                      {selectedSpot.mapCommute.legs.map((leg, index) => {
-                        const last = index === selectedSpot.mapCommute.legs.length - 1;
-                        return (
-                          <View key={leg.id} style={styles.timelineRow}>
-                            <View style={styles.timelineRail}>
-                              <View style={styles.timelineDot} />
-                              {!last ? <View style={styles.timelineLine} /> : null}
-                            </View>
-                            <View style={styles.timelineCard}>
-                              <View style={styles.legIconWrap}>
-                                <JamIcon ionicon={legIonicon(leg.kind)} size={20} color={GREEN} />
-                              </View>
-                              <View style={styles.timelineTextCol}>
-                                <Text style={styles.legTitle}>{leg.title}</Text>
-                                {leg.subtitle ? <Text style={styles.legSubtitle}>{leg.subtitle}</Text> : null}
-                                {leg.badge ? (
-                                  <View style={styles.legBadge}>
-                                    <Text style={styles.legBadgeText}>{leg.badge}</Text>
-                                  </View>
-                                ) : null}
-                              </View>
-                            </View>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  </ScrollView>
-                  <TouchableOpacity
-                    style={styles.viewMoreCta}
-                    onPress={openCommuteDetail}
-                    accessibilityRole="button"
-                    accessibilityLabel="View more step by step"
-                  >
-                    <Text style={styles.viewMoreCtaLabel}>VIEW MORE</Text>
-                  </TouchableOpacity>
+                )}
+                <Text style={styles.previewTitle}>{selectedSpot.name}</Text>
+                <Text style={styles.previewAddress}>{selectedSpot.address}</Text>
+                <View style={styles.previewRatingRow}>
+                  <JamIcon ionicon="star" size={16} color={STAR} />
+                  <Text style={styles.previewRatingText}>
+                    {rating == null
+                      ? 'Loading reviews…'
+                      : rating.count
+                        ? `${rating.average.toFixed(1)} (${rating.count} review${
+                            rating.count === 1 ? '' : 's'
+                          })`
+                        : 'No reviews yet'}
+                  </Text>
                 </View>
-              )}
+                <TouchableOpacity
+                  style={styles.aboutCta}
+                  onPress={() => {
+                    closeSheet();
+                    (
+                      navigation as unknown as { navigate: (name: string, params: object) => void }
+                    ).navigate('AboutEstablishment', { place: selectedSpot });
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="About establishment"
+                >
+                  <Text style={styles.aboutCtaLabel}>ABOUT ESTABLISHMENT</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.directionsCta}
+                  onPress={() => openGoogleDirections(selectedSpot)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Directions"
+                >
+                  <Text style={styles.directionsCtaLabel}>DIRECTIONS</Text>
+                </TouchableOpacity>
+              </ScrollView>
             </View>
           ) : null}
         </View>
@@ -448,7 +387,7 @@ const styles = StyleSheet.create({
     backgroundColor: MAP_BG,
   },
   mapLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: MAP_BG,
   },
   previewAnchor: {
@@ -510,7 +449,7 @@ const styles = StyleSheet.create({
     color: '#000000',
   },
   sheetBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.28)',
     zIndex: 2,
   },
@@ -540,39 +479,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(122,120,120,0.35)',
     marginBottom: 8,
   },
-  sheetBackRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
-    alignSelf: 'flex-start',
-  },
-  sheetBackChevron: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 20,
-    lineHeight: 22,
-    color: TEAL,
-    marginTop: -2,
-  },
-  sheetBackText: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 15,
-    color: TEAL,
-  },
   sheetScroll: {
     flex: 1,
-  },
-  sheetRoutesBody: {
-    flex: 1,
-    minHeight: 0,
-  },
-  sheetScrollRoutes: {
-    flex: 1,
-    minHeight: 0,
-  },
-  sheetScrollRoutesContent: {
-    paddingBottom: 12,
-    flexGrow: 1,
   },
   sheetScrollContent: {
     paddingBottom: 8,
@@ -595,47 +503,23 @@ const styles = StyleSheet.create({
     color: TITLE,
     marginBottom: 6,
   },
-  previewRatingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
-  },
-  previewRatingText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 14,
-    color: MUTED,
-  },
   previewAddress: {
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
     lineHeight: 20,
     color: MUTED,
-    marginBottom: 12,
+    marginBottom: 8,
   },
-  previewStatusRow: {
+  previewRatingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 6,
     marginBottom: 16,
-    flexWrap: 'wrap',
   },
-  openPill: {
-    backgroundColor: 'rgba(27, 138, 112, 0.12)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  openPillText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 12,
-    color: TEAL,
-  },
-  closesText: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
+  previewRatingText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
     color: MUTED,
-    flex: 1,
   },
   aboutCta: {
     marginBottom: 10,
@@ -664,101 +548,16 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },
-  routeSheetTitle: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 18,
-    color: TITLE,
-    marginBottom: 12,
-  },
-  timeline: {
-    marginBottom: 0,
-  },
-  timelineRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-  },
-  timelineRail: {
-    width: 22,
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  timelineDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: GREEN,
-    marginTop: 14,
-  },
-  timelineLine: {
-    flex: 1,
-    width: 2,
-    backgroundColor: 'rgba(16, 163, 127, 0.35)',
-    minHeight: 24,
-    marginVertical: 2,
-  },
-  timelineCard: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    backgroundColor: '#F8F8F6',
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(122, 120, 120, 0.15)',
-  },
-  legIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(16, 163, 127, 0.16)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  timelineTextCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  legTitle: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 15,
-    lineHeight: 22,
-    color: TITLE,
-  },
-  legSubtitle: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    lineHeight: 19,
-    color: MUTED,
-    marginTop: 4,
-  },
-  legBadge: {
-    alignSelf: 'flex-start',
-    marginTop: 8,
-    backgroundColor: 'rgba(16, 163, 127, 0.2)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  legBadgeText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 11,
-    color: GREEN,
-  },
-  viewMoreCta: {
+  searchEmptyHint: {
+    marginTop: 10,
     alignSelf: 'center',
-    backgroundColor: GREEN,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 999,
-    paddingVertical: 11,
-    paddingHorizontal: 28,
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  viewMoreCtaLabel: {
-    fontFamily: 'Poppins_700Bold',
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    fontFamily: 'Inter_400Regular',
     fontSize: 12,
-    color: '#FFFFFF',
-    letterSpacing: 0.45,
+    color: MUTED,
+    overflow: 'hidden',
   },
 });

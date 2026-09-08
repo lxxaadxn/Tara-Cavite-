@@ -11,4 +11,18 @@ declare module 'cavitour-shared/mapPins' {
     lookups: unknown[],
     label: string
   ): string;
+  export function defaultMapPinRetinaDataUrl(label: string): string;
+  export function leafletPinIconOptions(
+    iconUrl: string | null | undefined,
+    label: string
+  ): {
+    iconUrl: string;
+    iconRetinaUrl: string;
+    iconSize: [number, number];
+    iconAnchor: [number, number];
+    popupAnchor: [number, number];
+    shadowUrl: string;
+    shadowSize: [number, number];
+    shadowAnchor: [number, number];
+  };
 }

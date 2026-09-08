@@ -16,6 +16,13 @@ CREATE TABLE IF NOT EXISTS public.announcements (
   establishment_owner_id UUID REFERENCES public.establishment_owners(id) ON DELETE SET NULL,
   is_published BOOLEAN NOT NULL DEFAULT TRUE,
   published_at TIMESTAMPTZ,
+  image_url TEXT,
+  action_url TEXT,
+  event_starts_at TIMESTAMPTZ,
+  event_ends_at TIMESTAMPTZ,
+  venue_name TEXT,
+  latitude DOUBLE PRECISION,
+  longitude DOUBLE PRECISION,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -98,7 +105,11 @@ DROP POLICY IF EXISTS "Anyone can read published announcements" ON public.announ
 CREATE POLICY "Anyone can read published announcements"
   ON public.announcements FOR SELECT
   TO anon, authenticated
-  USING (is_published = TRUE);
+  USING (
+    is_published = TRUE
+    AND published_at IS NOT NULL
+    AND published_at <= NOW()
+  );
 
 DROP POLICY IF EXISTS "Authors read own announcements" ON public.announcements;
 CREATE POLICY "Authors read own announcements"

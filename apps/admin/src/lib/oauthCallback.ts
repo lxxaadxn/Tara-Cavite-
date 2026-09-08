@@ -1,5 +1,8 @@
 import { supabase } from './supabase';
 
+/** Dedupe PKCE exchanges (React Strict Mode remounts + double navigations). */
+const exchangeByCode = new Map<string, Promise<void>>();
+
 function parseAuthParams(url: string) {
   const merged = new URLSearchParams();
   const hashIdx = url.indexOf('#');
@@ -18,22 +21,67 @@ export function urlHasOAuthParams(href: string) {
   return /[?&#](code|access_token|error)=/.test(href);
 }
 
+function isRecoverableOAuthExchangeError(message: string) {
+  return /oauth state has expired|flow_state_expired|flow_state_not_found|already been used|invalid flow state|code verifier/i.test(
+    message || ''
+  );
+}
+
+async function waitForExistingSession(attempts = 10, delayMs = 60) {
+  for (let i = 0; i < attempts; i += 1) {
+    const { data } = await supabase.auth.getSession();
+    if (data.session) return data.session;
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, delayMs);
+    });
+  }
+  return null;
+}
+
+async function exchangeCodeOnce(code: string) {
+  const cached = exchangeByCode.get(code);
+  if (cached) return cached;
+
+  const task = (async () => {
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (!error) return;
+
+    const session = await waitForExistingSession();
+    if (session) return;
+
+    if (isRecoverableOAuthExchangeError(error.message)) {
+      const retrySession = await waitForExistingSession(15, 80);
+      if (retrySession) return;
+    }
+    throw error;
+  })();
+
+  exchangeByCode.set(code, task);
+  try {
+    await task;
+  } catch (err) {
+    exchangeByCode.delete(code);
+    throw err;
+  }
+  return task;
+}
+
 export async function completeOAuthFromUrl(href: string) {
   const params = parseAuthParams(href);
   const oauthError = params.get('error');
   const oauthErrorDescription = params.get('error_description');
   if (oauthError) {
-    throw new Error(oauthErrorDescription || oauthError);
+    const detail = oauthErrorDescription || oauthError;
+    if (isRecoverableOAuthExchangeError(detail)) {
+      const session = await waitForExistingSession();
+      if (session) return;
+    }
+    throw new Error(detail);
   }
 
   const code = params.get('code');
   if (code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (error) {
-      const { data: existing } = await supabase.auth.getSession();
-      if (existing.session) return;
-      throw error;
-    }
+    await exchangeCodeOnce(code);
     return;
   }
 

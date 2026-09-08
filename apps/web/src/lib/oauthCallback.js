@@ -1,5 +1,8 @@
 import { supabase } from './supabase';
 
+/** Dedupe PKCE exchanges (React Strict Mode remounts + double navigations). */
+const exchangeByCode = new Map();
+
 /** Merge query string and hash fragment (Supabase PKCE `code` or implicit tokens). */
 export function parseAuthParams(url) {
   const merged = new URLSearchParams();
@@ -19,6 +22,54 @@ export function urlHasOAuthParams(href) {
   return /[?&#](code|access_token|error)=/.test(href);
 }
 
+/** Supabase wording varies ("state not found or expired", "flow_state_not_found", PKCE mismatch). */
+export function isStaleOAuthStateError(message) {
+  return /oauth state|flow_state|invalid flow state|code verifier|code_verifier|pkce/i.test(String(message || ''));
+}
+
+function isRecoverableOAuthExchangeError(message) {
+  return isStaleOAuthStateError(message) || /already been used/i.test(String(message || ''));
+}
+
+async function waitForExistingSession(attempts = 10, delayMs = 60) {
+  for (let i = 0; i < attempts; i += 1) {
+    const { data } = await supabase.auth.getSession();
+    if (data.session) return data.session;
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, delayMs);
+    });
+  }
+  return null;
+}
+
+async function exchangeCodeOnce(code) {
+  const cached = exchangeByCode.get(code);
+  if (cached) return cached;
+
+  const task = (async () => {
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (!error) return;
+
+    const session = await waitForExistingSession();
+    if (session) return;
+
+    if (isRecoverableOAuthExchangeError(error.message)) {
+      const retrySession = await waitForExistingSession(15, 80);
+      if (retrySession) return;
+    }
+    throw error;
+  })();
+
+  exchangeByCode.set(code, task);
+  try {
+    await task;
+  } catch (err) {
+    exchangeByCode.delete(code);
+    throw err;
+  }
+  return task;
+}
+
 /**
  * Exchange Google OAuth redirect params for a Supabase session (web SPA).
  * @param {string} href Full callback URL (location.href).
@@ -28,19 +79,17 @@ export async function completeOAuthFromUrl(href) {
   const oauthError = params.get('error');
   const oauthErrorDescription = params.get('error_description');
   if (oauthError) {
-    throw new Error(oauthErrorDescription || oauthError);
+    const detail = oauthErrorDescription || oauthError;
+    if (isRecoverableOAuthExchangeError(detail)) {
+      const session = await waitForExistingSession();
+      if (session) return;
+    }
+    throw new Error(detail);
   }
 
   const code = params.get('code');
   if (code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (error) {
-      const { data: existing } = await supabase.auth.getSession();
-      if (existing.session) {
-        return;
-      }
-      throw error;
-    }
+    await exchangeCodeOnce(code);
     return;
   }
 

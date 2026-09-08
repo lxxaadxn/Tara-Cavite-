@@ -4,6 +4,8 @@ export type LeafletMarker = {
   lat: number;
   lng: number;
   iconUrl?: string;
+  /** 2× pin so markers stay crisp on high-DPI screens. */
+  iconRetinaUrl?: string;
 };
 
 export type LeafletPreviewPoint = { x: number; y: number };

@@ -1,16 +1,41 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useToast } from '../components/Toast';
 import { useAuth } from '../contexts/AuthContext';
 import { useAdminPathPrefix } from '../contexts/AdminPathPrefixContext';
+import {
+  readAdminPreferences,
+  saveAdminPreferences,
+  type AdminPreferences,
+} from '../lib/adminProfile';
+import { supabase } from '../lib/supabase';
 import styles from './Settings.module.css';
 
 export function Settings() {
-  const [emailNotif, setEmailNotif] = useState(true);
-  const [pushNotif, setPushNotif] = useState(false);
-  const [compactMode, setCompactMode] = useState(false);
   const { signOut, session } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
   const routePrefix = useAdminPathPrefix();
+
+  // Same store the Profile page writes, so the two pages cannot disagree.
+  const savedPrefs = useMemo(() => readAdminPreferences(session?.user), [session?.user]);
+  const [prefs, setPrefs] = useState<AdminPreferences>(savedPrefs);
+  const [compactMode, setCompactMode] = useState(false);
+
+  useEffect(() => {
+    setPrefs(savedPrefs);
+  }, [savedPrefs]);
+
+  const togglePref = async (key: keyof AdminPreferences) => {
+    const next = { ...prefs, [key]: !prefs[key] };
+    setPrefs(next);
+    try {
+      await saveAdminPreferences(supabase, next);
+    } catch (err) {
+      setPrefs(prefs);
+      toast(err instanceof Error ? err.message : 'Could not save preference', 'error');
+    }
+  };
 
   const handleLogout = async () => {
     await signOut();
@@ -47,24 +72,32 @@ export function Settings() {
         <h3>Notifications</h3>
         <div className={styles.toggleRow}>
           <div>
-            <span className={styles.label}>Email Notifications</span>
-            <p className={styles.desc}>Receive email updates about new spots and reviews</p>
+            <span className={styles.label}>Establishment announcements</span>
+            <p className={styles.desc}>When an establishment posts an announcement</p>
           </div>
           <button
-            className={`${styles.toggle} ${emailNotif ? styles.on : ''}`}
-            onClick={() => setEmailNotif(!emailNotif)}
+            type="button"
+            role="switch"
+            aria-checked={prefs.establishmentAnnouncements}
+            aria-label="Establishment announcements"
+            className={`${styles.toggle} ${prefs.establishmentAnnouncements ? styles.on : ''}`}
+            onClick={() => void togglePref('establishmentAnnouncements')}
           >
             <span className={styles.knob} />
           </button>
         </div>
         <div className={styles.toggleRow}>
           <div>
-            <span className={styles.label}>Push Notifications</span>
-            <p className={styles.desc}>Get push notifications for important updates</p>
+            <span className={styles.label}>Establishment application activation</span>
+            <p className={styles.desc}>When an establishment sets a password for their invite</p>
           </div>
           <button
-            className={`${styles.toggle} ${pushNotif ? styles.on : ''}`}
-            onClick={() => setPushNotif(!pushNotif)}
+            type="button"
+            role="switch"
+            aria-checked={prefs.establishmentActivations}
+            aria-label="Establishment application activation"
+            className={`${styles.toggle} ${prefs.establishmentActivations ? styles.on : ''}`}
+            onClick={() => void togglePref('establishmentActivations')}
           >
             <span className={styles.knob} />
           </button>

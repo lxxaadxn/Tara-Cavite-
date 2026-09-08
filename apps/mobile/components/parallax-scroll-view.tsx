@@ -52,7 +52,7 @@ export default function ParallaxScrollView({
       <Animated.View
         style={[
           styles.header,
-          { backgroundColor: headerBackgroundColor[colorScheme] },
+          { backgroundColor: (headerBackgroundColor as Record<string, string>)[colorScheme] },
           headerAnimatedStyle,
         ]}>
         {headerImage}

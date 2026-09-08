@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ADMIN_ALLOWED_EMAIL, isAllowedAdminEmail } from '../lib/adminEmail';
+import { adminAllowlistHint, isAllowedAdminEmailAsync } from '../lib/adminEmail';
 import { completeOAuthFromUrl, urlHasOAuthParams, waitForSupabaseSession } from '../lib/oauthCallback';
+import { clearAdminOAuthNextPath, peekAdminOAuthNextPath } from '../lib/startGoogleOAuth';
 import { supabase } from '../lib/supabase';
 import { useAdminHref } from '../contexts/AdminPathPrefixContext';
 import styles from './LoginPage.module.css';
@@ -10,6 +11,17 @@ function safeNextPath(raw: string | null) {
   const next = String(raw ?? '').trim();
   if (!next.startsWith('/') || next.startsWith('//')) return null;
   return next;
+}
+
+function friendlyGoogleError(message: string) {
+  const text = String(message || '').trim();
+  if (/oauth state has expired|flow_state_expired|flow_state_not_found|invalid flow state/i.test(text)) {
+    return 'Google sign-in expired. Please try Sign in with Google again.';
+  }
+  if (/pkce code verifier/i.test(text)) {
+    return 'Google sign-in could not finish in this browser tab. Try again from http://localhost:3001/login.';
+  }
+  return text || 'Google sign in failed';
 }
 
 export function OAuthCallbackPage() {
@@ -21,7 +33,8 @@ export function OAuthCallbackPage() {
 
   useEffect(() => {
     let active = true;
-    const nextPath = safeNextPath(searchParams.get('next')) || dashboardHref;
+    const nextPath =
+      safeNextPath(searchParams.get('next')) || peekAdminOAuthNextPath() || dashboardHref;
 
     const finish = async () => {
       let authError: string | null = null;
@@ -30,11 +43,13 @@ export function OAuthCallbackPage() {
         const href = window.location.href;
         if (urlHasOAuthParams(href)) {
           await completeOAuthFromUrl(href);
+          clearAdminOAuthNextPath();
+          document.cookie = 'cavitour_oauth_intent=; path=/; max-age=0; SameSite=Lax';
           const cleanPath = window.location.pathname;
           window.history.replaceState({}, document.title, `${cleanPath}?next=${encodeURIComponent(nextPath)}`);
         }
       } catch (err) {
-        authError = err instanceof Error ? err.message : 'Google sign in failed';
+        authError = friendlyGoogleError(err instanceof Error ? err.message : 'Google sign in failed');
       }
 
       if (!active) return;
@@ -62,9 +77,9 @@ export function OAuthCallbackPage() {
       if (!active) return;
 
       const email = session?.user?.email?.trim().toLowerCase() ?? '';
-      if (!session || !isAllowedAdminEmail(email)) {
+      if (!session || !(await isAllowedAdminEmailAsync(supabase, email))) {
         await supabase.auth.signOut();
-        goLogin(`Only ${ADMIN_ALLOWED_EMAIL} can access the admin app.`);
+        goLogin(`Only ${adminAllowlistHint()} can access the admin app.`);
         return;
       }
 

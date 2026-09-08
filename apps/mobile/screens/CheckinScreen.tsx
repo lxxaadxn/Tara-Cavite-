@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import {
   extractCheckinCodeFromText,
@@ -78,7 +77,7 @@ const CheckinScreen: React.FC = () => {
   }, [initial, runCheckin]);
 
   return (
-    <SafeAreaView style={styles.root} edges={['top']}>
+    <View style={styles.root}>
       <Header
         title={params.fromDestinationReached ? 'Confirm arrival' : 'Check in'}
         showBack
@@ -114,7 +113,7 @@ const CheckinScreen: React.FC = () => {
           )}
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 

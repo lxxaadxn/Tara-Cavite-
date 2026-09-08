@@ -9,8 +9,8 @@
   "overrides": {
     "vite": "^7.3.1",
     "react-router-dom": "^7.13.0",
-    "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
   },
   "scripts": {
     "mobile": "npm run start --workspace=cavitour-mobile",
@@ -22,11 +22,10 @@
     "start": "npm run mobile",
     "dev": "npm run dev --workspace=cavitour-web",
     "web": "npm run dev --workspace=cavitour-web",
-    "web:build": "npm run build --workspace=cavitour-web",
-    "web:preview": "npm run preview --workspace=cavitour-web",
     "admin": "npm run dev --workspace=cavitour-admin",
-    "admin:build": "npm run build --workspace=cavitour-admin",
-    "admin:preview": "npm run preview --workspace=cavitour-admin",
+    "dev:both": "npx --yes concurrently -n web,admin -c cyan,magenta \"npm run web\" \"npm run admin\"",
+    "open:local": "node scripts/open-local-apps.mjs",
+    "web:build": "npm run build --workspace=cavitour-web",
     "build:icons": "node scripts/build-jam-svgs.mjs",
     "reset-project": "node scripts/reset-project.js",
     "cavite:import": "node scripts/import-sta-cavite-v3.mjs",

@@ -1,6 +1,22 @@
-import { Fragment, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
+import { Fragment, useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { ConfirmDialog } from './ConfirmDialog';
+import { RowMenu, type RowMenuItem } from './RowMenu';
+import { PencilIcon } from './rowIcons';
 import styles from './ContentCrudPage.module.css';
+
+const DEFAULT_PAGE_SIZE = 30;
+
+function pageList(current: number, total: number): (number | 'gap')[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const pages = new Set<number>([1, total, current, current - 1, current + 1]);
+  const sorted = [...pages].filter((p) => p >= 1 && p <= total).sort((a, b) => a - b);
+  const out: (number | 'gap')[] = [];
+  sorted.forEach((page, index) => {
+    if (index > 0 && page - sorted[index - 1] > 1) out.push('gap');
+    out.push(page);
+  });
+  return out;
+}
 
 function itemLabel<T extends { id: string }>(row: T): string {
   const rec = row as Record<string, unknown>;
@@ -11,11 +27,18 @@ function itemLabel<T extends { id: string }>(row: T): string {
   return '';
 }
 
+function pluralNoun(noun: string): string {
+  if (noun.endsWith('y')) return `${noun.slice(0, -1)}ies`;
+  if (/(s|x|z|ch|sh)$/.test(noun)) return `${noun}es`;
+  return `${noun}s`;
+}
+
 function itemNoun(title: string): string {
   const t = title.trim().toLowerCase();
   if (t === 'tourist attractions') return 'attraction';
   if (t === 'cities/municipalities' || t === 'cities') return 'city';
   if (t === 'municipalities') return 'municipality';
+  if (t === 'categories') return 'category';
   if (t.endsWith('ies')) return `${t.slice(0, -3)}y`;
   if (t.endsWith('s')) return t.slice(0, -1);
   return t || 'item';
@@ -30,12 +53,16 @@ export type CrudColumn<T> = {
 export type CrudField = {
   key: string;
   label: string;
-  type?: 'text' | 'number' | 'textarea' | 'select' | 'checkbox';
+  type?: 'text' | 'number' | 'textarea' | 'select' | 'checkbox' | 'datetime-local';
   placeholder?: string;
+  /** Shown under the control (preferred over long placeholders). */
+  helpText?: string;
   options?: { value: string; label: string }[];
   required?: boolean;
   /** In wide modal grid, span both columns. */
   span?: 'full' | 'half';
+  /** Skip rendering when false. */
+  visibleWhen?: (form: Record<string, unknown>) => boolean;
 };
 
 export type CrudExtraFormCtx<T extends { id: string }> = {
@@ -74,6 +101,16 @@ type Props<T extends { id: string }> = {
   renderExtraForm?: (ctx: CrudExtraFormCtx<T>) => ReactNode;
   /** Extra UI after a named field (e.g. map under Google Maps link). */
   renderAfterField?: (key: string, ctx: CrudExtraFormCtx<T>) => ReactNode;
+  /** Dropdowns beside search (e.g. city / municipality). */
+  selectFilters?: {
+    key: string;
+    label: string;
+    value: string;
+    options: { value: string; label: string }[];
+    onChange: (value: string) => void;
+  }[];
+  /** Additional row predicate after status + search. */
+  rowFilter?: (row: T) => boolean;
   /** Called when the modal closes (cancel, overlay, or successful save). */
   onModalClose?: () => void;
   /** Called when the Add modal opens (reset staging state). */
@@ -82,6 +119,16 @@ type Props<T extends { id: string }> = {
   modalSize?: 'default' | 'wide';
   /** Size to content when nested (e.g. landing page). */
   embedded?: boolean;
+  /** Override columns based on the active status tab. */
+  getColumns?: (status: string) => CrudColumn<T>[];
+  /** Extra entries listed above Delete in the row's kebab menu. */
+  rowMenuItems?: (row: T, ctx: { status: string; saving: boolean }) => RowMenuItem[];
+  /** Primary save button label (defaults to Save / Saving…). */
+  saveLabel?: string | ((form: Omit<T, 'id'>) => string);
+  /** Show Delete in the edit modal footer (requires onDelete). Default true when onDelete is set. */
+  modalDelete?: boolean;
+  /** Rows per page. 0 lists every row; embedded tables are never paginated. */
+  pageSize?: number;
 };
 
 function newId() {
@@ -109,15 +156,24 @@ export function ContentCrudPage<T extends { id: string }>({
   error = null,
   renderExtraForm,
   renderAfterField,
+  selectFilters,
+  rowFilter,
   onModalClose,
   onOpenCreate,
   modalSize = 'default',
   embedded = false,
+  getColumns,
+  rowMenuItems,
+  saveLabel,
+  modalDelete,
+  pageSize = DEFAULT_PAGE_SIZE,
 }: Props<T>) {
   const isWide = modalSize === 'wide';
   const isLive = Boolean(onCreate || onUpdate || onDelete);
+  const showModalDelete = modalDelete ?? Boolean(onDelete);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
+  const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Omit<T, 'id'>>(emptyForm);
@@ -127,14 +183,38 @@ export function ContentCrudPage<T extends { id: string }>({
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  const activeColumns = useMemo(
+    () => (getColumns ? getColumns(status) : columns),
+    [getColumns, columns, status]
+  );
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rows.filter((row) => {
       if (statusFilter && status !== 'all' && !statusFilter.match(row, status)) return false;
+      if (rowFilter && !rowFilter(row)) return false;
       if (!q) return true;
       return searchKeys.some((key) => String(row[key] ?? '').toLowerCase().includes(q));
     });
-  }, [rows, query, status, searchKeys, statusFilter]);
+  }, [rows, query, status, searchKeys, statusFilter, rowFilter]);
+
+  const paginated = !embedded && pageSize > 0;
+  const pageCount = paginated ? Math.max(1, Math.ceil(filtered.length / pageSize)) : 1;
+  const currentPage = Math.min(page, pageCount);
+  const pageStart = paginated ? (currentPage - 1) * pageSize : 0;
+  const visible = paginated ? filtered.slice(pageStart, pageStart + pageSize) : filtered;
+
+  const noun = itemNoun(title);
+  const pageSummary =
+    filtered.length === 0
+      ? `Showing 0 ${pluralNoun(noun)}`
+      : `Showing ${pageStart + 1}–${pageStart + visible.length} of ${filtered.length} ${
+          filtered.length === 1 ? noun : pluralNoun(noun)
+        }`;
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, status, filtered.length]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -221,6 +301,12 @@ export function ContentCrudPage<T extends { id: string }>({
       try {
         await onDelete(id);
         setPendingDelete(null);
+        if (modalOpen && editingId === id) {
+          setModalOpen(false);
+          setEditingId(null);
+          setForm(emptyForm);
+          onModalClose?.();
+        }
       } catch (e) {
         setDeleteError(e instanceof Error ? e.message : 'Delete failed');
       } finally {
@@ -231,6 +317,12 @@ export function ContentCrudPage<T extends { id: string }>({
 
     onChange?.(rows.filter((r) => r.id !== id));
     setPendingDelete(null);
+    if (modalOpen && editingId === id) {
+      setModalOpen(false);
+      setEditingId(null);
+      setForm(emptyForm);
+      onModalClose?.();
+    }
   };
 
   const setField = (key: string, value: string | number | boolean) => {
@@ -239,6 +331,21 @@ export function ContentCrudPage<T extends { id: string }>({
 
   const searchAndAdd = (
     <div className={styles.toolbarRight}>
+      {(selectFilters ?? []).map((filter) => (
+        <select
+          key={filter.key}
+          className={styles.filterSelect}
+          value={filter.value}
+          aria-label={filter.label}
+          onChange={(e) => filter.onChange(e.target.value)}
+        >
+          {filter.options.map((opt) => (
+            <option key={opt.value || `${filter.key}-all`} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      ))}
       <label className={styles.search}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
           <circle cx="11" cy="11" r="8" />
@@ -251,9 +358,11 @@ export function ContentCrudPage<T extends { id: string }>({
           onChange={(e) => setQuery(e.target.value)}
         />
       </label>
-      <button type="button" className={styles.primaryBtn} onClick={openCreate} disabled={loading || saving}>
-        {addLabel}
-      </button>
+      {onCreate ? (
+        <button type="button" className={styles.primaryBtn} onClick={openCreate} disabled={loading || saving}>
+          {addLabel}
+        </button>
+      ) : null}
     </div>
   );
 
@@ -298,43 +407,48 @@ export function ContentCrudPage<T extends { id: string }>({
         <table className={styles.table}>
           <thead>
             <tr>
-              {columns.map((col) => (
+              {activeColumns.map((col) => (
                 <th key={col.key}>{col.header}</th>
               ))}
-              <th>Actions</th>
+              <th className={styles.actionsHead}>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {!loading && filtered.length === 0 ? (
+            {!loading && visible.length === 0 ? (
               <tr className={styles.rowCard}>
-                <td colSpan={columns.length + 1} className={styles.empty}>
+                <td colSpan={activeColumns.length + 1} className={styles.empty}>
                   No records match your search.
                 </td>
               </tr>
             ) : (
-              filtered.map((row) => (
+              visible.map((row) => (
                 <tr key={row.id} className={styles.rowCard}>
-                  {columns.map((col) => (
+                  {activeColumns.map((col) => (
                     <td key={col.key}>{col.render(row)}</td>
                   ))}
-                  <td>
-                    <div className={styles.actions}>
+                  <td className={styles.actionsHead}>
+                    <div className={styles.rowTools}>
                       <button
                         type="button"
-                        className={styles.actionBtn}
+                        className={styles.iconBtn}
+                        aria-label={`Edit ${itemLabel(row) || noun}`}
+                        title="Edit"
                         onClick={() => openEdit(row)}
                         disabled={saving}
                       >
-                        Edit
+                        <PencilIcon />
                       </button>
-                      <button
-                        type="button"
-                        className={`${styles.actionBtn} ${styles.danger}`}
-                        onClick={() => requestRemove(row)}
-                        disabled={saving || deleting}
-                      >
-                        Delete
-                      </button>
+                      <RowMenu
+                        label={`More actions for ${itemLabel(row) || noun}`}
+                        items={[
+                          ...(rowMenuItems?.(row, { status, saving }) ?? []),
+                          {
+                            label: 'Delete',
+                            onSelect: () => requestRemove(row),
+                            danger: true,
+                          },
+                        ]}
+                      />
                     </div>
                   </td>
                 </tr>
@@ -342,6 +456,47 @@ export function ContentCrudPage<T extends { id: string }>({
             )}
           </tbody>
         </table>
+
+        {paginated ? (
+          <div className={styles.pagination}>
+            <span className={styles.pageInfo}>{pageSummary}</span>
+            <div className={styles.pageBtns}>
+              <button
+                type="button"
+                className={styles.pageBtn}
+                onClick={() => setPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage <= 1}
+              >
+                Prev
+              </button>
+              {pageList(currentPage, pageCount).map((item, index) =>
+                item === 'gap' ? (
+                  <span key={`gap-${index}`} className={styles.pageGap}>
+                    …
+                  </span>
+                ) : (
+                  <button
+                    key={item}
+                    type="button"
+                    className={`${styles.pageBtn} ${item === currentPage ? styles.pageBtnActive : ''}`}
+                    aria-current={item === currentPage ? 'page' : undefined}
+                    onClick={() => setPage(item)}
+                  >
+                    {item}
+                  </button>
+                )
+              )}
+              <button
+                type="button"
+                className={styles.pageBtn}
+                onClick={() => setPage(Math.min(pageCount, currentPage + 1))}
+                disabled={currentPage >= pageCount}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {modalOpen ? (
@@ -353,9 +508,12 @@ export function ContentCrudPage<T extends { id: string }>({
             aria-labelledby="crud-modal-title"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 id="crud-modal-title">{editingId ? 'Edit' : 'Add'} {title.replace(/s$/, '')}</h2>
+            <h2 id="crud-modal-title">{editingId ? 'Edit' : 'Add'} {itemNoun(title)}</h2>
             <div className={isWide ? styles.formGrid : styles.form}>
               {fields.map((field) => {
+                if (field.visibleWhen && !field.visibleWhen(form as Record<string, unknown>)) {
+                  return null;
+                }
                 const value = (form as Record<string, unknown>)[field.key];
                 const spanFull =
                   field.span === 'full' ||
@@ -363,20 +521,24 @@ export function ContentCrudPage<T extends { id: string }>({
                   field.type === 'checkbox';
                 const fieldClass = `${styles.field}${spanFull && isWide ? ` ${styles.spanFull}` : ''}`;
                 const extraCtx = { form, setForm, editingId, saving };
+                const help = field.helpText ? (
+                  <span className={styles.fieldHelp}>{field.helpText}</span>
+                ) : null;
                 let control: ReactNode;
                 if (field.type === 'checkbox') {
                   control = (
-                    <label
-                      className={`${styles.checkLabel}${isWide ? ` ${styles.spanFull}` : ''}`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={Boolean(value)}
-                        onChange={(e) => setField(field.key, e.target.checked)}
-                        disabled={saving}
-                      />
-                      {field.label}
-                    </label>
+                    <div className={isWide ? styles.spanFull : undefined}>
+                      <label className={styles.checkLabel}>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(value)}
+                          onChange={(e) => setField(field.key, e.target.checked)}
+                          disabled={saving}
+                        />
+                        {field.label}
+                      </label>
+                      {help}
+                    </div>
                   );
                 } else if (field.type === 'textarea') {
                   control = (
@@ -385,10 +547,11 @@ export function ContentCrudPage<T extends { id: string }>({
                       <textarea
                         value={String(value ?? '')}
                         placeholder={field.placeholder}
-                        rows={3}
+                        rows={5}
                         onChange={(e) => setField(field.key, e.target.value)}
                         disabled={saving}
                       />
+                      {help}
                     </label>
                   );
                 } else if (field.type === 'select') {
@@ -414,14 +577,21 @@ export function ContentCrudPage<T extends { id: string }>({
                           </option>
                         ))}
                       </select>
+                      {help}
                     </label>
                   );
                 } else {
+                  const inputType =
+                    field.type === 'number'
+                      ? 'number'
+                      : field.type === 'datetime-local'
+                        ? 'datetime-local'
+                        : 'text';
                   control = (
                     <label className={fieldClass}>
                       {field.label}
                       <input
-                        type={field.type === 'number' ? 'number' : 'text'}
+                        type={inputType}
                         value={value == null ? '' : String(value)}
                         placeholder={field.placeholder}
                         required={field.required}
@@ -433,6 +603,7 @@ export function ContentCrudPage<T extends { id: string }>({
                         }
                         disabled={saving}
                       />
+                      {help}
                     </label>
                   );
                 }
@@ -451,12 +622,33 @@ export function ContentCrudPage<T extends { id: string }>({
             </div>
             {actionError ? <p className={styles.loadError}>{actionError}</p> : null}
             <div className={styles.modalActions}>
-              <button type="button" className={styles.actionBtn} onClick={closeModal} disabled={saving}>
-                Cancel
-              </button>
-              <button type="button" className={styles.primaryBtn} onClick={() => void save()} disabled={saving}>
-                {saving ? 'Saving…' : 'Save'}
-              </button>
+              {showModalDelete && editingId ? (
+                <button
+                  type="button"
+                  className={styles.modalDeleteBtn}
+                  onClick={() => {
+                    const row = rows.find((r) => r.id === editingId);
+                    if (row) requestRemove(row);
+                  }}
+                  disabled={saving || deleting}
+                >
+                  Delete
+                </button>
+              ) : (
+                <span className={styles.modalActionsSpacer} aria-hidden />
+              )}
+              <div className={styles.modalActionsRight}>
+                <button type="button" className={styles.actionBtn} onClick={closeModal} disabled={saving}>
+                  Cancel
+                </button>
+                <button type="button" className={styles.primaryBtn} onClick={() => void save()} disabled={saving}>
+                  {saving
+                    ? 'Saving…'
+                    : typeof saveLabel === 'function'
+                      ? saveLabel(form)
+                      : saveLabel || 'Save'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -486,9 +678,18 @@ export function ContentCrudPage<T extends { id: string }>({
 export function CrudBadge({
   label,
   tone = 'neutral',
+  icon,
+  title,
 }: {
   label: string;
   tone?: 'neutral' | 'green' | 'amber' | 'red' | 'blue';
+  icon?: ReactNode;
+  title?: string;
 }) {
-  return <span className={`${styles.badge} ${styles[`tone_${tone}`]}`}>{label}</span>;
+  return (
+    <span className={`${styles.badge} ${styles[`tone_${tone}`]}`} title={title}>
+      {icon}
+      {label}
+    </span>
+  );
 }

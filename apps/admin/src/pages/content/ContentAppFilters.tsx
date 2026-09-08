@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { shortLabelForNtdpCategory } from 'cavitour-shared/ntdpFilterMeta';
 import { ContentCrudPage, CrudBadge } from '../../components/ContentCrudPage';
 import {
-  createFilterLookup,
   deleteFilterLookup,
   fetchNtdpLookupRows,
   updateFilterLookup,
@@ -49,11 +48,6 @@ export function ContentAppFilters() {
     void reload();
   }, [reload]);
 
-  const handleCreate = async (form: Omit<NtdpFilterCrud, 'id'>) => {
-    await createFilterLookup(supabase, { label: form.label, kind: 'ntdp' });
-    await reload();
-  };
-
   const handleUpdate = async (id: string, form: Omit<NtdpFilterCrud, 'id'>) => {
     await updateFilterLookup(supabase, id, { label: form.label, kind: 'ntdp' });
     await reload();
@@ -66,13 +60,11 @@ export function ContentAppFilters() {
 
   return (
     <ContentCrudPage<NtdpFilterCrud>
-      title="Filters"
+      title="App/Web Filter"
       rows={rows}
       loading={loading}
       error={error}
       emptyForm={emptyForm}
-      addLabel="Add NTDP category"
-      onCreate={handleCreate}
       onUpdate={handleUpdate}
       onDelete={handleDelete}
       searchKeys={['label']}

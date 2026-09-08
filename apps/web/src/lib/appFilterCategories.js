@@ -4,6 +4,43 @@ import { WEB_CATEGORY_OPTIONS } from './dashboardFilterOptions';
 
 /** @typedef {{ key: string, label: string, shortLabel: string, icon: string, matchKeywords: string[], ntdpName?: string }} AppFilterCategoryOption */
 
+/** Hide Education from Search quick pills and Filter modal. */
+const HIDDEN_SEARCH_CATEGORY_FOLDS = new Set([
+  'education',
+  'educational',
+  'educational tourism',
+]);
+
+function foldCategoryLabel(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[/&,]+/g, ' ')
+    .replace(/\s+tourism$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** @param {AppFilterCategoryOption | null | undefined} opt */
+export function isHiddenSearchCategory(opt) {
+  const fold = foldCategoryLabel(opt?.shortLabel || opt?.label || opt?.ntdpName || opt?.key);
+  if (!fold) return false;
+  if (HIDDEN_SEARCH_CATEGORY_FOLDS.has(fold)) return true;
+  for (const hidden of HIDDEN_SEARCH_CATEGORY_FOLDS) {
+    if (fold.includes(hidden)) return true;
+  }
+  return false;
+}
+
+/**
+ * @param {AppFilterCategoryOption[] | null | undefined} options
+ * @returns {AppFilterCategoryOption[]}
+ */
+export function visibleSearchCategoryOptions(options) {
+  return (options ?? []).filter((o) => !isHiddenSearchCategory(o));
+}
+
 /**
  * @param {any[]} rows
  * @returns {AppFilterCategoryOption[]}

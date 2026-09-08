@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   Modal,
   View,
   Text,
@@ -28,12 +27,10 @@ import {
 } from '../lib/supabase';
 import { isNetworkErrorMsg, NETWORK_ERROR_USER_MESSAGE, withAuthRetry } from '../lib/authHelpers';
 import { signInWithGoogleMobile } from '../lib/googleAuth';
-import { getAdminReservedEmailMessage, isAdminReservedEmail } from '../lib/adminReservedEmail';
+import { getAdminReservedEmailMessage, isAdminReservedEmailAsync } from '../lib/adminReservedEmail';
 import { markMobileLocationPromptPending } from '../components/LocationPermissionModal';
 import { TRAVELER_ACCOUNT_DISABLED_MESSAGE } from 'cavitour-shared/accountStatus';
-import { siteContentValue } from 'cavitour-shared/siteContent';
 import { rejectDisabledTraveler } from '../lib/rejectDisabledTraveler';
-import { useSiteContent } from '../lib/useSiteContent';
 
 const MUTED = '#737373';
 const BORDER = '#E5E5E5';
@@ -57,9 +54,7 @@ function toFriendlyLoginError(error: unknown): string {
 const SignInScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
-  const cms = useSiteContent();
   const loginWelcome = 'Welcome back! Enter your details to continue exploring';
-  const loginBanner = siteContentValue(cms, 'auth.login.banner_url');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
@@ -132,7 +127,7 @@ const SignInScreen: React.FC = () => {
       setFormError('Please enter a valid email address.');
       return;
     }
-    if (isAdminReservedEmail(trimmedEmail)) {
+    if (await isAdminReservedEmailAsync(trimmedEmail)) {
       setFormError(getAdminReservedEmailMessage());
       return;
     }
@@ -243,11 +238,13 @@ const SignInScreen: React.FC = () => {
   };
 
   const goForgot = () => {
-    const parent = navigation.getParent();
+    const parent = navigation.getParent() as unknown as {
+      navigate: (name: string, params: object) => void;
+    } | null;
     if (parent) {
-      parent.navigate('Auth' as never, { screen: 'ForgotPassword' } as never);
+      parent.navigate('Auth', { screen: 'ForgotPassword' });
     } else {
-      navigation.navigate('ForgotPassword' as never);
+      (navigation as unknown as { navigate: (name: string) => void }).navigate('ForgotPassword');
     }
   };
 
@@ -286,10 +283,6 @@ const SignInScreen: React.FC = () => {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.form}>
-            {loginBanner ? (
-              <Image source={{ uri: loginBanner }} style={styles.loginBanner} resizeMode="cover" />
-            ) : null}
-
             <View style={styles.brandWrap}>
               <LogoWordmark />
             </View>
@@ -387,7 +380,12 @@ const SignInScreen: React.FC = () => {
 
             <View style={styles.footerRow}>
               <Text style={styles.footerMuted}>New here? </Text>
-              <TouchableOpacity onPress={() => navigation.navigate('SignUp')} accessibilityRole="button">
+              <TouchableOpacity
+                onPress={() =>
+                  (navigation as unknown as { navigate: (name: string) => void }).navigate('SignUp')
+                }
+                accessibilityRole="button"
+              >
                 <Text style={styles.footerLink}>Sign up</Text>
               </TouchableOpacity>
             </View>
@@ -413,13 +411,6 @@ const styles = StyleSheet.create({
   },
   form: {
     width: '100%',
-  },
-  loginBanner: {
-    width: '100%',
-    height: 140,
-    borderRadius: 16,
-    marginBottom: 16,
-    backgroundColor: '#FFFFFF',
   },
   brandWrap: {
     alignItems: 'center',

@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { Header, HeaderAction } from '../components/Header';
 import { JamIcon } from '../components/JamIcon';
 import type { JamIconName } from '../lib/jamSvgMap';
 import { legacyIoniconToJam } from '../lib/legacyIoniconToJam';
@@ -147,24 +148,14 @@ const NewListScreen: React.FC = () => {
 
   return (
     <View style={styles.root}>
-      <View style={[styles.greenHeader, { paddingTop: insets.top + 8 }]}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            style={styles.headerIconBtn}
-            onPress={() => navigation.goBack()}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <JamIcon ionicon="chevron-left" size={26} color={WHITE} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={1} pointerEvents="none">
-            {isEditing ? 'Edit List' : 'New List'}
-          </Text>
-          <TouchableOpacity
-            style={styles.headerIconBtn}
+      <Header
+        title={isEditing ? 'Edit List' : 'New List'}
+        showBack
+        darkBackground
+        right={
+          <HeaderAction
             onPress={handleSave}
             disabled={saving || !canSave}
-            accessibilityRole="button"
             accessibilityLabel={isEditing ? 'Save changes' : 'Save list'}
           >
             {saving ? (
@@ -172,9 +163,9 @@ const NewListScreen: React.FC = () => {
             ) : (
               <JamIcon ionicon="checkmark" size={24} color={canSave ? WHITE : 'rgba(255,255,255,0.45)'} />
             )}
-          </TouchableOpacity>
-        </View>
-      </View>
+          </HeaderAction>
+        }
+      />
 
       <ScrollView
         style={styles.scroll}
@@ -281,30 +272,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: WHITE,
-  },
-  greenHeader: {
-    backgroundColor: GREEN,
-    paddingBottom: 12,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
-  },
-  headerIconBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 20,
-    lineHeight: 24,
-    color: WHITE,
-    textAlign: 'center',
   },
   scroll: {
     flex: 1,

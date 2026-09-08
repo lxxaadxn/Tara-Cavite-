@@ -9,6 +9,23 @@ export const ESTABLISHMENT_MANAGEMENT_SQL_HINT =
 export const ESTABLISHMENT_INVITE_FN_HINT =
   'Deploy the invite-establishment Edge Function (see ESTABLISHMENT_INVITE_ADMIN.sql), then try again.';
 
+/** The admin write policies live in a different SQL file than the invite setup. */
+export const ESTABLISHMENT_ADMIN_WRITE_HINT =
+  'Supabase blocked this change. Run ESTABLISHMENT_MANAGEMENT_ADMIN.sql in the SQL Editor — it creates the "Admins update establishment owners" policy — then try again.';
+
+const ESTABLISHMENT_ADMIN_SESSION_HINT =
+  'Supabase does not recognise this session as an admin, so the change was blocked. Add this email to the admin allowlist (Settings → Admin access), then sign out and back in.';
+
+/**
+ * A write that changes no rows means RLS filtered it out. Ask Supabase whether
+ * the session is admin so the message names the actual cause.
+ */
+async function blockedWriteError(client: SupabaseClient): Promise<Error> {
+  const { data, error } = await client.rpc('is_cavitour_session_admin');
+  if (!error && data === false) return new Error(ESTABLISHMENT_ADMIN_SESSION_HINT);
+  return new Error(ESTABLISHMENT_ADMIN_WRITE_HINT);
+}
+
 export type OwnerVerificationStatus =
   | 'pending'
   | 'under_review'
@@ -19,7 +36,7 @@ export type OwnerVerificationStatus =
 
 export type OwnerAccountStatus = 'active' | 'disabled' | 'deleted';
 
-export type EstablishmentListMode = 'all' | 'pending' | 'deactivated';
+export type EstablishmentListMode = 'all' | 'pending' | 'deactivated' | 'drafts';
 
 export type AdminEstablishment = {
   id: string;
@@ -29,8 +46,11 @@ export type AdminEstablishment = {
   businessName: string;
   businessType: string;
   lgu: string;
+  barangay: string;
   address: string;
   googleMapsLink: string;
+  /** Optional note the admin recorded when inviting this establishment. */
+  inviteMessage: string;
   avatarUrl: string | null;
   verificationStatus: OwnerVerificationStatus;
   accountStatus: OwnerAccountStatus;
@@ -50,11 +70,14 @@ export type EstablishmentProfilePatch = {
   businessName: string;
   businessType: string;
   lgu: string;
+  barangay: string;
   address: string;
   googleMapsLink: string;
   fullName: string;
   phone: string;
   email: string;
+  /** Only written when present, so detail-page edits leave the note alone. */
+  inviteMessage?: string;
 };
 
 export type InviteEstablishmentInput = {
@@ -64,15 +87,45 @@ export type InviteEstablishmentInput = {
   businessType: string;
   address: string;
   lgu: string;
+  barangay?: string;
   phone?: string;
   googleMapsLink?: string;
+  inviteMessage?: string;
 };
 
-const SELECT_FULL =
-  'id, email, full_name, phone, business_name, business_type, lgu, address, google_maps_link, avatar_url, verification_status, account_status, notes, created_at, invited_at, setup_completed_at, public_visible, sta_place_id, place_checkin_codes!establishment_owners_sta_place_id_fkey(code, is_active)';
+/** Columns every install has, back to the original owners table. */
+const SELECT_CORE = [
+  'id',
+  'email',
+  'full_name',
+  'phone',
+  'business_name',
+  'business_type',
+  'lgu',
+  'address',
+  'google_maps_link',
+  'avatar_url',
+  'verification_status',
+  'account_status',
+  'notes',
+  'created_at',
+  'sta_place_id',
+];
 
-const SELECT_BASE =
-  'id, email, full_name, phone, business_name, business_type, lgu, address, google_maps_link, avatar_url, verification_status, account_status, notes, created_at, sta_place_id';
+/** Added by later SQL files. Each is dropped on its own if the DB lacks it. */
+const SELECT_OPTIONAL = [
+  'barangay',
+  'invite_message',
+  'invited_at',
+  'setup_completed_at',
+  'public_visible',
+  'place_checkin_codes!establishment_owners_sta_place_id_fkey(code, is_active)',
+];
+
+/** Name Postgres would use for a select part, e.g. the table of an embed. */
+function selectPartName(part: string): string {
+  return part.split('!')[0].split('(')[0].trim();
+}
 
 function isMissingRelationError(error: { message?: string; code?: string } | null): boolean {
   if (!error) return false;
@@ -152,8 +205,10 @@ function mapRow(row: Record<string, unknown>): AdminEstablishment {
     businessName,
     businessType: String(row.business_type ?? '').trim(),
     lgu: String(row.lgu ?? '').trim(),
+    barangay: String(row.barangay ?? '').trim(),
     address: String(row.address ?? '').trim(),
     googleMapsLink: String(row.google_maps_link ?? '').trim(),
+    inviteMessage: String(row.invite_message ?? '').trim(),
     avatarUrl: String(row.avatar_url ?? '').trim() || null,
     verificationStatus: parseVerification(row.verification_status),
     accountStatus: parseAccount(row.account_status),
@@ -168,6 +223,29 @@ function mapRow(row: Record<string, unknown>): AdminEstablishment {
   };
 }
 
+const TITLE_CASE_MINOR_WORDS = new Set(['a', 'an', 'and', 'at', 'by', 'de', 'del', 'for', 'in', 'ng', 'of', 'on', 'or', 'the', 'to']);
+
+/** Display-only Title Case; stored Supabase values are never rewritten. */
+export function toTitleCase(value: string): string {
+  const trimmed = (value ?? '').trim();
+  if (!trimmed) return '';
+  return trimmed
+    .toLowerCase()
+    .split(/(\s+)/)
+    .map((chunk, index) => {
+      if (!chunk.trim()) return chunk;
+      return chunk
+        .split(/([-'/.])/)
+        .map((part, partIndex) => {
+          if (!/[a-z0-9]/.test(part)) return part;
+          if (index > 0 && partIndex === 0 && TITLE_CASE_MINOR_WORDS.has(part)) return part;
+          return part.charAt(0).toUpperCase() + part.slice(1);
+        })
+        .join('');
+    })
+    .join('');
+}
+
 export function isPendingSetup(row: AdminEstablishment): boolean {
   return (
     row.accountStatus === 'active' &&
@@ -178,6 +256,7 @@ export function isPendingSetup(row: AdminEstablishment): boolean {
 
 export function matchesEstablishmentList(row: AdminEstablishment, mode: EstablishmentListMode): boolean {
   if (row.accountStatus === 'deleted') return false;
+  if (mode === 'drafts') return false;
   if (mode === 'pending') return isPendingSetup(row);
   if (mode === 'deactivated') return row.accountStatus === 'disabled';
   return true;
@@ -199,11 +278,25 @@ export function setupLabel(row: AdminEstablishment): string {
   return verificationLabel(row.verificationStatus);
 }
 
+/**
+ * Read the owners, dropping only the optional columns this database is missing.
+ * A single unknown column used to knock out the whole optional set, which left
+ * the UI reading public_visible (and the invite dates) as blank forever.
+ */
 async function selectOwners(client: SupabaseClient) {
-  const full = await client.from('establishment_owners').select(SELECT_FULL).order('created_at', { ascending: false });
-  if (!full.error) return full;
-  const base = await client.from('establishment_owners').select(SELECT_BASE).order('created_at', { ascending: false });
-  return base;
+  let optional = [...SELECT_OPTIONAL];
+
+  for (;;) {
+    const result = await client
+      .from('establishment_owners')
+      .select([...SELECT_CORE, ...optional].join(', '))
+      .order('created_at', { ascending: false });
+    if (!result.error || optional.length === 0) return result;
+
+    const message = `${result.error.message ?? ''} ${result.error.details ?? ''}`.toLowerCase();
+    const offending = optional.find((part) => message.includes(selectPartName(part).toLowerCase()));
+    optional = offending ? optional.filter((part) => part !== offending) : [];
+  }
 }
 
 export async function fetchAdminEstablishments(client: SupabaseClient): Promise<AdminEstablishment[]> {
@@ -225,20 +318,31 @@ export async function updateEstablishmentProfile(
   id: string,
   patch: EstablishmentProfilePatch
 ): Promise<void> {
-  const { error } = await client
+  const { data, error } = await client
     .from('establishment_owners')
     .update({
       business_name: patch.businessName.trim() || null,
       business_type: patch.businessType.trim() || null,
       lgu: patch.lgu.trim() || null,
+      barangay: patch.barangay.trim() || null,
       address: patch.address.trim() || null,
       google_maps_link: patch.googleMapsLink.trim() || null,
       full_name: patch.fullName.trim() || null,
       phone: patch.phone.trim() || null,
       email: patch.email.trim() || null,
     })
-    .eq('id', id);
+    .eq('id', id)
+    .select('id');
   if (error) throw friendlyAdminError(error, 'Failed to update establishment');
+  if (!data || data.length === 0) throw await blockedWriteError(client);
+
+  if (patch.inviteMessage !== undefined) {
+    // Older databases predate this column; the profile edit still counts.
+    await client
+      .from('establishment_owners')
+      .update({ invite_message: patch.inviteMessage.trim() || null })
+      .eq('id', id);
+  }
 }
 
 export async function setEstablishmentAccountStatus(
@@ -246,8 +350,15 @@ export async function setEstablishmentAccountStatus(
   id: string,
   status: 'active' | 'disabled'
 ): Promise<void> {
-  const { error } = await client.from('establishment_owners').update({ account_status: status }).eq('id', id);
+  const { data, error } = await client
+    .from('establishment_owners')
+    .update({ account_status: status })
+    .eq('id', id)
+    .select('id, account_status');
   if (error) throw friendlyAdminError(error, 'Failed to update account status');
+  // RLS hides rows the session may not write, so a blocked update looks like a
+  // success with nothing changed. Treat that as the permission error it is.
+  if (!data || data.length === 0) throw await blockedWriteError(client);
 }
 
 export async function setEstablishmentPublicVisible(
@@ -255,8 +366,13 @@ export async function setEstablishmentPublicVisible(
   id: string,
   publicVisible: boolean
 ): Promise<void> {
-  const { error } = await client.from('establishment_owners').update({ public_visible: publicVisible }).eq('id', id);
+  const { data, error } = await client
+    .from('establishment_owners')
+    .update({ public_visible: publicVisible })
+    .eq('id', id)
+    .select('id, public_visible');
   if (error) throw friendlyAdminError(error, 'Failed to update public visibility');
+  if (!data || data.length === 0) throw await blockedWriteError(client);
 }
 
 async function readFunctionError(error: unknown, data: unknown): Promise<string> {
@@ -294,8 +410,10 @@ export async function inviteEstablishment(
       businessType: input.businessType.trim(),
       lgu: input.lgu.trim(),
       address: input.address.trim(),
+      barangay: (input.barangay ?? '').trim(),
       phone: (input.phone ?? '').trim(),
       googleMapsLink: (input.googleMapsLink ?? '').trim(),
+      inviteMessage: (input.inviteMessage ?? '').trim(),
       redirectTo,
       resend,
     },
@@ -303,7 +421,19 @@ export async function inviteEstablishment(
   if (error) throw new Error(await readFunctionError(error, data));
   const payload = data as { error?: string; ownerId?: string } | null;
   if (payload?.error) throw new Error(payload.error);
-  return { ownerId: payload?.ownerId };
+
+  const ownerId = payload?.ownerId;
+  const barangay = (input.barangay ?? '').trim();
+  const inviteMessage = (input.inviteMessage ?? '').trim();
+  if (ownerId && (barangay || inviteMessage)) {
+    // Safety net for a not-yet-redeployed Edge Function, which drops these two
+    // columns. The invitation is already sent; never fail the whole flow here.
+    await client
+      .from('establishment_owners')
+      .update({ barangay: barangay || null, invite_message: inviteMessage || null })
+      .eq('id', ownerId);
+  }
+  return { ownerId };
 }
 
 export function establishmentSetupRedirect(): string {
@@ -331,4 +461,99 @@ export async function ensureEstablishmentQr(
   });
   if (error) throw friendlyAdminError(error, 'Failed to generate QR code');
   return data ? String(data) : null;
+}
+
+export const ESTABLISHMENT_DRAFTS_SQL_HINT =
+  'Run 20260908120000_establishment_drafts.sql in the Supabase SQL Editor, then reload.';
+
+export type EstablishmentDraft = {
+  id: string;
+  email: string;
+  businessName: string;
+  fullName: string;
+  phone: string;
+  businessType: string;
+  lgu: string;
+  barangay: string;
+  address: string;
+  googleMapsLink: string;
+  inviteMessage: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type EstablishmentDraftInput = {
+  email: string;
+  businessName: string;
+  fullName: string;
+  phone: string;
+  businessType: string;
+  lgu: string;
+  barangay: string;
+  address: string;
+  inviteMessage: string;
+};
+
+const DRAFT_SELECT =
+  'id, email, business_name, full_name, phone, business_type, lgu, barangay, address, google_maps_link, invite_message, created_at, updated_at';
+
+function mapDraft(row: Record<string, unknown>): EstablishmentDraft {
+  return {
+    id: String(row.id),
+    email: String(row.email ?? '').trim(),
+    businessName: String(row.business_name ?? '').trim(),
+    fullName: String(row.full_name ?? '').trim(),
+    phone: String(row.phone ?? '').trim(),
+    businessType: String(row.business_type ?? '').trim(),
+    lgu: String(row.lgu ?? '').trim(),
+    barangay: String(row.barangay ?? '').trim(),
+    address: String(row.address ?? '').trim(),
+    googleMapsLink: String(row.google_maps_link ?? '').trim(),
+    inviteMessage: String(row.invite_message ?? '').trim(),
+    createdAt: row.created_at ? String(row.created_at) : null,
+    updatedAt: row.updated_at ? String(row.updated_at) : null,
+  };
+}
+
+function friendlyDraftError(err: { message?: string; code?: string }, fallback: string): Error {
+  if (isMissingRelationError(err) || err.code === '42501') {
+    return new Error(ESTABLISHMENT_DRAFTS_SQL_HINT);
+  }
+  return new Error(err.message ?? fallback);
+}
+
+export async function fetchEstablishmentDrafts(client: SupabaseClient): Promise<EstablishmentDraft[]> {
+  const { data, error } = await client
+    .from('establishment_drafts')
+    .select(DRAFT_SELECT)
+    .order('updated_at', { ascending: false });
+  if (error) throw friendlyDraftError(error, 'Failed to load drafts');
+  return (data ?? []).map((row) => mapDraft(row as Record<string, unknown>));
+}
+
+export async function saveEstablishmentDraft(
+  client: SupabaseClient,
+  form: EstablishmentDraftInput,
+  id?: string
+): Promise<void> {
+  const payload = {
+    email: form.email.trim().toLowerCase() || null,
+    business_name: form.businessName.trim() || null,
+    full_name: form.fullName.trim() || null,
+    phone: form.phone.trim() || null,
+    business_type: form.businessType.trim() || null,
+    lgu: form.lgu.trim() || null,
+    barangay: form.barangay.trim() || null,
+    address: form.address.trim() || null,
+    invite_message: form.inviteMessage.trim() || null,
+  };
+  const { error } = id
+    ? await client.from('establishment_drafts').update(payload).eq('id', id)
+    : await client.from('establishment_drafts').insert(payload);
+  if (error) throw friendlyDraftError(error, 'Failed to save draft');
+}
+
+export async function deleteEstablishmentDraft(client: SupabaseClient, id: string): Promise<void> {
+  const { error } = await client.from('establishment_drafts').delete().eq('id', id);
+  if (error) throw friendlyDraftError(error, 'Failed to delete draft');
 }

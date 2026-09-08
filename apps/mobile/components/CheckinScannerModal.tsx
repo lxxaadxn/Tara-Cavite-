@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { extractCheckinCodeFromText } from 'cavitour-shared/placeCheckin';
 import { confirmCheckinFromCode, type ConfirmCheckinOptions } from '../lib/confirmCheckin';
@@ -29,9 +30,14 @@ export function CheckinScannerModal({
   checkinOptions,
   title = 'Scan poster QR',
 }: Props) {
+  const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   const locked = useRef(false);
   const [busy, setBusy] = useState(false);
+  const [headerHeight, setHeaderHeight] = useState(0);
+  // Reserve space for the floating header above permission-state content.
+  // Measured via onLayout so it tracks notched phones; fallback covers first render.
+  const centerPadTop = (headerHeight || insets.top + 52) + 24;
 
   useEffect(() => {
     if (!visible) {
@@ -70,19 +76,12 @@ export function CheckinScannerModal({
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={styles.root}>
-        <View style={styles.header}>
-          <Text style={styles.title}>{title}</Text>
-          <TouchableOpacity onPress={onClose} hitSlop={12} accessibilityRole="button">
-            <Text style={styles.close}>Close</Text>
-          </TouchableOpacity>
-        </View>
-
         {!permission ? (
-          <View style={styles.center}>
+          <View style={[styles.center, { paddingTop: centerPadTop }]}>
             <ActivityIndicator color="#fff" />
           </View>
         ) : !permission.granted ? (
-          <View style={styles.center}>
+          <View style={[styles.center, { paddingTop: centerPadTop }]}>
             <Text style={styles.hint}>Camera access is needed to scan printed establishment QR codes.</Text>
             <TouchableOpacity style={styles.btn} onPress={() => void requestPermission()}>
               <Text style={styles.btnText}>Allow camera</Text>
@@ -97,13 +96,24 @@ export function CheckinScannerModal({
               onBarcodeScanned={busy ? undefined : onBarcode}
             />
             <View style={styles.frame} pointerEvents="none" />
-            <Text style={styles.overlayHint}>
-              {busy
-                ? 'Recording your visit…'
-                : 'Point at a printed poster QR — not the QR shown on this phone.'}
-            </Text>
+            {busy ? (
+              <View style={styles.busyOverlay} pointerEvents="none">
+                <ActivityIndicator size="small" color="#a3e635" />
+                <Text style={styles.busyText}>Recording your visit…</Text>
+              </View>
+            ) : null}
           </View>
         )}
+
+        <View
+          style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]}
+          onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
+        >
+          <Text style={styles.title}>{title}</Text>
+          <TouchableOpacity onPress={onClose} hitSlop={12} accessibilityRole="button">
+            <Text style={styles.close}>Close</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </Modal>
   );
@@ -124,11 +134,16 @@ export function ScanCheckinButton({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0f172a' },
+  root: { flex: 1, backgroundColor: '#000' },
   header: {
-    paddingTop: 54,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    paddingHorizontal: 20,
+    paddingBottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -144,7 +159,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   btnText: { color: '#fff', fontWeight: '600' },
-  cameraWrap: { flex: 1, margin: 16, borderRadius: 16, overflow: 'hidden' },
+  cameraWrap: { flex: 1, backgroundColor: '#000' },
   frame: {
     position: 'absolute',
     left: '12%',
@@ -155,12 +170,19 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(163, 230, 53, 0.9)',
     borderRadius: 16,
   },
-  overlayHint: {
+  busyOverlay: {
     position: 'absolute',
-    left: 16,
-    right: 16,
-    bottom: 24,
-    textAlign: 'center',
+    bottom: 48,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24,
+  },
+  busyText: {
     color: '#fff',
     fontSize: 14,
     fontFamily: 'Inter_500Medium',

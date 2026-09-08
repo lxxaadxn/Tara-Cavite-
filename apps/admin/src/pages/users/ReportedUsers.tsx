@@ -10,6 +10,9 @@ import {
   resolveUserReport,
 } from '../../lib/adminUsers';
 import { supabase } from '../../lib/supabase';
+import crud from '../../components/ContentCrudPage.module.css';
+import { RowMenu } from '../../components/RowMenu';
+import { EyeIcon } from '../../components/rowIcons';
 import styles from './UsersAdmin.module.css';
 import { UsersFilterButton, type UserRoleFilter } from './UsersFilter';
 
@@ -92,7 +95,7 @@ export function ReportedUsers() {
               <th>User</th>
               <th>Reason</th>
               <th>Reported</th>
-              <th>Actions</th>
+              <th className={crud.actionsHead}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -120,14 +123,20 @@ export function ReportedUsers() {
                     {row.notes ? <span className={styles.userMeta}>{row.notes}</span> : null}
                   </td>
                   <td>{formatAdminDate(row.createdAt)}</td>
-                  <td>
-                    <div className={styles.actions}>
-                      <Link className={styles.actionBtn} to={profileHref(row.userId)}>
-                        View
+                  <td className={crud.actionsHead}>
+                    <div className={crud.rowTools}>
+                      <Link
+                        className={crud.iconBtn}
+                        to={profileHref(row.userId)}
+                        aria-label={`View ${row.userName}`}
+                        title="View profile"
+                      >
+                        <EyeIcon />
                       </Link>
-                      <button type="button" className={styles.actionBtn} onClick={() => void resolve(row.id)}>
-                        Resolve
-                      </button>
+                      <RowMenu
+                        label={`More actions for the report on ${row.userName}`}
+                        items={[{ label: 'Resolve report', onSelect: () => void resolve(row.id) }]}
+                      />
                     </div>
                   </td>
                 </tr>

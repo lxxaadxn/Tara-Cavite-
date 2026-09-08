@@ -3,22 +3,25 @@ import { useEffect, useState } from 'react';
 /**
  * @param {Object} props
  * @param {boolean} props.open
+ * @param {'edit' | 'create'} [props.mode]
  * @param {{ id?: string, name?: string, privacy?: 'private' | 'public' } | null} props.list
  * @param {() => void} props.onClose
  * @param {(patch: { name: string, privacy: 'private' | 'public' }) => void} props.onSave
  * @param {string} [props.error]
  */
-export function SavedListEditModal({ open, list, onClose, onSave, error = '' }) {
+export function SavedListEditModal({ open, list, onClose, onSave, error = '', mode = 'edit' }) {
   const [nameDraft, setNameDraft] = useState('');
   const [privacy, setPrivacy] = useState('private');
+  const isCreate = mode === 'create';
 
   useEffect(() => {
-    if (!open || !list) return;
-    setNameDraft(list.name || '');
-    setPrivacy(list.privacy === 'public' ? 'public' : 'private');
+    if (!open) return;
+    setNameDraft(list?.name || '');
+    setPrivacy(list?.privacy === 'public' ? 'public' : 'private');
   }, [open, list]);
 
-  if (!open || !list) return null;
+  if (!open) return null;
+  if (!isCreate && !list) return null;
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -43,9 +46,13 @@ export function SavedListEditModal({ open, list, onClose, onSave, error = '' }) 
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 id="edit-list-title" className="font-['Poppins',sans-serif] text-lg font-bold text-neutral-900">
-              Edit list
+              {isCreate ? 'Create list' : 'Edit list'}
             </h2>
-            <p className="mt-1 text-sm text-neutral-500">Change the name or who can see this collection.</p>
+            <p className="mt-1 text-sm text-neutral-500">
+              {isCreate
+                ? 'Make a collection for places and itineraries you save.'
+                : 'Change the name or who can see this collection.'}
+            </p>
           </div>
           <button
             type="button"
@@ -66,7 +73,8 @@ export function SavedListEditModal({ open, list, onClose, onSave, error = '' }) 
           id="edit-list-name"
           value={nameDraft}
           onChange={(e) => setNameDraft(e.target.value)}
-          className="mt-1.5 h-11 w-full rounded-xl border border-neutral-200 px-3 text-sm outline-none transition focus:border-[#10A37F]/50 focus:ring-2 focus:ring-[rgba(16, 163, 127,0.2)]"
+          placeholder="e.g. Weekend spots"
+          className="mt-1.5 h-11 w-full rounded-xl border border-neutral-200 px-3 text-sm outline-none transition focus:border-[#10A37F]/50 focus:ring-2 focus:ring-[rgba(16,163,127,0.2)]"
           autoFocus
         />
 
@@ -123,7 +131,7 @@ export function SavedListEditModal({ open, list, onClose, onSave, error = '' }) 
             type="submit"
             className="rounded-xl bg-[#10A37F] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-95"
           >
-            Save changes
+            {isCreate ? 'Create list' : 'Save changes'}
           </button>
         </div>
       </form>

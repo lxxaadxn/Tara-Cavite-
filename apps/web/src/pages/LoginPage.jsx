@@ -3,13 +3,13 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 import { supabase } from '../lib/supabase';
 import { LogoWordmark } from '../components/LogoWordmark';
 import { GoogleAuthButton, GoogleLogoMark } from '../components/GoogleAuthButton';
-import { startGoogleOAuth } from '../lib/startGoogleOAuth';
+import { consumePendingGoogleOAuth, startGoogleOAuth } from '../lib/startGoogleOAuth';
+import { isStaleOAuthStateError } from '../lib/oauthCallback';
 import { markLocationPromptPending } from '../lib/promptLocationOnLogin';
 import { TRAVELER_ACCOUNT_DISABLED_MESSAGE } from 'cavitour-shared/accountStatus';
 import { rejectDisabledTraveler } from '../lib/rejectDisabledTraveler';
 import { ESTABLISHMENT_DISABLED_MESSAGE, resolveAccountHome } from '../lib/accountHome';
-import { useSiteContent } from '../lib/useSiteContent';
-import { siteContentValue } from 'cavitour-shared/siteContent';
+import { isAdminReservedEmailAsync } from '../lib/adminReservedEmail';
 
 const olive = 'var(--ct-olive)';
 const teal = 'var(--ct-teal)';
@@ -25,6 +25,9 @@ function toFriendlyLoginError(err) {
   if (normalized.includes('invalid login credentials')) {
     return 'Email or password is incorrect. If this account was created with Google, use "Sign in with Google" or reset your password.';
   }
+  if (isStaleOAuthStateError(normalized)) {
+    return 'Google sign-in could not be completed on this browser. Tap “Sign in with Google” to try again.';
+  }
   return message || 'Sign in failed';
 }
 
@@ -37,9 +40,7 @@ function safeNextPath(raw) {
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const cms = useSiteContent();
   const loginWelcome = 'Welcome back! Enter your details to continue exploring';
-  const loginBanner = siteContentValue(cms, 'auth.login.banner_url');
   const [searchParams] = useSearchParams();
   const nextPath = safeNextPath(searchParams.get('next'));
   const [email, setEmail] = useState('');
@@ -58,17 +59,7 @@ export function LoginPage() {
     if (searchParams.get('confirmed') === '1') {
       setInfo('Email confirmed. You can sign in now.');
     }
-    let active = true;
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!active || !data.session) return;
-      const home = await resolveAccountHome(supabase, data.session, nextPath);
-      if (!active || home.blocked) return;
-      navigate(home.path, { replace: true });
-    });
-    return () => {
-      active = false;
-    };
-  }, [navigate, nextPath, searchParams]);
+  }, [searchParams]);
 
   useEffect(() => {
     if (location.state?.passwordReset) {
@@ -87,7 +78,7 @@ export function LoginPage() {
   useEffect(() => {
     const googleError = location.state?.googleError;
     if (typeof googleError === 'string' && googleError.trim()) {
-      setError(googleError);
+      setError(toFriendlyLoginError(googleError));
       navigate(location.pathname + location.search, { replace: true, state: {} });
     }
   }, [location.pathname, location.search, location.state, navigate]);
@@ -99,11 +90,17 @@ export function LoginPage() {
     try {
       await startGoogleOAuth({ next: nextPath });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Google sign in failed');
+      setError(toFriendlyLoginError(err instanceof Error ? err.message : 'Google sign in failed'));
       setLoading(false);
       setGoogleAuthInProgress(false);
     }
   };
+
+  useEffect(() => {
+    if (!consumePendingGoogleOAuth()) return;
+    void handleGoogleAuth();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- resume once after localhost bounce
+  }, []);
 
   const handleResendConfirmation = async () => {
     const trimmedEmail = email.trim().toLowerCase();
@@ -162,14 +159,16 @@ export function LoginPage() {
         setError(home.message || TRAVELER_ACCOUNT_DISABLED_MESSAGE);
         return;
       }
-      if (!home.owner) {
+      const email = session.user?.email?.trim().toLowerCase() ?? '';
+      const isAdmin = await isAdminReservedEmailAsync(email);
+      if (!isAdmin && !home.owner) {
         const allowed = await rejectDisabledTraveler(session);
         if (!allowed) {
           setError(TRAVELER_ACCOUNT_DISABLED_MESSAGE);
           return;
         }
       }
-      if (!String(home.path).startsWith('/establishment')) {
+      if (!isAdmin && !String(home.path).startsWith('/establishment')) {
         markLocationPromptPending(session.user?.id);
       }
       navigate(home.path, { replace: true });
@@ -238,13 +237,6 @@ export function LoginPage() {
       ) : null}
 
       <div className="mx-auto w-full max-w-md overflow-hidden rounded-[1.7rem] bg-white p-3 shadow-[0_24px_60px_rgba(0,0,0,0.10)] sm:p-6">
-        {loginBanner ? (
-          <img
-            src={loginBanner}
-            alt=""
-            className="mb-3 h-36 w-full rounded-2xl object-cover sm:h-44"
-          />
-        ) : null}
         <div className="w-full px-2 py-2 sm:px-4">
             <div className="mb-6 text-center">
               <Link to="/" className="inline-flex items-center justify-center">

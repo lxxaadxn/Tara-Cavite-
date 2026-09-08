@@ -17,7 +17,7 @@ export default defineConfig({
     },
   },
   server: {
-    host: 'localhost',
+    host: true,
     port: 5173,
     // Keep 5173 so mobile Google OAuth bridge URLs (and Supabase Redirect URLs) stay valid.
     strictPort: true,

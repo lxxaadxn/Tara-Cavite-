@@ -7,16 +7,18 @@ import { LogoWordmark } from '../components/LogoWordmark';
 
 const WebLandingScreen: React.FC = () => {
   const navigation = useNavigation();
+  const go = (name: string) =>
+    (navigation as unknown as { navigate: (name: string) => void }).navigate(name);
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <LogoWordmark markSize={32} wordFontSize={24} />
         <View style={styles.headerButtons}>
-          <TouchableOpacity onPress={() => navigation.navigate('SignIn')} style={styles.logInButton}>
+          <TouchableOpacity onPress={() => go('SignIn')} style={styles.logInButton}>
             <Text style={styles.logInText}>Log In</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate('SignUp')} style={styles.signUpButton}>
+          <TouchableOpacity onPress={() => go('SignUp')} style={styles.signUpButton}>
             <Text style={styles.signUpButtonText}>Sign Up</Text>
           </TouchableOpacity>
         </View>
@@ -31,7 +33,7 @@ const WebLandingScreen: React.FC = () => {
         </Text>
         <View style={styles.ctaRow}>
           <TouchableOpacity
-            onPress={() => navigation.navigate('SignIn')}
+            onPress={() => go('SignIn')}
             style={styles.primaryCta}
           >
             <Text style={styles.primaryCtaText}>Start Exploring</Text>

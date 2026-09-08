@@ -6,8 +6,6 @@ import { resolveAvatarFromSources, resolveAvatarUrl } from 'cavitour-shared/defa
 import { subscribeAnnouncementsChanged, unreadAnnouncementCount } from 'cavitour-shared/announcements';
 import { supabase } from '../lib/supabase';
 
-const jade = '#1B8A70';
-
 function navMatch(pathname, to) {
   if (to === '/search') return pathname === '/search' || pathname.startsWith('/place/');
   return pathname === to || pathname.startsWith(`${to}/`);
@@ -186,17 +184,11 @@ export function AppHeader({ embedded = false }) {
               <NavLink
                 key={to}
                 to={to}
-                className="rounded-full px-4 py-1.5 font-['Poppins',sans-serif] text-[14px] font-medium transition"
-                style={
+                className={`inline-flex h-9 items-center rounded-full px-4 font-['Poppins',sans-serif] text-[14px] leading-none transition ${
                   isActive
-                    ? {
-                        backgroundColor: '#fff',
-                        color: jade,
-                        fontWeight: 600,
-                        boxShadow: '0 4px 14px rgba(27, 138, 112, 0.16)',
-                      }
-                    : { color: '#707D7D' }
-                }
+                    ? 'bg-white font-semibold text-[#1B8A70] shadow-[0_4px_14px_rgba(27,138,112,0.16)]'
+                    : 'font-medium text-[#707D7D] hover:text-[#16352E]'
+                }`}
               >
                 {label}
               </NavLink>
@@ -287,19 +279,18 @@ export function AppHeader({ embedded = false }) {
         </div>
       </div>
 
-      <div className="flex gap-1 overflow-x-auto bg-[#F1F7F6] px-3 py-2 md:hidden">
+      <div className="flex items-center gap-1 overflow-x-auto bg-[#F1F7F6] px-3 py-2 md:hidden">
         {nav.map(({ to, label }) => {
           const isActive = navMatch(pathname, to);
           return (
             <NavLink
               key={to}
               to={to}
-              className="whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-medium"
-              style={
+              className={`inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 text-sm leading-none transition ${
                 isActive
-                  ? { backgroundColor: '#fff', color: jade, fontWeight: 600, boxShadow: '0 2px 8px rgba(27, 138, 112, 0.14)' }
-                  : { color: '#707D7D' }
-              }
+                  ? 'bg-white font-semibold text-[#1B8A70] shadow-[0_2px_8px_rgba(27,138,112,0.14)]'
+                  : 'font-medium text-[#707D7D]'
+              }`}
             >
               {label}
             </NavLink>

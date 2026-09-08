@@ -33,6 +33,8 @@ export type PlacesCatalogRow = {
 
 /** Alias for screens that still import `PlaceRow`. */
 export type PlaceRow = PlacesCatalogRow;
+/** Legacy demo-catalog row (same shape as the catalog view). */
+export type TouristAttractedRow = CatalogViewRow;
 /** @deprecated Use PlacesCatalogRow */
 export type CavitePlaceRow = PlacesCatalogRow;
 
@@ -151,8 +153,9 @@ function publishedCatalogQuery(client: SupabaseClient) {
 
 async function queryPublishedPlaces(
   client: SupabaseClient,
-  builder: (q: ReturnType<typeof publishedCatalogQuery>) => PromiseLike<{
-    data: TouristAttractedRow[] | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  builder: (q: any) => PromiseLike<{
+    data: CatalogViewRow[] | null;
     error: { message: string } | null;
   }>
 ): Promise<PlacesCatalogRow[]> {
@@ -400,5 +403,5 @@ export async function fetchPlaceById(client: SupabaseClient, id: string): Promis
 
   const demoRow = getDemoEstablishmentById(key);
   if (!demoRow) return null;
-  return rowToPlace(demoRow as PlacesCatalogRow);
+  return rowToPlace(demoRow as unknown as PlacesCatalogRow);
 }

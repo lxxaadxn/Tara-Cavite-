@@ -14,29 +14,23 @@ type Props = {
 
 export function ChevronStepper({ steps, current, onChange }: Props) {
   return (
-    <ol className={styles.bar} aria-label="Content sections">
+    <div className={styles.bar} role="tablist" aria-label="Content sections">
       {steps.map((step, index) => {
-        const state = index < current ? 'done' : index === current ? 'current' : 'todo';
-        const edge =
-          index === 0 ? styles.first : index === steps.length - 1 ? styles.last : '';
+        const selected = index === current;
         return (
-          <li
+          <button
             key={step.id}
-            className={styles.item}
-            style={{ zIndex: index === current ? 20 : steps.length - index }}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            title={step.support}
+            className={`${styles.tab} ${selected ? styles.tabActive : ''}`}
+            onClick={() => onChange(index)}
           >
-            <button
-              type="button"
-              className={`${styles.step} ${styles[state]} ${edge}`}
-              aria-current={index === current ? 'step' : undefined}
-              onClick={() => onChange(index)}
-            >
-              <span className={styles.title}>{step.title}</span>
-              <span className={styles.support}>{step.support}</span>
-            </button>
-          </li>
+            {step.title}
+          </button>
         );
       })}
-    </ol>
+    </div>
   );
 }

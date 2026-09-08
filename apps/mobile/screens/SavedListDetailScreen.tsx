@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
+import { Header, HeaderAction } from '../components/Header';
 import { JamIcon } from '../components/JamIcon';
 import { CONTENT_PIPELINE } from 'cavitour-shared';
 import { Place, type ItineraryCard } from '../data/mockData';
@@ -36,6 +37,7 @@ const SAVED_PLACES_SELECT =
   'establishment_public_id, ta_name, address, type, hours, latitude, longitude, picture, description, ntdp_category, city_mun';
 
 type SavedKind = 'establishment' | 'itinerary';
+type TypeFilter = 'all' | SavedKind;
 
 export type SavedListDetailParams = {
   listId: string;
@@ -46,7 +48,7 @@ export type SavedListDetailParams = {
     icon_name: string;
     type: 'private' | 'shared';
   };
-  focusKind?: SavedKind;
+  focusKind?: TypeFilter;
 };
 
 type SavedRow = {
@@ -56,8 +58,6 @@ type SavedRow = {
   place?: Place;
   itinerary?: ItineraryCard;
 };
-
-type TypeFilter = 'all' | SavedKind;
 
 function rowImage(item: SavedRow) {
   if (item.kind === 'establishment') {
@@ -89,7 +89,7 @@ export default function SavedListDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [allRows, setAllRows] = useState<SavedRow[]>([]);
   const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>(focusKind ?? 'establishment');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>(focusKind ?? 'all');
   const [filterModalVisible, setFilterModalVisible] = useState(false);
 
   const load = useCallback(async () => {
@@ -211,13 +211,12 @@ export default function SavedListDetailScreen() {
   };
 
   const goEditList = () => {
-    navigation.navigate(
-      'NewList' as never,
-      {
-        listId: list.id,
-        listData: list,
-      } as never
-    );
+    (
+      navigation as unknown as { navigate: (name: string, params: object) => void }
+    ).navigate('NewList', {
+      listId: list.id,
+      listData: list,
+    });
   };
 
   const filterLabel =
@@ -242,29 +241,16 @@ export default function SavedListDetailScreen() {
 
   return (
     <View style={styles.root}>
-      <View style={[styles.greenHeader, { paddingTop: insets.top + 8 }]}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            style={styles.headerIconBtn}
-            onPress={() => navigation.goBack()}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <JamIcon ionicon="chevron-left" size={26} color={WHITE} />
-          </TouchableOpacity>
-          <Pressable
-            style={styles.headerTitlePress}
-            onLongPress={goEditList}
-            accessibilityRole="header"
-            accessibilityLabel={`${list.name}. Long press to edit list.`}
-          >
-            <Text style={styles.headerTitle} numberOfLines={1}>
-              {list.name}
-            </Text>
-          </Pressable>
-          <View style={styles.headerIconBtn} />
-        </View>
-      </View>
+      <Header
+        title={list.name}
+        showBack
+        darkBackground
+        right={
+          <HeaderAction onPress={goEditList} accessibilityLabel="Edit list">
+            <JamIcon ionicon="create-outline" size={22} color={WHITE} />
+          </HeaderAction>
+        }
+      />
 
       <View style={styles.seg}>
         <TouchableOpacity
@@ -369,35 +355,6 @@ export default function SavedListDetailScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: PAGE_BG },
-  greenHeader: {
-    backgroundColor: GREEN,
-    paddingBottom: 12,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
-  },
-  headerIconBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitlePress: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 0,
-  },
-  headerTitle: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 20,
-    lineHeight: 24,
-    color: WHITE,
-    textAlign: 'center',
-  },
   seg: {
     marginHorizontal: H_PAD,
     marginTop: 10,

@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  StatusBar,
   Alert,
   Platform,
   KeyboardAvoidingView,
@@ -16,9 +15,9 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { Header } from '../components/Header';
 import { JamIcon } from '../components/JamIcon';
 
-const HEADER_GREEN = '#10A37F';
 const TEAL = '#1B8A70';
 const PAGE_BG = '#F4F6EC';
 const WHITE = '#FFFFFF';
@@ -102,28 +101,7 @@ const CreateItineraryScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <StatusBar barStyle="light-content" backgroundColor={HEADER_GREEN} />
-      <View style={[styles.header, { paddingTop: insets.top + 8, paddingBottom: 14 }]}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.headerSide}
-            accessibilityLabel="Go back"
-            accessibilityRole="button"
-          >
-            <JamIcon name="chevron-left" size={26} color="#FFFFFF" />
-          </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle} pointerEvents="none">
-              Create itinerary
-            </Text>
-            <Text style={styles.headerSub} pointerEvents="none">
-              Plan dates & stops
-            </Text>
-          </View>
-          <View style={styles.headerSide} />
-        </View>
-      </View>
+      <Header title="Create itinerary" showBack darkBackground />
 
       <KeyboardAvoidingView
         style={styles.flex}
@@ -294,40 +272,6 @@ const styles = StyleSheet.create({
     backgroundColor: PAGE_BG,
   },
   flex: { flex: 1 },
-  header: {
-    backgroundColor: HEADER_GREEN,
-    paddingHorizontal: H_PAD,
-    borderBottomLeftRadius: 22,
-    borderBottomRightRadius: 22,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerSide: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 20,
-    lineHeight: 24,
-    color: '#FFFFFF',
-    textAlign: 'center',
-  },
-  headerSub: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.9)',
-    marginTop: 2,
-  },
   scroll: { flex: 1 },
   scrollContent: {
     paddingHorizontal: H_PAD,
@@ -481,7 +425,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   iosBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.4)',
   },
   iosSheet: {

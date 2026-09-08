@@ -359,7 +359,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(38, 38, 38, 0.35)',
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   sheet: {
     maxHeight: '92%',

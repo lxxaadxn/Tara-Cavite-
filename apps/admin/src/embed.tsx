@@ -6,9 +6,9 @@ import { ReportedUsers } from './pages/users/ReportedUsers';
 import {
   AllEstablishmentsPage,
   DeactivatedEstablishmentsPage,
+  DraftEstablishmentsPage,
   PendingEstablishmentsPage,
 } from './pages/establishments/EstablishmentList';
-import { EstablishmentAdd } from './pages/establishments/EstablishmentAdd';
 import { EstablishmentDetail } from './pages/establishments/EstablishmentDetail';
 import { Analytics } from './pages/Analytics';
 import { Settings } from './pages/Settings';
@@ -23,26 +23,21 @@ import { ContentEstablishments } from './pages/content/ContentEstablishments';
 import { ContentAnnouncements } from './pages/content/ContentAnnouncements';
 import { ContentMunicipalities, ContentCities } from './pages/content/ContentMunicipalities';
 import { ContentItineraries } from './pages/content/ContentItineraries';
+import { ItineraryAiPage } from './pages/content/ItineraryAiPage';
 import { LandingPageAdmin } from './pages/content/LandingPageAdmin';
 import {
   AuthPagesAdmin,
-  BrandAssetsAdmin,
 } from './pages/content/ContentCmsPages';
 import { ItineraryEditorPage } from './pages/content/ItineraryEditorPage';
 import { TourismReviews } from './pages/tourism/TourismReviews';
 import { CustomPinsPage } from './pages/maps/CustomPinsPage';
 import { AuditLogPage } from './pages/analytics/AuditLogPage';
 import { ExportReportsPage } from './pages/analytics/ExportReportsPage';
-import { AdminPlaceholder } from './components/AdminPlaceholder';
 import { ToastProvider } from './components/Toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AdminPathPrefixProvider, useAdminHref } from './contexts/AdminPathPrefixContext';
 import bootStyles from './App.module.css';
 import './adminEmbed.css';
-
-function stub(title: string, description: string, bullets: string[]) {
-  return <AdminPlaceholder title={title} description={description} bullets={bullets} />;
-}
 
 function RedirectToTourismReviews() {
   const to = useAdminHref('/web/tourism/reviews');
@@ -56,11 +51,6 @@ function RedirectToLandingPage() {
 
 function RedirectToAuthPages() {
   const to = useAdminHref('/web/content/auth');
-  return <Navigate to={to} replace />;
-}
-
-function RedirectToBrandAssets() {
-  const to = useAdminHref('/web/content/brand');
   return <Navigate to={to} replace />;
 }
 
@@ -86,7 +76,7 @@ export function adminLayoutChildRoutes() {
     <Route key="tour-attr" path="web/tourism/attractions" element={<ContentEstablishments />} />,
     <Route key="tour-announce" path="web/tourism/announcements" element={<ContentAnnouncements />} />,
     <Route key="tour-categories" path="web/tourism/categories" element={<ContentCategories />} />,
-    <Route key="tour-filters" path="web/tourism/filters" element={<ContentAppFilters />} />,
+    <Route key="tour-filters" path="web/tourism/filters" element={<Navigate to="web/content/filters" replace />} />,
     <Route key="tour-cities" path="web/tourism/cities" element={<ContentCities />} />,
     <Route key="tour-muni" path="web/tourism/municipalities" element={<ContentMunicipalities />} />,
     <Route key="tour-featured" path="web/tourism/featured" element={<RedirectToLandingPage />} />,
@@ -94,6 +84,7 @@ export function adminLayoutChildRoutes() {
     <Route key="tour-events" path="web/tourism/events" element={<RedirectToTourismReviews />} />,
 
     <Route key="itin-created" path="web/itineraries/created" element={<ContentItineraries />} />,
+    <Route key="itin-ai-generator" path="web/itineraries/ai" element={<ItineraryAiPage />} />,
     <Route key="itin-create" path="web/itineraries/create" element={<RedirectToNewItinerary />} />,
     <Route key="itin-created-new" path="web/itineraries/created/new" element={<ItineraryEditorPage />} />,
     <Route key="itin-created-edit" path="web/itineraries/created/:id/edit" element={<ItineraryEditorPage />} />,
@@ -109,18 +100,11 @@ export function adminLayoutChildRoutes() {
     <Route key="map-conn" path="web/maps/connections" element={<Navigate to="web/maps/pins" replace />} />,
 
     <Route key="est-idx" path="web/establishments" element={<AllEstablishmentsPage />} />,
-    <Route key="est-add" path="web/establishments/add" element={<EstablishmentAdd />} />,
-    <Route
-      key="est-import"
-      path="web/establishments/import"
-      element={stub('Bulk data import', 'Upload CSV or GeoJSON of establishments into the catalog.', [
-        'Download a CSV template',
-        'Map columns to catalog fields',
-        'Import GeoJSON geometry',
-      ])}
-    />,
+    <Route key="est-add" path="web/establishments/add" element={<Navigate to="web/establishments" replace />} />,
+    <Route key="est-import" path="web/establishments/import" element={<Navigate to="web/establishments" replace />} />,
     <Route key="est-pending" path="web/establishments/pending" element={<PendingEstablishmentsPage />} />,
     <Route key="est-deactivated" path="web/establishments/deactivated" element={<DeactivatedEstablishmentsPage />} />,
+    <Route key="est-drafts" path="web/establishments/drafts" element={<DraftEstablishmentsPage />} />,
     <Route key="est-approved" path="web/establishments/approved" element={<Navigate to="web/establishments" replace />} />,
     <Route key="est-rejected" path="web/establishments/rejected" element={<Navigate to="web/establishments" replace />} />,
     <Route key="est-detail" path="web/establishments/:ownerId" element={<EstablishmentDetail />} />,
@@ -137,13 +121,13 @@ export function adminLayoutChildRoutes() {
     <Route key="cms-login" path="web/content/auth/login" element={<RedirectToAuthPages />} />,
     <Route key="cms-signup" path="web/content/auth/signup" element={<RedirectToAuthPages />} />,
     <Route key="cms-reset" path="web/content/auth/reset" element={<RedirectToAuthPages />} />,
-    <Route key="cms-brand" path="web/content/brand" element={<BrandAssetsAdmin />} />,
-    <Route key="cms-logo" path="web/content/brand/logo" element={<RedirectToBrandAssets />} />,
-    <Route key="cms-meta" path="web/content/brand/metadata" element={<RedirectToBrandAssets />} />,
+    <Route key="cms-brand" path="web/content/brand" element={<RedirectToAuthPages />} />,
+    <Route key="cms-logo" path="web/content/brand/logo" element={<RedirectToAuthPages />} />,
+    <Route key="cms-meta" path="web/content/brand/metadata" element={<RedirectToAuthPages />} />,
 
     <Route key="web-content" path="web/content" element={<Navigate to="web/tourism/attractions" replace />} />,
     <Route key="web-content-overview" path="web/content/overview" element={<RedirectToLandingPage />} />,
-    <Route key="web-content-filters" path="web/content/filters" element={<Navigate to="web/tourism/filters" replace />} />,
+    <Route key="web-content-filters" path="web/content/filters" element={<ContentAppFilters />} />,
     <Route key="web-content-est" path="web/content/establishments" element={<Navigate to="web/tourism/attractions" replace />} />,
     <Route key="web-content-itin" path="web/content/itineraries" element={<Navigate to="web/itineraries/created" replace />} />,
     <Route key="web-content-maps" path="web/content/maps" element={<Navigate to="web/maps/pins" replace />} />,
@@ -207,7 +191,11 @@ export function AdminAuthGate({ loginPath = '/login' }: AdminAuthGateProps) {
 
   if (!session) {
     const next = `${location.pathname}${location.search}`;
-    const skipNext = !next || next === '/' || next.startsWith('/login') || next.startsWith('/admin/login');
+    const skipNext =
+      !next ||
+      next === '/' ||
+      next.startsWith('/login') ||
+      next.startsWith('/admin/login');
     const to = skipNext ? loginPath : `${loginPath}?next=${encodeURIComponent(next)}`;
     return <Navigate to={to} replace />;
   }

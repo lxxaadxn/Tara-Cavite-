@@ -4,6 +4,7 @@ import {
   keywordMapFromOptions,
   labelMapFromOptions,
   staticCategoryOptions,
+  visibleSearchCategoryOptions,
 } from '../lib/appFilterCategories';
 import { fetchLguFilterOptions, locationLabelMapFromOptions } from '../lib/lguFilterOptions';
 import { WEB_CITY_OPTIONS, WEB_MUNICIPALITY_OPTIONS } from '../lib/dashboardFilterOptions';
@@ -138,7 +139,9 @@ export function FilterModal({
   const [categories, setCategories] = useState(() => new Set());
   const [cities, setCities] = useState(() => new Set());
   const [municipalities, setMunicipalities] = useState(() => new Set());
-  const [categoryOptions, setCategoryOptions] = useState(() => staticCategoryOptions());
+  const [categoryOptions, setCategoryOptions] = useState(() =>
+    visibleSearchCategoryOptions(staticCategoryOptions())
+  );
   const [cityOptions, setCityOptions] = useState(() =>
     WEB_CITY_OPTIONS.map((o) => ({ key: o.label, label: o.label }))
   );
@@ -150,7 +153,7 @@ export function FilterModal({
     let cancelled = false;
     void fetchAppFilterCategoryOptions().then((opts) => {
       if (cancelled) return;
-      setCategoryOptions(opts);
+      setCategoryOptions(visibleSearchCategoryOptions(opts));
       setRuntimeCategoryKeywords(keywordMapFromOptions(opts, getDefaultCategoryKeywords()));
       setRuntimeCategoryLabels(labelMapFromOptions(opts));
     });
@@ -206,8 +209,9 @@ export function FilterModal({
   };
 
   const pending = useMemo(
-    () => pendingFilters(categories, cities, municipalities),
-    [categories, cities, municipalities]
+    () =>
+      pendingFilters(hideCategories ? new Set() : categories, cities, municipalities),
+    [hideCategories, categories, cities, municipalities]
   );
 
   const previewCount = useMemo(() => {

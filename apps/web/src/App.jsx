@@ -21,6 +21,7 @@ import { ItineraryPage } from './pages/ItineraryPage';
 import { ItineraryDetailPage } from './pages/ItineraryDetailPage';
 import { AnnouncementsPage } from './pages/AnnouncementsPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { PublicProfilePage } from './pages/PublicProfilePage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { TravelHistoryPage } from './pages/TravelHistoryPage';
 import { PrivacyPage } from './pages/PrivacyPage';
@@ -145,7 +146,7 @@ export default function App() {
         {/* Admin (apps/admin) — same dev server as marketing web */}
         <Route path="/admin" element={<AdminEmbedRoot />}>
           <Route index element={<Navigate to="web/dashboard" replace />} />
-          <Route path="login" element={<Navigate to="/login" replace />} />
+          <Route path="login" element={<Navigate to="/login?next=/admin/web/dashboard" replace />} />
           <Route element={<AdminAuthGate loginPath="/login" />}>
             <Route element={<AdminLayout />}>{adminLayoutChildRoutes()}</Route>
           </Route>
@@ -200,6 +201,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="/u/:userId" element={<PublicProfilePage />} />
         <Route
           path="/profile/history"
           element={

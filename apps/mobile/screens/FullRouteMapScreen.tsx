@@ -10,8 +10,6 @@ import {
 
   TouchableOpacity,
 
-  StatusBar,
-
   ActivityIndicator,
 
   Linking,
@@ -22,13 +20,13 @@ import {
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useRoute, useNavigation } from '@react-navigation/native';
+import { useRoute } from '@react-navigation/native';
 
 import * as Location from 'expo-location';
 
-import { JamIcon } from '../components/JamIcon';
-
 import { DirectionsMapView } from '../components/DirectionsMapView';
+
+import { Header } from '../components/Header';
 
 import type { DirectionsMapPayload } from '../lib/directionsMapBridge';
 
@@ -36,13 +34,9 @@ import { fetchDrivingRoute, fetchFootRoute } from '../lib/fetchOsrmRoute';
 
 
 
-const TITLE = '#241D13';
-
 const MUTED = '#737373';
 
 const GREEN = '#10A37F';
-
-const WHITE = '#FFFFFF';
 
 
 
@@ -68,8 +62,6 @@ type LineGeo = { type: 'LineString'; coordinates: number[][] };
 export default function FullRouteMapScreen() {
 
   const insets = useSafeAreaInsets();
-
-  const navigation = useNavigation();
 
   const route = useRoute();
 
@@ -340,51 +332,11 @@ export default function FullRouteMapScreen() {
 
     <View style={styles.root}>
 
-      <StatusBar barStyle="dark-content" backgroundColor={WHITE} />
-
       <DirectionsMapView payload={payload} style={styles.map} />
 
 
 
-      <View style={[styles.backOverlay, { paddingTop: insets.top + 10 }]} pointerEvents="box-none">
-
-        <TouchableOpacity
-
-          style={styles.backBarBtn}
-
-          onPress={() => navigation.goBack()}
-
-          accessibilityRole="button"
-
-          accessibilityLabel="Go back"
-
-          activeOpacity={0.75}
-
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-
-        >
-
-          <View style={styles.backBarIconWrap}>
-
-            <JamIcon ionicon="arrow-back" size={22} color={TITLE} />
-
-          </View>
-
-          <Text style={styles.backBarLabel}>Back</Text>
-
-        </TouchableOpacity>
-
-        {destLabel ? (
-
-          <Text style={styles.mapTitle} numberOfLines={1}>
-
-            {destLabel}
-
-          </Text>
-
-        ) : null}
-
-      </View>
+      <Header title={destLabel || 'Route'} showBack darkBackground />
 
 
 
@@ -434,89 +386,9 @@ const styles = StyleSheet.create({
 
   map: {
 
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
 
     borderRadius: 0,
-
-  },
-
-  backOverlay: {
-
-    position: 'absolute',
-
-    left: 0,
-
-    right: 0,
-
-    top: 0,
-
-    paddingHorizontal: 12,
-
-    zIndex: 10,
-
-  },
-
-  backBarBtn: {
-
-    flexDirection: 'row',
-
-    alignItems: 'center',
-
-    alignSelf: 'flex-start',
-
-    gap: 10,
-
-    minHeight: 44,
-
-    paddingRight: 12,
-
-  },
-
-  backBarIconWrap: {
-
-    width: 40,
-
-    height: 40,
-
-    borderRadius: 20,
-
-    alignItems: 'center',
-
-    justifyContent: 'center',
-
-    backgroundColor: '#F3F4F6',
-
-    borderWidth: 1,
-
-    borderColor: 'rgba(17, 24, 39, 0.08)',
-
-  },
-
-  backBarLabel: {
-
-    fontFamily: 'Poppins_600SemiBold',
-
-    fontSize: 16,
-
-    lineHeight: 22,
-
-    color: TITLE,
-
-  },
-
-  mapTitle: {
-
-    marginTop: 6,
-
-    marginLeft: 4,
-
-    fontFamily: 'Poppins_500Medium',
-
-    fontSize: 15,
-
-    color: TITLE,
-
-    maxWidth: '92%',
 
   },
 

@@ -5,6 +5,7 @@ import { useAdminHref, useAdminPathPrefix } from '../contexts/AdminPathPrefixCon
 import { usePageHeaderState } from '../contexts/PageHeaderContext';
 import { navLabelForPath } from '../config/mainNav';
 import { adminAccountFromUser } from '../lib/adminAccount';
+import { NotificationsBell } from './NotificationsBell';
 import styles from './TopNav.module.css';
 
 export function TopNav() {
@@ -40,6 +41,7 @@ export function TopNav() {
     setProfileOpen(false);
     await signOut();
     if (routePrefix) {
+      // Embedded production admin shares the web origin — back to tourist home.
       window.location.replace('/');
       return;
     }
@@ -57,6 +59,8 @@ export function TopNav() {
             {override.action.label}
           </button>
         ) : null}
+
+        <NotificationsBell />
 
         <div className={styles.profileWrap} ref={profileRef}>
           <button

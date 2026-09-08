@@ -13,10 +13,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { JamIcon } from '../components/JamIcon';
+import { Header } from '../components/Header';
 import type { JamIconName } from '../lib/jamSvgMap';
 import { legacyIoniconToJam } from '../lib/legacyIoniconToJam';
 import { supabase } from '../lib/supabase';
 import { fetchSavedItemCountsByListId } from '../lib/savedListItems';
+import { fetchPublishedItineraries, matchItinerary } from 'cavitour-shared/itineraries';
+import type { ItineraryCard } from '../data/mockData';
 
 interface SavedList {
   id: string;
@@ -70,6 +73,39 @@ function formatUpdated(iso?: string): string {
   }
 }
 
+async function fetchSavedItinerariesAcrossLists(
+  client: typeof supabase,
+  listIds: string[]
+): Promise<ItineraryCard[]> {
+  if (!listIds.length) return [];
+  const { data: links, error } = await client
+    .from('saved_list_itinerary_items')
+    .select('itinerary_ref')
+    .in('list_id', listIds);
+  if (error || !links) return [];
+  const refs = [
+    ...new Set(
+      links
+        .map((r) => String((r as { itinerary_ref: string }).itinerary_ref ?? '').trim())
+        .filter(Boolean)
+    ),
+  ];
+  if (!refs.length) return [];
+  let published: Awaited<ReturnType<typeof fetchPublishedItineraries>> = [];
+  try {
+    published = await fetchPublishedItineraries(client);
+  } catch {
+    published = [];
+  }
+  const cards: ItineraryCard[] = [];
+  for (const ref of refs) {
+    const c = matchItinerary(published, ref) as ItineraryCard | null;
+    if (c) cards.push(c);
+  }
+  cards.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
+  return cards;
+}
+
 const SavedListScreen: React.FC = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -78,7 +114,7 @@ const SavedListScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [hubTab, setHubTab] = useState<'Saved' | 'Itineraries'>('Saved');
+  const [savedItineraries, setSavedItineraries] = useState<ItineraryCard[]>([]);
 
   const loadLists = async (isRefresh = false) => {
     try {
@@ -89,6 +125,7 @@ const SavedListScreen: React.FC = () => {
       } = await supabase.auth.getUser();
       if (!user) {
         setLists([]);
+        setSavedItineraries([]);
         return;
       }
 
@@ -113,9 +150,17 @@ const SavedListScreen: React.FC = () => {
         console.error('Error loading list place counts:', e);
       }
       setLists(rows.map((l) => ({ ...l, place_count: counts[l.id] ?? 0 })));
+
+      try {
+        setSavedItineraries(await fetchSavedItinerariesAcrossLists(supabase, listIds));
+      } catch (e) {
+        console.error('Error loading saved itineraries:', e);
+        setSavedItineraries([]);
+      }
     } catch (error) {
       console.error('Error loading lists:', error);
       setLists([]);
+      setSavedItineraries([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -137,8 +182,6 @@ const SavedListScreen: React.FC = () => {
         (l.description ?? '').toLowerCase().includes(q)
     );
   }, [lists, query]);
-
-  const totalSaves = useMemo(() => lists.reduce((a, l) => a + l.place_count, 0), [lists]);
 
   const handleDelete = (list: SavedList) => {
     Alert.alert(
@@ -168,59 +211,28 @@ const SavedListScreen: React.FC = () => {
   };
 
   const handleOpenList = (list: SavedList) => {
-    navigation.navigate(
-      'SavedListDetail' as never,
-      {
-        listId: list.id,
-        list: {
-          id: list.id,
-          name: list.name,
-          description: list.description,
-          icon_name: list.icon_name,
-          type: list.type,
-        },
-        focusKind: hubTab === 'Itineraries' ? 'itinerary' : 'establishment',
-      } as never
-    );
+    (
+      navigation as unknown as { navigate: (name: string, params: object) => void }
+    ).navigate('SavedListDetail', {
+      listId: list.id,
+      list: {
+        id: list.id,
+        name: list.name,
+        description: list.description,
+        icon_name: list.icon_name,
+        type: list.type,
+      },
+    });
   };
 
-  const renderPageHeader = () => (
-    <View style={[styles.pageHeader, { paddingTop: insets.top + 8 }]}>
-      <View style={styles.titleRow}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          hitSlop={10}
-        >
-          <JamIcon ionicon="chevron-left" size={22} color={TITLE} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Saved</Text>
-      </View>
-      <Text style={styles.headerSubtitle}>
-        {!loading && lists.length > 0
-          ? `${lists.length} list${lists.length === 1 ? '' : 's'} · ${totalSaves} save${totalSaves === 1 ? '' : 's'}`
-          : 'Places and itineraries you keep for later.'}
-      </Text>
-      <View style={styles.seg}>
-        {(['Saved', 'Itineraries'] as const).map((tab) => {
-          const on = hubTab === tab;
-          return (
-            <TouchableOpacity
-              key={tab}
-              style={[styles.segBtn, on && styles.segBtnOn]}
-              onPress={() => setHubTab(tab)}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: on }}
-            >
-              <Text style={[styles.segText, on && styles.segTextOn]}>{tab}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </View>
-  );
+  const openItinerary = (card: ItineraryCard) => {
+    (navigation as { navigate: (name: string, params: object) => void }).navigate('Itineraries', {
+      screen: 'ItineraryDetail',
+      params: { itineraryId: card.id },
+    });
+  };
+
+  const renderPageHeader = () => <Header title="Saved" showBack darkBackground />;
 
   const renderListItem = ({ item }: { item: SavedList }) => {
     const { name: iconJam, color: iconColor } = listIconVisual(item.icon_name);
@@ -292,34 +304,34 @@ const SavedListScreen: React.FC = () => {
       {renderPageHeader()}
 
       <View style={styles.body}>
-        <TouchableOpacity
-          style={styles.addListButton}
-          onPress={() => navigation.navigate('NewList' as never)}
-          activeOpacity={0.88}
-          accessibilityLabel="Create new list"
-          accessibilityRole="button"
-        >
-          <JamIcon ionicon="plus" size={22} color={WHITE} />
-          <Text style={styles.addListButtonText}>New list</Text>
-        </TouchableOpacity>
-
         {lists.length > 0 ? (
-          <View style={styles.searchShell}>
-            <JamIcon ionicon="search" size={18} color={MUTED} />
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search lists…"
-              placeholderTextColor={PLACEHOLDER}
-              style={styles.searchInput}
-              returnKeyType="search"
-              accessibilityLabel="Search saved lists"
-            />
-            {query.length > 0 ? (
-              <TouchableOpacity onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Clear search">
-                <JamIcon ionicon="close-circle" size={20} color={MUTED} />
-              </TouchableOpacity>
-            ) : null}
+          <View style={styles.searchRow}>
+            <View style={styles.searchShell}>
+              <JamIcon ionicon="search" size={18} color={MUTED} />
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search lists…"
+                placeholderTextColor={PLACEHOLDER}
+                style={styles.searchInput}
+                returnKeyType="search"
+                accessibilityLabel="Search saved lists"
+              />
+              {query.length > 0 ? (
+                <TouchableOpacity onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Clear search">
+                  <JamIcon ionicon="close-circle" size={20} color={MUTED} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+            <TouchableOpacity
+              style={styles.addListCircle}
+              onPress={() => navigation.navigate('NewList' as never)}
+              activeOpacity={0.88}
+              accessibilityLabel="Create new list"
+              accessibilityRole="button"
+            >
+              <JamIcon ionicon="plus" size={24} color={WHITE} />
+            </TouchableOpacity>
           </View>
         ) : null}
 
@@ -330,9 +342,7 @@ const SavedListScreen: React.FC = () => {
             </View>
             <Text style={styles.emptyTitle}>Nothing saved yet</Text>
             <Text style={styles.emptySubtitle}>
-              {hubTab === 'Itineraries'
-                ? 'Save a curated route from an itinerary page to see it here.'
-                : 'Browse places and tap save to add them to a list.'}
+              Browse places and tap save to add them to a list.
             </Text>
             <TouchableOpacity
               style={styles.emptyCta}
@@ -360,6 +370,42 @@ const SavedListScreen: React.FC = () => {
                 colors={[GREEN]}
               />
             }
+            ListFooterComponent={
+              <View>
+                <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>Itineraries</Text>
+                {savedItineraries.length === 0 ? (
+                  <Text style={styles.itinEmpty}>
+                    Save a curated route from an itinerary page to see it here.
+                  </Text>
+                ) : (
+                  savedItineraries.map((card) => (
+                    <TouchableOpacity
+                      key={card.id}
+                      style={styles.itinRow}
+                      onPress={() => openItinerary(card)}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${card.title}, itinerary`}
+                    >
+                      <View style={styles.iconBubble}>
+                        <JamIcon ionicon="map-outline" size={24} color={TEAL} />
+                      </View>
+                      <View style={styles.cardText}>
+                        <Text style={styles.listTitle} numberOfLines={1}>
+                          {card.title}
+                        </Text>
+                        {card.subtitle ? (
+                          <Text style={styles.updatedHint} numberOfLines={1}>
+                            {card.subtitle}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <JamIcon ionicon="chevron-forward" size={20} color={MUTED} />
+                    </TouchableOpacity>
+                  ))
+                )}
+              </View>
+            }
             ListEmptyComponent={
               query.trim() ? (
                 <Text style={styles.noMatch}>No lists match “{query.trim()}”.</Text>
@@ -377,62 +423,36 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: PAGE_BG,
   },
-  pageHeader: {
-    paddingHorizontal: 20,
-    paddingBottom: 12,
+  body: {
+    flex: 1,
   },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: -8,
-  },
-  headerTitle: {
+  sectionTitle: {
     fontFamily: 'Poppins_600SemiBold',
-    fontSize: 24,
-    lineHeight: 30,
+    fontSize: 16,
+    lineHeight: 22,
     color: TITLE,
+    marginBottom: 4,
   },
-  headerSubtitle: {
-    fontFamily: 'Poppins_400Regular',
+  sectionTitleSpaced: {
+    marginTop: 20,
+  },
+  itinEmpty: {
+    fontFamily: 'Inter_400Regular',
     fontSize: 13,
     lineHeight: 18,
     color: MUTED,
-    marginTop: 4,
+    marginBottom: 4,
   },
-  seg: {
-    marginTop: 14,
+  itinRow: {
     flexDirection: 'row',
-    backgroundColor: '#E8EEEC',
-    borderRadius: 999,
-    padding: 4,
-  },
-  segBtn: {
-    flex: 1,
-    borderRadius: 999,
-    paddingVertical: 8,
     alignItems: 'center',
-  },
-  segBtnOn: {
     backgroundColor: WHITE,
-  },
-  segText: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 13,
-    color: MUTED,
-  },
-  segTextOn: {
-    color: TEAL,
-    fontFamily: 'Poppins_600SemiBold',
-  },
-  body: {
-    flex: 1,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(27, 138, 112, 0.08)',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginTop: 8,
   },
   loadingBody: {
     flex: 1,
@@ -445,35 +465,32 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: MUTED,
   },
-  addListButton: {
-    marginHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 12,
+  addListCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     backgroundColor: CTA_DARK,
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
   },
-  addListButtonText: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 15,
-    color: WHITE,
-  },
-  searchShell: {
+  searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     marginHorizontal: 16,
+    marginTop: 12,
     marginBottom: 12,
+  },
+  searchShell: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     backgroundColor: INPUT_BG,
-    borderRadius: 14,
+    borderRadius: 999,
     borderWidth: 1,
     borderColor: 'rgba(27, 138, 112, 0.12)',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 10,
   },
   searchInput: {

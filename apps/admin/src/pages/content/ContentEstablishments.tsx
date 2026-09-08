@@ -17,6 +17,7 @@ import { persistStaAboutAndMedia } from '../../lib/staAttractionMedia';
 import {
   type StaHighlight,
   type StaV3Form,
+  computeIsListed,
   deleteStaV3Row,
   fetchStaV3Rows,
   insertStaV3Row,
@@ -32,7 +33,9 @@ import {
   tableSelectOptions,
 } from '../../lib/staLookups';
 import { fetchPlaceCheckinMap, type PlaceCheckinInfo } from '../../lib/placeVisits';
+import { fetchCitiesAdmin, inferLguKind, type CityAdminRow } from '../../lib/staCitiesAdmin';
 import { supabase } from '../../lib/supabase';
+import { foldLguName } from 'cavitour-shared/lguKind';
 
 /** Admin table/form row (string coords for inputs + About/media/hours/contact). */
 type StaCrudRow = {
@@ -294,6 +297,8 @@ function AttractionAboutPhotos({
   imagesAtOpenRef: MutableRefObject<string[]>;
 }) {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [dragOver, setDragOver] = useState<number | null>(null);
 
   useEffect(() => {
     if (!lightboxUrl) return;
@@ -303,6 +308,17 @@ function AttractionAboutPhotos({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [lightboxUrl]);
+
+  const reorderImages = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0) return;
+    setForm((prev) => {
+      const images = [...(prev.images ?? [])];
+      if (from >= images.length || to >= images.length) return prev;
+      const [item] = images.splice(from, 1);
+      images.splice(to, 0, item);
+      return { ...prev, images };
+    });
+  };
 
   return (
     <div className={styles.extraSection}>
@@ -368,18 +384,64 @@ function AttractionAboutPhotos({
       </label>
       <div className={styles.field}>
         <span>Photos</span>
+        <p className={styles.photoHint}>Drag the handle to change order. The first photo is the cover.</p>
         {(form.images ?? []).length > 0 ? (
           <div className={styles.imageGrid}>
             {(form.images ?? []).map((url, idx) => (
-              <div key={`${url}-${idx}`} className={styles.imageTile}>
+              <div
+                key={`${url}-${idx}`}
+                className={`${styles.imageTile} ${dragFrom === idx ? styles.imageTileDragging : ''} ${
+                  dragOver === idx && dragFrom !== null && dragFrom !== idx ? styles.imageTileDrop : ''
+                }`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  if (dragOver !== idx) setDragOver(idx);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const from = Number(e.dataTransfer.getData('text/plain'));
+                  if (Number.isFinite(from)) reorderImages(from, idx);
+                  setDragFrom(null);
+                  setDragOver(null);
+                }}
+              >
                 <button
                   type="button"
                   className={styles.imageTileBtn}
-                  aria-label="View image"
+                  aria-label={idx === 0 ? 'View cover image' : `View image ${idx + 1}`}
                   disabled={saving}
                   onClick={() => setLightboxUrl(url)}
                 >
                   <img src={url} alt="" />
+                </button>
+                {idx === 0 ? <span className={styles.coverBadge}>Cover</span> : null}
+                <button
+                  type="button"
+                  className={styles.imageGrip}
+                  draggable={!saving}
+                  disabled={saving}
+                  aria-label={`Drag to reorder photo ${idx + 1}`}
+                  onDragStart={(e) => {
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', String(idx));
+                    const tile = e.currentTarget.closest(`.${styles.imageTile}`);
+                    if (tile) e.dataTransfer.setDragImage(tile, 44, 44);
+                    setDragFrom(idx);
+                  }}
+                  onDragEnd={() => {
+                    setDragFrom(null);
+                    setDragOver(null);
+                  }}
+                >
+                  <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor" aria-hidden>
+                    <circle cx="3" cy="3" r="1.4" />
+                    <circle cx="9" cy="3" r="1.4" />
+                    <circle cx="3" cy="8" r="1.4" />
+                    <circle cx="9" cy="8" r="1.4" />
+                    <circle cx="3" cy="13" r="1.4" />
+                    <circle cx="9" cy="13" r="1.4" />
+                  </svg>
                 </button>
                 <button
                   type="button"
@@ -465,6 +527,8 @@ export function ContentEstablishments() {
   const [rows, setRows] = useState<StaCrudRow[]>([]);
   const [checkins, setCheckins] = useState<Map<string, PlaceCheckinInfo>>(new Map());
   const [lookups, setLookups] = useState<StaLookups>(emptyLookups);
+  const [lguRows, setLguRows] = useState<CityAdminRow[]>([]);
+  const [locationFilter, setLocationFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -483,11 +547,13 @@ export function ContentEstablishments() {
     setLoading(true);
     setError(null);
     try {
-      const [data, nextLookups] = await Promise.all([
+      const [data, nextLookups, nextLgus] = await Promise.all([
         fetchStaV3Rows(supabase),
         fetchStaLookups(supabase),
+        fetchCitiesAdmin(supabase).catch(() => [] as CityAdminRow[]),
       ]);
       setLookups(nextLookups);
+      setLguRows(nextLgus);
       const mapped = data.map((row) =>
         toCrudRow({
           id: row.id,
@@ -528,6 +594,28 @@ export function ContentEstablishments() {
     void reload();
   }, [reload]);
 
+  const locationFilterOptions = useMemo(() => {
+    const cities =
+      lguRows.length > 0
+        ? lguRows.filter((r) => r.kind === 'city').map((r) => r.name)
+        : lookups.cities.filter((c) => inferLguKind(c.label) === 'city').map((c) => c.label);
+    const municipalities =
+      lguRows.length > 0
+        ? lguRows.filter((r) => r.kind === 'municipality').map((r) => r.name)
+        : lookups.cities.filter((c) => inferLguKind(c.label) === 'municipality').map((c) => c.label);
+    return [
+      { value: '', label: 'All locations' },
+      ...cities.map((name) => ({ value: name, label: name })),
+      ...municipalities.map((name) => ({ value: name, label: name })),
+    ];
+  }, [lguRows, lookups.cities]);
+  const matchesLguFilter = useCallback(
+    (row: StaCrudRow) => {
+      if (!locationFilter) return true;
+      return foldLguName(row.city_mun || row.city) === foldLguName(locationFilter);
+    },
+    [locationFilter]
+  );
   const cityOptions = useMemo(() => tableSelectOptions(lookups.cities), [lookups.cities]);
   const taCategoryOptions = useMemo(
     () => tableSelectOptions(lookups.taCategories),
@@ -592,6 +680,88 @@ export function ContentEstablishments() {
     await reload();
   };
 
+  const toggleListing = async (row: StaCrudRow, nextHighlight: StaHighlight) => {
+    const form: Omit<StaCrudRow, 'id'> = {
+      ...emptyForm,
+      ...row,
+      name: row.ta_name,
+      city: row.city_mun,
+      description: row.description ?? '',
+      images: [...(row.images ?? [])],
+      openingHours: row.openingHours ?? '',
+      closingHours: row.closingHours ?? '',
+      phone: row.phone ?? '',
+      email: row.email ?? '',
+      website: row.website ?? '',
+      highlight: nextHighlight,
+    };
+    await saveStaAndMedia(form, row.id);
+    if (nextHighlight === 'red') {
+      toast('Attraction hidden', 'success');
+    } else {
+      const willList = computeIsListed({
+        address: form.address,
+        google_maps_link: form.google_maps_link,
+        highlight: nextHighlight,
+      });
+      if (willList) toast('Attraction listed', 'success');
+      else {
+        toast(
+          'Display set, but it still needs an address and Google Maps link to appear as Listed.',
+          'info'
+        );
+      }
+    }
+    await reload();
+  };
+
+  const tableColumns = useMemo(
+    () => [
+      {
+        key: 'photo',
+        header: 'Photo',
+        render: (r: StaCrudRow) =>
+          r.images[0] ? (
+            <img src={r.images[0]} alt="" className={styles.tableThumb} />
+          ) : (
+            <span className={styles.tableThumbEmpty}>—</span>
+          ),
+      },
+      { key: 'name', header: 'Name', render: (r: StaCrudRow) => <strong>{r.ta_name}</strong> },
+      { key: 'city', header: 'City', render: (r: StaCrudRow) => r.city_mun || '—' },
+      { key: 'barangay', header: 'Barangay', render: (r: StaCrudRow) => r.barangay || '—' },
+      {
+        key: 'visits',
+        header: 'Visits',
+        render: (r: StaCrudRow) => checkins.get(r.id)?.totalVisits ?? 0,
+      },
+      {
+        key: 'qr',
+        header: 'Check-in QR',
+        render: (r: StaCrudRow) => {
+          const ci = checkins.get(r.id);
+          if (!ci) return <span className={styles.muted}>No code</span>;
+          return (
+            <div className={styles.qrCell}>
+              <img src={ci.qrUrl} alt={`QR for ${r.ta_name}`} width={48} height={48} />
+              <code className={styles.qrCode}>{ci.code}</code>
+            </div>
+          );
+        },
+      },
+      {
+        key: 'highlight',
+        header: 'Display',
+        render: (r: StaCrudRow) => {
+          if (r.highlight === 'red') return <CrudBadge label="Hidden" tone="neutral" />;
+          if (r.highlight === 'yellow') return <CrudBadge label="Festivals" tone="amber" />;
+          return <CrudBadge label="Display" tone="green" />;
+        },
+      },
+    ],
+    [checkins]
+  );
+
   return (
     <ContentCrudPage<StaCrudRow>
       title="Tourist Attractions"
@@ -650,6 +820,16 @@ export function ContentEstablishments() {
         ],
         match: (row, value) => (value === 'listed' ? row.is_listed : !row.is_listed),
       }}
+      selectFilters={[
+        {
+          key: 'location',
+          label: 'City or municipality',
+          value: locationFilter,
+          options: locationFilterOptions,
+          onChange: setLocationFilter,
+        },
+      ]}
+      rowFilter={matchesLguFilter}
       fields={[
         { key: 'ta_name', label: 'Name', required: true, span: 'full' },
         {
@@ -713,49 +893,17 @@ export function ContentEstablishments() {
           />
         </>
       )}
-      columns={[
-        {
-          key: 'photo',
-          header: 'Photo',
-          render: (r) =>
-            r.images[0] ? (
-              <img src={r.images[0]} alt="" className={styles.tableThumb} />
-            ) : (
-              <span className={styles.tableThumbEmpty}>—</span>
-            ),
-        },
-        { key: 'name', header: 'Name', render: (r) => <strong>{r.ta_name}</strong> },
-        { key: 'city', header: 'City', render: (r) => r.city_mun || '—' },
-        { key: 'barangay', header: 'Barangay', render: (r) => r.barangay || '—' },
-        {
-          key: 'visits',
-          header: 'Visits',
-          render: (r) => checkins.get(r.id)?.totalVisits ?? 0,
-        },
-        {
-          key: 'qr',
-          header: 'Check-in QR',
-          render: (r) => {
-            const ci = checkins.get(r.id);
-            if (!ci) return <span className={styles.muted}>No code</span>;
-            return (
-              <div className={styles.qrCell}>
-                <img src={ci.qrUrl} alt={`QR for ${r.ta_name}`} width={48} height={48} />
-                <code className={styles.qrCode}>{ci.code}</code>
-              </div>
-            );
-          },
-        },
-        {
-          key: 'highlight',
-          header: 'Display',
-          render: (r) => {
-            if (r.highlight === 'red') return <CrudBadge label="Hidden" tone="neutral" />;
-            if (r.highlight === 'yellow') return <CrudBadge label="Festivals" tone="amber" />;
-            return <CrudBadge label="Display" tone="green" />;
-          },
-        },
-      ]}
+      columns={tableColumns}
+      getColumns={(tab) =>
+        tab === 'listed' || tab === 'hidden'
+          ? tableColumns.filter((col) => col.key !== 'highlight')
+          : tableColumns
+      }
+      rowMenuItems={(row, { status: tab, saving }) =>
+        tab === 'hidden' && !saving
+          ? [{ label: 'Show on app', onSelect: () => void toggleListing(row, 'none') }]
+          : []
+      }
     />
   );
 }

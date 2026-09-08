@@ -18,6 +18,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { JamIcon } from '../components/JamIcon';
+import { Header } from '../components/Header';
 import { SaveToListSheet, type SaveToListRow } from '../components/SaveToListSheet';
 import { Place, getItineraryEstablishments } from '../data/mockData';
 import { parsePlaceCoords } from '../lib/placeCoords';
@@ -25,7 +26,7 @@ import { placeImageSource } from '../lib/placeImageSource';
 import { launchGoogleMapsDrivingTo } from '../lib/launchGoogleMapsDirections';
 import * as Location from 'expo-location';
 import { formatNtdpCategoryTagLabel, getEstablishmentAboutBody } from '../lib/ntdpDisplayLabels';
-import { fetchPlaceById, fetchDashboardPlacesPool, haversineDistanceKm } from '../lib/placesFromSupabase';
+import { fetchPlaceById } from '../lib/placesFromSupabase';
 import { supabase } from '../lib/supabase';
 import {
   isSupabasePlaceId,
@@ -77,16 +78,7 @@ function buildReviewStats(ratings: number[]) {
 const PAGE_BG = '#FFFFFF';
 const LIST_PAGE_BG = '#F5F5F6';
 const CARD_BORDER = 'rgba(229, 229, 229, 0.9)';
-const CATEGORY_PILL_BG = 'rgba(16, 163, 127, 0.22)';
-const CATEGORY_PILL_TEXT = '#3d4a06';
 const NEUTRAL_MUTED = '#737373';
-
-function formatProximityKm(km: number | null | undefined): string {
-  if (km == null || !Number.isFinite(km)) return '';
-  if (km < 0.1) return 'Nearby';
-  if (km < 10) return `${km.toFixed(1)} km`;
-  return `${Math.round(km)} km`;
-}
 
 export type AboutEstablishmentParams = {
   place?: Place;
@@ -131,24 +123,29 @@ function normalizeExternalUrl(url: string): string {
   return `https://${t}`;
 }
 
-function AboutBackBar({ onBack, topInset }: { onBack: () => void; topInset: number }) {
-  return (
-    <View style={[styles.backBar, { paddingTop: topInset + 10 }]}>
-      <TouchableOpacity
-        style={styles.backBarBtn}
-        onPress={onBack}
-        accessibilityRole="button"
-        accessibilityLabel="Go back"
-        activeOpacity={0.75}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-      >
-        <View style={styles.backBarIconWrap}>
-          <JamIcon ionicon="arrow-back" size={22} color={TITLE} />
-        </View>
-        <Text style={styles.backBarLabel}>Back</Text>
-      </TouchableOpacity>
-    </View>
-  );
+function formatClockAnalog(raw: string): string | null {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(raw.trim());
+  if (!match) return null;
+  const hour24 = Number(match[1]);
+  const minutes = match[2];
+  if (!Number.isInteger(hour24) || hour24 < 0 || hour24 > 23) return null;
+  const suffix = hour24 >= 12 ? 'PM' : 'AM';
+  const hour12 = hour24 % 12 || 12;
+  return `${hour12}:${minutes} ${suffix}`;
+}
+
+/** Catalog hours are "07:00 – 17:00"; show 12-hour time like the web detail page. */
+function formatHoursAnalog(hours?: string | null): string {
+  const text = String(hours ?? '').trim();
+  if (!text) return '';
+  if (/\b(?:am|pm)\b/i.test(text)) return text;
+  const parts = text.split(/\s*[–—-]\s*/);
+  if (parts.length === 2) {
+    const start = formatClockAnalog(parts[0]);
+    const end = formatClockAnalog(parts[1]);
+    if (start && end) return `${start} – ${end}`;
+  }
+  return formatClockAnalog(text) ?? text;
 }
 
 function EstablishmentPhotoCarousel({
@@ -247,7 +244,6 @@ export default function AboutEstablishmentScreen() {
   const [reviewsError, setReviewsError] = useState('');
   const [canWriteReview, setCanWriteReview] = useState(false);
   const [userPt, setUserPt] = useState<{ lat: number; lng: number } | null>(null);
-  const [nearbyPlaces, setNearbyPlaces] = useState<Array<Place & { distanceKm: number }>>([]);
   const [overviewExpanded, setOverviewExpanded] = useState(false);
 
   useEffect(() => {
@@ -374,8 +370,10 @@ export default function AboutEstablishmentScreen() {
     if (addr) return addr;
     return place.city_mun?.trim() ?? '';
   }, [place]);
+  const hoursLabel = useMemo(() => formatHoursAnalog(place?.hours), [place?.hours]);
   const hasContact = Boolean(
-    place?.phone ||
+    hoursLabel ||
+      place?.phone ||
       place?.email ||
       place?.website ||
       place?.social_facebook ||
@@ -384,11 +382,6 @@ export default function AboutEstablishmentScreen() {
   );
 
   const placeCoords = useMemo(() => (place ? parsePlaceCoords(place) : null), [place]);
-  const distanceKm = useMemo(() => {
-    if (!userPt || !placeCoords) return null;
-    return haversineDistanceKm(userPt.lat, userPt.lng, placeCoords.lat, placeCoords.lng);
-  }, [userPt, placeCoords]);
-  const distanceLabel = formatProximityKm(distanceKm);
   const highlightCards = useMemo(() => {
     if (!place) return [];
     return [
@@ -417,38 +410,6 @@ export default function AboutEstablishmentScreen() {
       cancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    if (!placeCoords || isItinerary) {
-      setNearbyPlaces([]);
-      return;
-    }
-    let cancelled = false;
-    void fetchDashboardPlacesPool(supabase, 400)
-      .then((pool) => {
-        if (cancelled) return;
-        const ranked = pool
-          .filter((p) => p.id !== place?.id)
-          .map((p) => {
-            const c = parsePlaceCoords(p);
-            if (!c) return null;
-            return {
-              ...p,
-              distanceKm: haversineDistanceKm(placeCoords.lat, placeCoords.lng, c.lat, c.lng),
-            };
-          })
-          .filter((p): p is Place & { distanceKm: number } => p != null && Number.isFinite(p.distanceKm))
-          .sort((a, b) => a.distanceKm - b.distanceKm)
-          .slice(0, 4);
-        setNearbyPlaces(ranked);
-      })
-      .catch(() => {
-        if (!cancelled) setNearbyPlaces([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [place?.id, placeCoords?.lat, placeCoords?.lng, isItinerary]);
 
   const visitorReviews = useMemo(
     () => [...publishedReviews].sort((a, b) => b.at - a.at),
@@ -565,37 +526,6 @@ export default function AboutEstablishmentScreen() {
     Linking.openURL(normalizeExternalUrl(url)).catch(() => {
       Alert.alert('Could not open link', 'This link could not be opened on your device.');
     });
-  };
-
-  const openStartCaviTrip = () => {
-    const c = parsePlaceCoords(place);
-    if (!c) {
-      Alert.alert('Can’t start trip', 'This place does not have map coordinates yet.');
-      return;
-    }
-    const placeForNav: Place = { ...place, latitude: c.lat, longitude: c.lng };
-
-    const goInApp = () => {
-      (navigation as { navigate: (name: string, params: object) => void }).navigate('Directions', {
-        place: placeForNav,
-        caviTrip: true,
-      });
-    };
-
-    const openGoogleMaps = async () => {
-      await launchGoogleMapsDrivingTo(c.lat, c.lng);
-      goInApp();
-    };
-
-    Alert.alert(
-      'Start CaviTrip',
-      `Open Google Maps with directions from your location to ${place.name}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Stay in app', onPress: goInApp },
-        { text: 'Open Google Maps', onPress: () => void openGoogleMaps() },
-      ]
-    );
   };
 
   const saveItemToList = async (listId: string, listName: string) => {
@@ -724,8 +654,8 @@ export default function AboutEstablishmentScreen() {
     const itinerarySlides = collectPhotoSlides(place);
     return (
       <View style={[styles.root, { backgroundColor: LIST_PAGE_BG }]}>
+        <Header title="About establishment" showBack darkBackground onBackPress={goBack} />
         <View style={styles.itineraryCarouselPad}>
-          <AboutBackBar onBack={goBack} topInset={insets.top} />
           <EstablishmentPhotoCarousel slides={itinerarySlides} placeName={place.name} />
         </View>
         <FlatList
@@ -738,7 +668,6 @@ export default function AboutEstablishmentScreen() {
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
             <View style={styles.itineraryHeaderBlock}>
-              <Text style={styles.eyebrow}>About establishment</Text>
               <Text style={styles.itineraryTitleBelowHero}>{place.name}</Text>
               <Text style={styles.establishmentsHeading}>Establishments</Text>
             </View>
@@ -772,6 +701,28 @@ export default function AboutEstablishmentScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: PAGE_BG }]}>
+      <Header
+        title="About establishment"
+        showBack
+        darkBackground
+        onBackPress={goBack}
+        right={
+          <TouchableOpacity
+            style={[styles.headerSaveBtn, saved && styles.headerSaveBtnActive]}
+            onPress={onPressSaveFab}
+            accessibilityRole="button"
+            accessibilityLabel={saved ? 'Remove save' : 'Save place'}
+            activeOpacity={0.82}
+            disabled={checkingSaved}
+          >
+            {checkingSaved ? (
+              <ActivityIndicator size="small" color={WHITE} />
+            ) : (
+              <JamIcon ionicon="bookmark-outline" size={22} color={WHITE} />
+            )}
+          </TouchableOpacity>
+        }
+      />
       <ScrollView
         ref={scrollRef}
         style={styles.scroll}
@@ -781,38 +732,17 @@ export default function AboutEstablishmentScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <AboutBackBar onBack={goBack} topInset={insets.top} />
         <EstablishmentPhotoCarousel slides={photoSlides} placeName={place.name} />
 
         <View style={[styles.titleBlock, { width: screenWidth - 36 }]}>
           <View style={styles.titleTextCol}>
-            <Text style={styles.eyebrow}>About establishment</Text>
             <Text style={styles.placeName}>{place.name}</Text>
             {addressLine ? (
               <Text style={styles.addressLine} numberOfLines={3}>
                 {addressLine}
               </Text>
             ) : null}
-            <View style={styles.categoryPillRow}>
-              <View style={styles.categoryPill}>
-                <Text style={styles.categoryPillText}>{categoryLabel}</Text>
-              </View>
-            </View>
           </View>
-          <TouchableOpacity
-            style={[styles.fab, styles.fabSave, saved && styles.fabSaveActive]}
-            onPress={onPressSaveFab}
-            accessibilityRole="button"
-            accessibilityLabel={saved ? 'Remove save' : 'Save place'}
-            activeOpacity={0.82}
-            disabled={checkingSaved}
-          >
-            {checkingSaved ? (
-              <ActivityIndicator size="small" color={saved ? WHITE : GREEN} />
-            ) : (
-              <JamIcon ionicon="bookmark-outline" size={20} color={saved ? WHITE : GREEN} />
-            )}
-          </TouchableOpacity>
         </View>
 
         <View style={styles.aboutPanel}>
@@ -830,91 +760,108 @@ export default function AboutEstablishmentScreen() {
                 ) : null}
               </>
             )}
-            {place.hours?.trim() ? (
-              <Text style={styles.hoursLine}>
-                <Text style={styles.hoursLabel}>Hours: </Text>
-                {place.hours.trim()}
-              </Text>
-            ) : null}
+          </View>
+        </View>
+
+        <View style={[styles.aboutPanel, styles.contactCard]}>
+          <View style={[styles.aboutPanelInner, styles.contactCardInner]}>
+            <Text style={styles.contactHeading}>Contact</Text>
             {hasContact ? (
-              <View style={styles.contactBox}>
-                <Text style={[styles.descriptionLabel, styles.contactSectionTitle]}>Contact</Text>
-                {place.phone ? (
-                  <Text style={styles.contactLine}>
-                    <Text style={styles.contactLabel}>Phone: </Text>
-                    {place.phone}
-                  </Text>
+              <View style={styles.contactColumns}>
+                <View style={styles.contactCol}>
+                  {hoursLabel ? (
+                    <View>
+                      <Text style={styles.contactFieldLabel}>Hours</Text>
+                      <Text style={styles.contactFieldValue}>{hoursLabel}</Text>
+                    </View>
+                  ) : null}
+                  {place.phone ? (
+                    <View>
+                      <Text style={styles.contactFieldLabel}>Phone</Text>
+                      <Text style={styles.contactFieldValue}>{place.phone}</Text>
+                    </View>
+                  ) : null}
+                  {place.email ? (
+                    <View>
+                      <Text style={styles.contactFieldLabel}>Email</Text>
+                      <Text style={styles.contactFieldValue} numberOfLines={2}>
+                        {place.email}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+                {place.website || place.social_facebook || place.social_instagram || place.social_twitter ? (
+                  <View style={styles.contactCol}>
+                    <Text style={styles.contactFieldLabel}>Social Media</Text>
+                    {place.website ? (
+                      <TouchableOpacity
+                        onPress={() => openContactLink(place.website!)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.contactLink} numberOfLines={1}>
+                          Website
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+                    {place.social_facebook ? (
+                      <TouchableOpacity
+                        onPress={() => openContactLink(place.social_facebook!)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.contactLink} numberOfLines={1}>
+                          Facebook
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+                    {place.social_instagram ? (
+                      <TouchableOpacity
+                        onPress={() => openContactLink(place.social_instagram!)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.contactLink} numberOfLines={1}>
+                          Instagram
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+                    {place.social_twitter ? (
+                      <TouchableOpacity
+                        onPress={() => openContactLink(place.social_twitter!)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.contactLink} numberOfLines={1}>
+                          X
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
                 ) : null}
-                {place.email ? (
-                  <Text style={styles.contactLine}>
-                    <Text style={styles.contactLabel}>Email: </Text>
-                    {place.email}
-                  </Text>
+              </View>
+            ) : (
+              <Text style={styles.contactEmpty}>No contact details listed yet.</Text>
+            )}
+            {addressLine || categoryLabel ? (
+              <View style={styles.contactDetailsRow}>
+                {addressLine ? (
+                  <View style={styles.contactDetailItem}>
+                    <Text style={styles.contactFieldLabel}>Address</Text>
+                    <Text style={styles.contactFieldValue}>{addressLine}</Text>
+                  </View>
                 ) : null}
-                {place.website ? (
-                  <TouchableOpacity
-                    onPress={() => openContactLink(place.website!)}
-                    activeOpacity={0.7}
-                    style={styles.contactTapRow}
-                  >
-                    <Text style={styles.contactLine}>
-                      <Text style={styles.contactLabel}>Website: </Text>
-                      <Text style={styles.contactLink}>{place.website}</Text>
-                    </Text>
-                  </TouchableOpacity>
-                ) : null}
-                {place.social_facebook ? (
-                  <TouchableOpacity
-                    onPress={() => openContactLink(place.social_facebook!)}
-                    activeOpacity={0.7}
-                    style={styles.contactTapRow}
-                  >
-                    <Text style={styles.contactLine}>
-                      <Text style={styles.contactLabel}>Facebook: </Text>
-                      <Text style={styles.contactLink}>{place.social_facebook}</Text>
-                    </Text>
-                  </TouchableOpacity>
-                ) : null}
-                {place.social_instagram ? (
-                  <TouchableOpacity
-                    onPress={() => openContactLink(place.social_instagram!)}
-                    activeOpacity={0.7}
-                    style={styles.contactTapRow}
-                  >
-                    <Text style={styles.contactLine}>
-                      <Text style={styles.contactLabel}>Instagram: </Text>
-                      <Text style={styles.contactLink}>{place.social_instagram}</Text>
-                    </Text>
-                  </TouchableOpacity>
-                ) : null}
-                {place.social_twitter ? (
-                  <TouchableOpacity
-                    onPress={() => openContactLink(place.social_twitter!)}
-                    activeOpacity={0.7}
-                    style={styles.contactTapRow}
-                  >
-                    <Text style={styles.contactLine}>
-                      <Text style={styles.contactLabel}>X: </Text>
-                      <Text style={styles.contactLink}>{place.social_twitter}</Text>
-                    </Text>
-                  </TouchableOpacity>
+                {categoryLabel ? (
+                  <View style={styles.contactDetailItem}>
+                    <Text style={styles.contactFieldLabel}>Category</Text>
+                    <Text style={styles.contactFieldValue}>{categoryLabel}</Text>
+                  </View>
                 ) : null}
               </View>
             ) : null}
           </View>
         </View>
 
-        {distanceLabel ? (
-          <View style={styles.sectionBlock}>
-            <Text style={styles.sectionEyebrow}>Distance</Text>
-            <Text style={styles.distanceValue}>{distanceLabel}</Text>
-          </View>
-        ) : null}
-
         {highlightCards.length > 0 ? (
           <View style={styles.sectionBlock}>
             <Text style={styles.sectionHeading}>Highlights</Text>
-            <View style={styles.highlightRow}>
+            <View style={styles.highlightList}>
               {highlightCards.map((item) => (
                 <View key={item.key} style={styles.highlightCard}>
                   <Text style={styles.highlightLabel}>{item.label}</Text>
@@ -946,38 +893,6 @@ export default function AboutEstablishmentScreen() {
                 userLocation={userPt}
                 style={styles.mapInner}
               />
-            </View>
-          </View>
-        ) : null}
-
-        {nearbyPlaces.length > 0 ? (
-          <View style={styles.sectionBlock}>
-            <Text style={styles.sectionHeading}>Nearby</Text>
-            <View style={styles.nearbyGrid}>
-              {nearbyPlaces.map((p) => {
-                const img = placeImageSource(p.image);
-                const dist = formatProximityKm(p.distanceKm);
-                return (
-                  <TouchableOpacity
-                    key={p.id}
-                    style={styles.nearbyCard}
-                    onPress={() =>
-                      (navigation as { push?: (n: string, p: object) => void; navigate: (n: string, p: object) => void }).push
-                        ? (navigation as { push: (n: string, p: object) => void }).push('AboutEstablishment', { place: p })
-                        : (navigation as { navigate: (n: string, p: object) => void }).navigate('AboutEstablishment', { place: p })
-                    }
-                    accessibilityRole="button"
-                  >
-                    {img ? <Image source={img} style={styles.nearbyImg} /> : <View style={[styles.nearbyImg, styles.nearbyImgFallback]} />}
-                    <Text style={styles.nearbyName} numberOfLines={2}>
-                      {p.name}
-                    </Text>
-                    <Text style={styles.nearbyMeta} numberOfLines={1}>
-                      {dist ? `${dist} away` : p.city_mun || p.address}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
             </View>
           </View>
         ) : null}
@@ -1064,18 +979,6 @@ export default function AboutEstablishmentScreen() {
             ) : null}
           </View>
         ) : null}
-
-        <View style={styles.actionsBlock}>
-          <TouchableOpacity
-            onPress={openStartCaviTrip}
-            style={styles.caviTripButton}
-            activeOpacity={0.92}
-            accessibilityRole="button"
-            accessibilityLabel="Start CaviTrip"
-          >
-            <Text style={styles.caviTripButtonLabel}>START CAVITRIP</Text>
-          </TouchableOpacity>
-        </View>
       </ScrollView>
 
       <SaveToListSheet
@@ -1104,33 +1007,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 18,
     paddingTop: 0,
-  },
-  backBar: {
-    marginBottom: 10,
-  },
-  backBarBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 10,
-    minHeight: 44,
-    paddingRight: 12,
-  },
-  backBarIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F3F4F6',
-    borderWidth: 1,
-    borderColor: 'rgba(17, 24, 39, 0.08)',
-  },
-  backBarLabel: {
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 16,
-    lineHeight: 22,
-    color: TITLE,
   },
   carouselWrap: {
     marginTop: 4,
@@ -1166,14 +1042,15 @@ const styles = StyleSheet.create({
     backgroundColor: WHITE,
     width: 18,
   },
-  eyebrow: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 10,
-    lineHeight: 14,
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
-    color: GREEN,
-    marginBottom: 4,
+  headerSaveBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerSaveBtnActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
   },
   titleBlock: {
     flexDirection: 'row',
@@ -1199,44 +1076,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     color: NEUTRAL_MUTED,
-  },
-  categoryPillRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 12,
-  },
-  categoryPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 9999,
-    backgroundColor: CATEGORY_PILL_BG,
-    maxWidth: '100%',
-    alignSelf: 'flex-start',
-  },
-  categoryPillText: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 11,
-    lineHeight: 16,
-    color: CATEGORY_PILL_TEXT,
-  },
-  fab: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    marginTop: 2,
-  },
-  fabSave: {
-    backgroundColor: WHITE,
-    borderWidth: 1,
-    borderColor: 'rgba(212, 212, 212, 1)',
-  },
-  fabSaveActive: {
-    backgroundColor: GREEN,
-    borderColor: GREEN,
   },
   aboutPanel: {
     borderRadius: 16,
@@ -1284,47 +1123,37 @@ const styles = StyleSheet.create({
   sectionBlock: {
     marginTop: 22,
   },
-  sectionEyebrow: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 12,
-    color: '#A3A3A3',
-  },
-  distanceValue: {
-    marginTop: 4,
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 18,
-    color: TITLE,
-  },
   sectionHeading: {
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 18,
     color: TITLE,
   },
-  highlightRow: {
+  highlightList: {
     marginTop: 12,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
   },
   highlightCard: {
-    flexGrow: 1,
-    flexBasis: '30%',
-    minWidth: 96,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: CARD_BORDER,
     backgroundColor: WHITE,
-    padding: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   highlightLabel: {
     fontFamily: 'Poppins_500Medium',
-    fontSize: 11,
+    fontSize: 12,
     color: '#A3A3A3',
   },
   highlightValue: {
-    marginTop: 6,
+    flex: 1,
+    textAlign: 'right',
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 13,
+    lineHeight: 18,
     color: TITLE,
   },
   locationHead: {
@@ -1355,90 +1184,65 @@ const styles = StyleSheet.create({
   mapInner: {
     flex: 1,
   },
-  nearbyGrid: {
-    marginTop: 12,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
+  contactCard: {
+    marginTop: 22,
   },
-  nearbyCard: {
-    width: '48%',
-    flexGrow: 1,
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: CARD_BORDER,
-    backgroundColor: WHITE,
+  contactCardInner: {
+    borderBottomWidth: 0,
   },
-  nearbyImg: {
-    width: '100%',
-    height: 96,
-    backgroundColor: '#F3F4F6',
-  },
-  nearbyImgFallback: {
-    backgroundColor: '#E5E7EB',
-  },
-  nearbyName: {
-    paddingHorizontal: 8,
-    paddingTop: 8,
+  contactHeading: {
     fontFamily: 'Poppins_600SemiBold',
-    fontSize: 13,
+    fontSize: 18,
+    lineHeight: 24,
     color: TITLE,
   },
-  nearbyMeta: {
-    paddingHorizontal: 8,
-    paddingBottom: 10,
-    marginTop: 2,
-    fontFamily: 'Poppins_400Regular',
+  contactColumns: {
+    marginTop: 16,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 20,
+  },
+  contactCol: {
+    flex: 1,
+    minWidth: 0,
+    gap: 12,
+  },
+  contactFieldLabel: {
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 11,
-    color: MUTED,
+    lineHeight: 14,
+    color: NEUTRAL_MUTED,
   },
-  hoursLine: {
-    marginTop: 16,
-    fontFamily: 'Inter_400Regular',
+  contactFieldValue: {
+    marginTop: 2,
+    fontFamily: 'Inter_500Medium',
     fontSize: 14,
-    lineHeight: 22,
-    color: '#404040',
-  },
-  hoursLabel: {
-    fontFamily: 'Inter_600SemiBold',
+    lineHeight: 20,
     color: TITLE,
   },
-  contactBox: {
-    marginTop: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: CARD_BORDER,
-    backgroundColor: WHITE,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  contactSectionTitle: {
-    marginBottom: 4,
-  },
-  contactTapRow: {
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  contactLine: {
+  contactEmpty: {
+    marginTop: 12,
     fontFamily: 'Inter_400Regular',
     fontSize: 14,
-    lineHeight: 22,
-    color: '#404040',
-    marginTop: 8,
+    lineHeight: 20,
+    color: NEUTRAL_MUTED,
   },
-  contactLabel: {
-    fontFamily: 'Inter_600SemiBold',
-    color: TITLE,
+  contactDetailsRow: {
+    marginTop: 18,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: CARD_BORDER,
+    gap: 12,
+  },
+  contactDetailItem: {
+    gap: 0,
   },
   contactLink: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+    lineHeight: 20,
     color: '#1B8A70',
     textDecorationLine: 'underline',
-  },
-  actionsBlock: {
-    marginTop: 20,
-    gap: 12,
   },
   reviewsSection: {
     marginTop: 22,
@@ -1610,24 +1414,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     letterSpacing: 0.8,
     color: TEAL,
-  },
-  caviTripButton: {
-    alignSelf: 'stretch',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 28,
-    minHeight: 54,
-    borderRadius: 14,
-    backgroundColor: TEAL,
-    borderWidth: 2,
-    borderColor: TEAL,
-  },
-  caviTripButtonLabel: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 15,
-    letterSpacing: 0.8,
-    color: WHITE,
   },
   itineraryCarouselPad: {
     paddingHorizontal: 18,

@@ -5,31 +5,36 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  StatusBar,
-  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import {
+  announcementNotificationSummary,
   fetchPublishedAnnouncements,
   groupAnnouncementsByDay,
   markAnnouncementsRead,
 } from 'cavitour-shared/announcements';
-import { JamIcon } from '../components/JamIcon';
-import type { JamIconName } from '../lib/jamSvgMap';
+import { Header } from '../components/Header';
+import { NotificationGlyph } from '../components/NotificationGlyph';
+import { navigateNamed } from '../lib/navigateNamed';
 import { supabase } from '../lib/supabase';
 
-const HEADER_GREEN = '#10A37F';
-const DATE_TEAL = '#1B8A70';
-const MUTED = '#7A7878';
-const ALERT_AMBER = '#C47B17';
-const H_PAD = 16;
+const PANEL_BG = '#F1F7F6';
+const INK = '#16352E';
+const TEAL = '#1B8A70';
+const MUTED = '#707D7D';
+const SKELETON = 'rgba(212, 212, 212, 0.8)';
+const H_PAD = 12;
+
+/** Same limit as web `NotificationsPopover`. */
+const NOTIFICATION_BODY_WORD_LIMIT = 28;
 
 type AnnouncementItem = {
   id: string;
   kind: string;
   title: string;
   place: string;
+  venueName?: string;
   body: string;
 };
 
@@ -39,16 +44,53 @@ type AnnouncementGroup = {
   items: AnnouncementItem[];
 };
 
+function truncateWords(text: string, limit: number): { text: string; truncated: boolean } {
+  const raw = String(text ?? '').trim();
+  if (!raw) return { text: '', truncated: false };
+  const words = raw.split(/\s+/).filter(Boolean);
+  if (words.length <= limit) return { text: raw, truncated: false };
+  return { text: words.slice(0, limit).join(' '), truncated: true };
+}
+
+function Skel({ style }: { style?: object }) {
+  return <View style={[styles.skel, style]} />;
+}
+
+function NotificationsSkeleton() {
+  return (
+    <View accessibilityLabel="Loading notifications">
+      {[0, 1].map((group) => (
+        <View key={group} style={styles.group}>
+          <View style={styles.groupHeader}>
+            <Skel style={styles.skelGroupTitle} />
+            <Skel style={styles.skelGroupTime} />
+          </View>
+          {[0, 1, 2].map((i) => (
+            <View key={i} style={styles.row}>
+              <Skel style={styles.skelGlyph} />
+              <View style={styles.rowText}>
+                <Skel style={styles.skelLine} />
+                <Skel style={styles.skelLineShort} />
+              </View>
+            </View>
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** Mirrors the web notifications popover: flat rows on a mint panel, 28-word previews. */
 const NotificationsScreen: React.FC = () => {
   const navigation = useNavigation();
-  const insets = useSafeAreaInsets();
   const [groups, setGroups] = useState<AnnouncementGroup[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
-  const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
     setError('');
     try {
       const rows = (await fetchPublishedAnnouncements(supabase)) as AnnouncementItem[];
@@ -59,7 +101,7 @@ const NotificationsScreen: React.FC = () => {
         await markAnnouncementsRead(
           supabase,
           userId,
-          rows.map((row: AnnouncementItem) => row.id)
+          rows.map((row) => row.id)
         );
       }
     } catch (err) {
@@ -67,6 +109,7 @@ const NotificationsScreen: React.FC = () => {
       setGroups([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
@@ -74,199 +117,198 @@ const NotificationsScreen: React.FC = () => {
     void load();
   }, [load]);
 
-  const iconFor = (kind: string): { name: JamIconName; color: string } =>
-    kind === 'advisory' ? { name: 'alert', color: ALERT_AMBER } : { name: 'bell', color: DATE_TEAL };
+  const openAnnouncement = (id: string) => {
+    navigateNamed(navigation, 'Announcements', { focusId: id });
+  };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <StatusBar barStyle="light-content" backgroundColor={HEADER_GREEN} />
-      <View style={[styles.greenHeader, { paddingTop: insets.top + 10, paddingBottom: 14 }]}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.headerSide}
-            accessibilityLabel="Go back"
-            accessibilityRole="button"
-          >
-            <JamIcon name="chevron-left" size={26} color="#FFFFFF" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle} pointerEvents="none">
-            Notifications
-          </Text>
-          <View style={styles.headerSide} />
-        </View>
-      </View>
+    <View style={styles.safe}>
+      <Header title="Notifications" showBack darkBackground />
 
-      {loading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator color={HEADER_GREEN} />
-        </View>
-      ) : (
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          {groups.length === 0 && !error ? (
-            <Text style={styles.empty}>No announcements yet.</Text>
-          ) : null}
-          {groups.map((item) => (
-            <View key={item.group} style={styles.group}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void load(true)}
+            tintColor={TEAL}
+            colors={[TEAL]}
+          />
+        }
+      >
+        {loading ? (
+          <NotificationsSkeleton />
+        ) : error ? (
+          <Text style={styles.error}>{error}</Text>
+        ) : groups.length === 0 ? (
+          <Text style={styles.empty}>No announcements yet.</Text>
+        ) : (
+          groups.map((group) => (
+            <View key={group.group} style={styles.group}>
               <View style={styles.groupHeader}>
-                <Text style={styles.groupTitle}>{item.group}</Text>
-                <Text style={styles.groupTime}>{item.timeLabel}</Text>
+                <Text style={styles.groupTitle}>{group.group}</Text>
+                <Text style={styles.groupTime}>{group.timeLabel}</Text>
               </View>
-              {item.items.map((n: AnnouncementItem) => {
-                const icon = iconFor(n.kind);
-                const expanded = expandedId === n.id;
+              {group.items.map((item) => {
+                const summary = announcementNotificationSummary(item);
+                const preview = item.body
+                  ? truncateWords(item.body, NOTIFICATION_BODY_WORD_LIMIT)
+                  : null;
                 return (
                   <TouchableOpacity
-                    key={n.id}
-                    activeOpacity={0.85}
-                    style={styles.card}
-                    onPress={() => setExpandedId(expanded ? null : n.id)}
-                    accessibilityLabel={`${n.title}, ${n.body}`}
+                    key={item.id}
+                    style={styles.row}
+                    onPress={() => openAnnouncement(item.id)}
+                    activeOpacity={0.8}
                     accessibilityRole="button"
+                    accessibilityLabel={preview?.text ? `${summary}. ${preview.text}` : summary}
                   >
-                    <View style={styles.iconSlot}>
-                      <JamIcon name={icon.name} size={20} color={icon.color} />
+                    <View style={styles.glyphSlot}>
+                      <NotificationGlyph kind={item.kind} size={20} />
                     </View>
-                    <View style={styles.textBlock}>
-                      <Text style={styles.cardTitle}>{n.title}</Text>
-                      {n.place ? <Text style={styles.cardPlace}>{n.place}</Text> : null}
-                      <Text style={styles.cardBody} numberOfLines={expanded ? undefined : 2}>
-                        {n.body}
-                      </Text>
+                    <View style={styles.rowText}>
+                      <Text style={styles.rowTitle}>{summary}</Text>
+                      {preview?.text ? (
+                        <Text style={styles.rowBody}>
+                          {preview.text}
+                          {preview.truncated ? (
+                            <Text style={styles.seeMore}> see more..</Text>
+                          ) : null}
+                        </Text>
+                      ) : null}
                     </View>
                   </TouchableOpacity>
                 );
               })}
             </View>
-          ))}
-        </ScrollView>
-      )}
-    </SafeAreaView>
+          ))
+        )}
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  greenHeader: {
-    backgroundColor: HEADER_GREEN,
-    paddingHorizontal: H_PAD,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerSide: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 18,
-    lineHeight: 22,
-    color: '#FFFFFF',
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: PANEL_BG,
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: H_PAD,
-    paddingTop: 12,
+    paddingTop: 14,
     paddingBottom: 28,
   },
-  empty: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 14,
-    color: MUTED,
-    marginTop: 12,
-  },
-  error: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 14,
-    color: '#E76365',
-    marginBottom: 12,
-  },
   group: {
-    marginBottom: 16,
+    marginBottom: 20,
   },
   groupHeader: {
     flexDirection: 'row',
+    alignItems: 'baseline',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 4,
     marginBottom: 8,
   },
   groupTitle: {
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 17,
-    lineHeight: 22,
-    color: DATE_TEAL,
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    lineHeight: 20,
+    color: TEAL,
   },
   groupTime: {
     fontFamily: 'Poppins_500Medium',
-    fontSize: 10,
-    lineHeight: 14,
+    fontSize: 11,
+    lineHeight: 16,
     color: MUTED,
   },
-  card: {
+  row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    gap: 12,
+    borderRadius: 16,
     backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     marginBottom: 8,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.45,
-    shadowRadius: 2,
-    elevation: 2,
   },
-  iconSlot: {
-    width: 28,
+  glyphSlot: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: PANEL_BG,
     alignItems: 'center',
-    paddingTop: 1,
-    marginRight: 8,
+    justifyContent: 'center',
+    marginTop: 2,
   },
-  textBlock: {
+  rowText: {
     flex: 1,
     minWidth: 0,
   },
-  cardTitle: {
-    fontFamily: 'Poppins_500Medium',
+  rowTitle: {
+    fontFamily: 'Poppins_400Regular',
     fontSize: 14,
     lineHeight: 20,
-    color: '#000000',
-    marginBottom: 2,
+    color: INK,
   },
-  cardPlace: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
-    lineHeight: 14,
-    color: DATE_TEAL,
-    marginBottom: 2,
-  },
-  cardBody: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 10,
-    lineHeight: 14,
+  rowBody: {
+    marginTop: 2,
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+    lineHeight: 19,
     color: MUTED,
+  },
+  seeMore: {
+    fontFamily: 'Poppins_600SemiBold',
+    color: TEAL,
+  },
+  empty: {
+    paddingHorizontal: 4,
+    paddingVertical: 24,
+    textAlign: 'center',
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 14,
+    color: MUTED,
+  },
+  error: {
+    paddingHorizontal: 4,
+    paddingVertical: 24,
+    textAlign: 'center',
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 14,
+    color: '#DC2626',
+  },
+  skel: {
+    borderRadius: 8,
+    backgroundColor: SKELETON,
+  },
+  skelGroupTitle: {
+    height: 16,
+    width: 80,
+  },
+  skelGroupTime: {
+    height: 12,
+    width: 64,
+  },
+  skelGlyph: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginTop: 2,
+  },
+  skelLine: {
+    height: 16,
+    alignSelf: 'stretch',
+  },
+  skelLineShort: {
+    height: 12,
+    width: 160,
+    maxWidth: '100%',
+    marginTop: 8,
   },
 });
 

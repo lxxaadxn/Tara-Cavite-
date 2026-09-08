@@ -67,3 +67,21 @@ export function locationLabelMapFromOptions(cities, municipalities) {
   }
   return m;
 }
+
+/**
+ * Combined Cavite cities + municipalities for profile location pickers.
+ * @returns {Promise<LguFilterOption[]>}
+ */
+export async function fetchLocationOptions() {
+  const { cities, municipalities } = await fetchLguFilterOptions();
+  const seen = new Set();
+  const out = [];
+  for (const o of [...cities, ...municipalities]) {
+    const fold = o.label.toLowerCase();
+    if (seen.has(fold)) continue;
+    seen.add(fold);
+    out.push(o);
+  }
+  out.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+  return out;
+}

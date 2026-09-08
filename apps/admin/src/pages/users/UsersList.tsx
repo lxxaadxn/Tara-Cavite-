@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useAdminPathPrefix } from '../../contexts/AdminPathPrefixContext';
 import { useToast } from '../../components/Toast';
+import { addAdminAllowlistEmail } from '../../lib/adminEmail';
 import {
   type AccountRole,
   type AdminTraveler,
@@ -14,6 +15,9 @@ import {
   setListedAccountStatus,
 } from '../../lib/adminUsers';
 import { supabase } from '../../lib/supabase';
+import crud from '../../components/ContentCrudPage.module.css';
+import { RowMenu } from '../../components/RowMenu';
+import { EyeIcon } from '../../components/rowIcons';
 import styles from './UsersAdmin.module.css';
 import { UsersFilterButton, type UserRoleFilter, type UserStatusFilter } from './UsersFilter';
 
@@ -54,6 +58,10 @@ export function UsersList({ mode }: { mode: Mode }) {
   const [statusFilter, setStatusFilter] = useState<UserStatusFilter>('all');
   const [pending, setPending] = useState<AdminTraveler | null>(null);
   const [saving, setSaving] = useState(false);
+  const [addAdminOpen, setAddAdminOpen] = useState(false);
+  const [adminEmail, setAdminEmail] = useState('');
+  const [addAdminError, setAddAdminError] = useState('');
+  const [addingAdmin, setAddingAdmin] = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -73,23 +81,20 @@ export function UsersList({ mode }: { mode: Mode }) {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = rows.filter((row) => {
+    return rows.filter((row) => {
       if (mode === 'active' && row.accountStatus !== 'active') return false;
       if (roleFilter !== 'all' && row.role !== roleFilter) return false;
       if (mode === 'all' && statusFilter === 'active' && row.accountStatus !== 'active') return false;
       if (mode === 'all' && statusFilter === 'disabled' && row.accountStatus === 'active') return false;
       if (!q) return true;
-      return [row.displayName, row.username, row.email, accountRoleLabel(row.role)].some((v) =>
-        v.toLowerCase().includes(q)
+      return (
+        row.displayName.toLowerCase().includes(q) ||
+        row.email.toLowerCase().includes(q) ||
+        row.username.toLowerCase().includes(q) ||
+        accountRoleLabel(row.role).toLowerCase().includes(q)
       );
     });
-    if (mode !== 'active') return list;
-    return list.slice().sort((a, b) => {
-      const at = a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : 0;
-      const bt = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : 0;
-      return bt - at;
-    });
-  }, [rows, query, mode, roleFilter, statusFilter]);
+  }, [rows, query, roleFilter, statusFilter, mode]);
 
   const confirmDisable = async () => {
     if (!pending) return;
@@ -116,6 +121,35 @@ export function UsersList({ mode }: { mode: Mode }) {
     }
   };
 
+  const closeAddAdmin = () => {
+    if (addingAdmin) return;
+    setAddAdminOpen(false);
+    setAdminEmail('');
+    setAddAdminError('');
+  };
+
+  const submitAddAdmin = async (e: FormEvent) => {
+    e.preventDefault();
+    setAddAdminError('');
+    const trimmed = adminEmail.trim().toLowerCase();
+    if (!trimmed || !trimmed.includes('@')) {
+      setAddAdminError('Enter a valid email address.');
+      return;
+    }
+    setAddingAdmin(true);
+    try {
+      const saved = await addAdminAllowlistEmail(supabase, trimmed);
+      toast(`Added admin: ${saved}`, 'success');
+      setAddAdminOpen(false);
+      setAdminEmail('');
+      await reload();
+    } catch (err) {
+      setAddAdminError(err instanceof Error ? err.message : 'Could not add admin email');
+    } finally {
+      setAddingAdmin(false);
+    }
+  };
+
   return (
     <div className={styles.page}>
       <header className={styles.header}>
@@ -131,13 +165,20 @@ export function UsersList({ mode }: { mode: Mode }) {
             onChange={(e) => setQuery(e.target.value)}
           />
         </label>
-        <UsersFilterButton
-          role={roleFilter}
-          onRoleChange={setRoleFilter}
-          showStatus={mode === 'all'}
-          status={statusFilter}
-          onStatusChange={setStatusFilter}
-        />
+        <div className={styles.headerActions}>
+          <UsersFilterButton
+            role={roleFilter}
+            onRoleChange={setRoleFilter}
+            showStatus={mode === 'all'}
+            status={statusFilter}
+            onStatusChange={setStatusFilter}
+          />
+          {mode === 'all' ? (
+            <button type="button" className={styles.primaryBtn} onClick={() => setAddAdminOpen(true)}>
+              Add Admin
+            </button>
+          ) : null}
+        </div>
       </header>
 
       {error ? <p className={styles.loadError}>{error}</p> : null}
@@ -151,7 +192,7 @@ export function UsersList({ mode }: { mode: Mode }) {
               <th>Role</th>
               <th>Status</th>
               <th>{mode === 'active' ? 'Last used' : 'Joined'}</th>
-              <th>Actions</th>
+              <th className={crud.actionsHead}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -199,19 +240,25 @@ export function UsersList({ mode }: { mode: Mode }) {
                       formatAdminDate(user.createdAt)
                     )}
                   </td>
-                  <td>
-                    <div className={styles.actions}>
-                      <Link className={styles.actionBtn} to={viewHref(user)}>
-                        View
+                  <td className={crud.actionsHead}>
+                    <div className={crud.rowTools}>
+                      <Link
+                        className={crud.iconBtn}
+                        to={viewHref(user)}
+                        aria-label={`View ${user.displayName}`}
+                        title="View profile"
+                      >
+                        <EyeIcon />
                       </Link>
-                      {user.role === 'admin' ? null : user.accountStatus === 'active' ? (
-                        <button type="button" className={`${styles.actionBtn} ${styles.danger}`} onClick={() => setPending(user)}>
-                          Deactivate
-                        </button>
-                      ) : (
-                        <button type="button" className={styles.actionBtn} onClick={() => void activate(user)}>
-                          Activate
-                        </button>
+                      {user.role === 'admin' ? null : (
+                        <RowMenu
+                          label={`More actions for ${user.displayName}`}
+                          items={
+                            user.accountStatus === 'active'
+                              ? [{ label: 'Deactivate', onSelect: () => setPending(user), danger: true }]
+                              : [{ label: 'Activate', onSelect: () => void activate(user) }]
+                          }
+                        />
                       )}
                     </div>
                   </td>
@@ -234,6 +281,51 @@ export function UsersList({ mode }: { mode: Mode }) {
           if (!saving) setPending(null);
         }}
       />
+
+      {addAdminOpen ? (
+        <div
+          className={styles.modalOverlay}
+          role="presentation"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeAddAdmin();
+          }}
+        >
+          <div className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="add-admin-title">
+            <h2 id="add-admin-title">Add Admin</h2>
+            <p className={styles.modalHint}>
+              Add an email to the admin allowlist. That Google or password account can then sign in to the admin app.
+            </p>
+            <form onSubmit={(e) => void submitAddAdmin(e)}>
+              <label className={styles.label}>
+                Email
+                <input
+                  className={styles.textInput}
+                  type="email"
+                  autoComplete="email"
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  placeholder="admin@example.com"
+                  required
+                  disabled={addingAdmin}
+                />
+              </label>
+              {addAdminError ? (
+                <p className={styles.modalError} role="alert">
+                  {addAdminError}
+                </p>
+              ) : null}
+              <div className={styles.modalActions}>
+                <button type="button" className={styles.secondaryBtn} onClick={closeAddAdmin} disabled={addingAdmin}>
+                  Cancel
+                </button>
+                <button type="submit" className={styles.primaryBtn} disabled={addingAdmin}>
+                  {addingAdmin ? 'Adding…' : 'Add Admin'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { isAllowedAdminEmail } from '../lib/adminEmail';
+import { ensureAdminAllowlist, isAllowedAdminEmailAsync } from '../lib/adminEmail';
 import { supabase } from '../lib/supabase';
 
 type AuthContextValue = {
@@ -28,9 +28,11 @@ async function normalizeSession(session: Session | null): Promise<Session | null
     email = data.user?.email?.trim().toLowerCase() ?? '';
   }
 
-  if (!email || !isAllowedAdminEmail(email)) {
+  if (!email || !(await isAllowedAdminEmailAsync(supabase, email))) {
     return null;
   }
+
+  void ensureAdminAllowlist(supabase);
   return session;
 }
 

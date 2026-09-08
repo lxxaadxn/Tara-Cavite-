@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { LogoWordmark } from '../components/LogoWordmark';
 import { GoogleAuthButton, GoogleLogoMark } from '../components/GoogleAuthButton';
-import { getAdminReservedEmailMessage, isAdminReservedEmail } from '../lib/adminReservedEmail';
-import { startGoogleOAuth } from '../lib/startGoogleOAuth';
+import { getAdminReservedEmailMessage, isAdminReservedEmailAsync } from '../lib/adminReservedEmail';
+import { consumePendingGoogleOAuth, startGoogleOAuth } from '../lib/startGoogleOAuth';
 
 const MIN_PASSWORD_LENGTH = 8;
 const teal = 'var(--ct-teal)';
@@ -53,6 +53,16 @@ export function SignupPage() {
     }
   };
 
+  useEffect(() => {
+    if (!consumePendingGoogleOAuth()) return;
+    setAcceptedTerms(true);
+    setLoading(true);
+    void startGoogleOAuth({ next: '/search' }).catch((err) => {
+      setError(err instanceof Error ? err.message : 'Google sign up failed');
+      setLoading(false);
+    });
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -62,7 +72,7 @@ export function SignupPage() {
       setError('Please fill in all required fields.');
       return;
     }
-    if (isAdminReservedEmail(trimmedEmail)) {
+    if (await isAdminReservedEmailAsync(trimmedEmail)) {
       setError(getAdminReservedEmailMessage());
       return;
     }

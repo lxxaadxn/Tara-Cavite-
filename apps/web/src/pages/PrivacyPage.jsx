@@ -38,8 +38,9 @@ export function PrivacyPage() {
         <section className="mt-4 max-w-xl rounded-[28px] bg-white p-5 sm:p-6">
           <h2 className="font-['Poppins',sans-serif] text-base font-semibold text-neutral-900">Public profile</h2>
           <p className="mt-2 text-sm leading-relaxed text-neutral-600">
-            A public traveler profile is not available yet. Your name, photo, and travel interests stay on your
-            account until that option is added.
+            Others can open your public profile from your reviews. They see your username, bio, interest tags,
+            activity counters, Cavite travel map, and lists marked Public. Your About details (email, phone,
+            birthday, and full name) stay private on your account page.
           </p>
         </section>
       </main>

@@ -128,6 +128,7 @@ async function runGoogleOAuthExpoOnly(options?: GoogleSignInOptions): Promise<vo
     console.info('[authOAuth] authorize redirect_to=', redirectInUrl);
   }
 
+
   if (isLocalhostAuthUrl(redirectInUrl) || isHttpUrl(redirectInUrl)) {
     throw new Error(SETUP_HINT);
   }
@@ -164,11 +165,7 @@ async function runGoogleOAuthExpoOnly(options?: GoogleSignInOptions): Promise<vo
         ? { showInRecents: true, createTask: true }
         : { preferEphemeralSession: false, createTask: false };
 
-    const result = await WebBrowser.openAuthSessionAsync(
-      authorizeUrl,
-      redirectTo,
-      authSessionOptions
-    );
+    const result = await WebBrowser.openAuthSessionAsync(authorizeUrl, redirectTo, authSessionOptions);
 
     onPhase?.('finishing');
 

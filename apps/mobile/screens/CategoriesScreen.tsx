@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   FlatList,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Colors, Theme } from '../constants/theme';
 import { JamIcon } from '../components/JamIcon';
@@ -39,7 +38,9 @@ const CategoriesScreen: React.FC = () => {
 
   const handleCategoryPress = (category: Category) => {
     // Navigate to filtered places by category
-    navigation.navigate('PlaceDetail', { category: category.name });
+    (
+      navigation as unknown as { navigate: (name: string, params: object) => void }
+    ).navigate('PlaceDetail', { category: category.name });
   };
 
   const renderCategoryItem = ({ item }: { item: Category }) => (
@@ -59,14 +60,8 @@ const CategoriesScreen: React.FC = () => {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <Header
-        title="Categories"
-        showBack
-        showNotification
-        darkBackground
-        onNotificationPress={() => navigation.navigate('Notifications')}
-      />
+    <View style={styles.container}>
+      <Header title="Categories" showBack showNotification darkBackground />
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.mainSection}>
           <Text style={styles.sectionTitle}>Browse by Category</Text>
@@ -85,7 +80,7 @@ const CategoriesScreen: React.FC = () => {
           />
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 

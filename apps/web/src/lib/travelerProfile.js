@@ -5,12 +5,18 @@ import {
 import { changePasswordWithSupabase } from 'cavitour-shared/changePassword';
 import { deleteUserAvatarFiles } from './avatarStorage';
 import { isItinerarySavedItem } from './savedPlaces';
+import {
+  BIO_MAX_LENGTH,
+  normalizeInterestTags,
+  normalizeSocialUrl,
+} from './travelerInterests';
 
 export const AVATAR_UPDATED_EVENT = 'cavitour:avatar-updated';
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
 
-const PROFILE_SELECT = 'username, avatar_url, city, phone, birthday';
+const PROFILE_SELECT =
+  'username, avatar_url, city, phone, birthday, bio, interest_tags, cover_url, social_instagram, social_facebook, social_tiktok';
 const PROFILE_SELECT_FALLBACK = 'username, avatar_url, city, phone';
 
 export function dateOnly(value) {
@@ -50,6 +56,12 @@ export function deriveProfile(user, profileRow) {
     phone: String(profileRow?.phone || user?.phone || meta.phone || '').trim(),
     email: user?.email || 'No email on account',
     birthday: dateOnly(profileRow?.birthday),
+    bio: String(profileRow?.bio ?? '').trim(),
+    interestTags: normalizeInterestTags(profileRow?.interest_tags),
+    coverUrl: String(profileRow?.cover_url ?? '').trim(),
+    socialInstagram: String(profileRow?.social_instagram ?? '').trim(),
+    socialFacebook: String(profileRow?.social_facebook ?? '').trim(),
+    socialTiktok: String(profileRow?.social_tiktok ?? '').trim(),
     memberSince: user?.created_at || '',
     lastSignIn: user?.last_sign_in_at || '',
     avatarUrl: resolveAvatarFromSources(profileRow, meta),
@@ -61,7 +73,17 @@ export async function fetchProfileRow(client, userId) {
   const full = await client.from('user_profiles').select(PROFILE_SELECT).eq('id', userId).maybeSingle();
   if (!full.error) return full.data ?? null;
   const msg = String(full.error.message ?? '');
-  if (/birthday|favorite_categories|preferred_lgus|accessibility_notes|column/i.test(msg)) {
+  if (
+    /birthday|favorite_categories|preferred_lgus|accessibility_notes|bio|interest_tags|cover_url|social_|column/i.test(
+      msg
+    )
+  ) {
+    const mid = await client
+      .from('user_profiles')
+      .select('username, avatar_url, city, phone, birthday')
+      .eq('id', userId)
+      .maybeSingle();
+    if (!mid.error) return mid.data ?? null;
     const retry = await client.from('user_profiles').select(PROFILE_SELECT_FALLBACK).eq('id', userId).maybeSingle();
     return retry.data ?? null;
   }
@@ -94,10 +116,24 @@ export function usernameForRow(profile, user) {
 }
 
 /**
- * Saves identity fields only. Does not write travel-interest columns.
+ * Saves identity + preference fields (not password).
  * @returns {{ profileRow: object | null, user: object, emailChangePending: boolean, birthdaySkipped: boolean }}
  */
-export async function saveProfileIdentity(client, { nickname, email, phone, city, birthday }) {
+export async function saveProfileIdentity(
+  client,
+  {
+    nickname,
+    email,
+    phone,
+    city,
+    birthday,
+    bio,
+    interestTags,
+    socialInstagram,
+    socialFacebook,
+    socialTiktok,
+  }
+) {
   const { data: authData } = await client.auth.getUser();
   const u = authData?.user;
   if (!u) throw new Error('Sign in to save your profile.');
@@ -105,6 +141,10 @@ export async function saveProfileIdentity(client, { nickname, email, phone, city
   const nick = String(nickname ?? '').trim();
   const emailTrim = String(email ?? '').trim().toLowerCase();
   const currentEmail = String(u.email ?? '').trim().toLowerCase();
+  const bioTrim = String(bio ?? '').trim();
+  if (bioTrim.length > BIO_MAX_LENGTH) {
+    throw new Error(`Bio must be ${BIO_MAX_LENGTH} characters or fewer.`);
+  }
 
   if (!nick) throw new Error('Please enter a nickname.');
   if (!emailTrim) throw new Error('Please enter an email address.');
@@ -137,10 +177,30 @@ export async function saveProfileIdentity(client, { nickname, email, phone, city
     city: String(city ?? '').trim() || null,
     phone: String(phone ?? '').trim() || null,
     birthday: dateOnly(birthday) || null,
+    bio: bioTrim || null,
+    interest_tags: normalizeInterestTags(interestTags),
+    social_instagram: normalizeSocialUrl(socialInstagram) || null,
+    social_facebook: normalizeSocialUrl(socialFacebook) || null,
+    social_tiktok: normalizeSocialUrl(socialTiktok) || null,
     updated_at: new Date().toISOString(),
   };
+
   let birthdaySkipped = false;
   let { error: upsertErr } = await client.from('user_profiles').upsert(payload, { onConflict: 'id' });
+  if (upsertErr && /bio|interest_tags|social_|cover_url|column|schema cache/i.test(String(upsertErr.message ?? ''))) {
+    const retryExtra = await client.from('user_profiles').upsert(
+      {
+        id: u.id,
+        username: nick,
+        city: payload.city,
+        phone: payload.phone,
+        birthday: payload.birthday,
+        updated_at: payload.updated_at,
+      },
+      { onConflict: 'id' }
+    );
+    upsertErr = retryExtra.error;
+  }
   if (upsertErr && /birthday|column|schema cache/i.test(String(upsertErr.message ?? ''))) {
     const retry = await client.from('user_profiles').upsert(
       {
@@ -176,12 +236,12 @@ export function assertAvatarFile(file) {
   }
 }
 
-export async function uploadUserAvatar(client, file, username) {
+async function uploadProfileImage(client, file, { pathPrefix, column }) {
   assertAvatarFile(file);
   const { data: authData, error: authReadErr } = await client.auth.getUser();
   if (authReadErr) throw authReadErr;
   const u = authData?.user;
-  if (!u) throw new Error('Sign in to upload a profile picture.');
+  if (!u) throw new Error('Sign in to upload an image.');
 
   const rawExt = (file.name.split('.').pop() || 'jpg').toLowerCase().replace('jpeg', 'jpg');
   const safeExt = ['jpg', 'png', 'webp'].includes(rawExt) ? rawExt : 'jpg';
@@ -194,7 +254,7 @@ export async function uploadUserAvatar(client, file, username) {
           ? 'image/webp'
           : 'image/jpeg';
 
-  const path = `${u.id}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${safeExt}`;
+  const path = `${u.id}/${pathPrefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${safeExt}`;
   const { error: upErr } = await client.storage.from('avatars').upload(path, file, {
     upsert: true,
     contentType: mime,
@@ -217,7 +277,15 @@ export async function uploadUserAvatar(client, file, username) {
   }
 
   const { data: urlData } = client.storage.from('avatars').getPublicUrl(path);
-  const publicUrl = urlData.publicUrl;
+  return { user: u, publicUrl: urlData.publicUrl, column };
+}
+
+export async function uploadUserAvatar(client, file, username) {
+  const { user: u, publicUrl } = await uploadProfileImage(client, file, {
+    pathPrefix: 'avatar',
+    column: 'avatar_url',
+  });
+
   const { error: profileErr } = await client.from('user_profiles').upsert(
     {
       id: u.id,
@@ -247,6 +315,69 @@ export async function uploadUserAvatar(client, file, username) {
     window.dispatchEvent(new CustomEvent(AVATAR_UPDATED_EVENT));
   }
   return { user: sessionUser, profileRow };
+}
+
+export async function uploadUserCover(client, file, username) {
+  const { user: u, publicUrl } = await uploadProfileImage(client, file, {
+    pathPrefix: 'cover',
+    column: 'cover_url',
+  });
+
+  const { error: profileErr } = await client.from('user_profiles').upsert(
+    {
+      id: u.id,
+      username: username || usernameForRow(null, u),
+      cover_url: publicUrl,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'id' }
+  );
+  if (profileErr) {
+    if (/cover_url|column|schema cache/i.test(String(profileErr.message ?? ''))) {
+      throw new Error(
+        'Cover photos are not enabled yet. Run supabase/migrations/20260907140000_user_profile_social_bio.sql in the Supabase SQL Editor.'
+      );
+    }
+    throw profileErr;
+  }
+
+  const profileRow = await fetchProfileRow(client, u.id);
+  return { user: u, profileRow };
+}
+
+export async function removeUserCover(client, username) {
+  const { data: authData, error: authReadErr } = await client.auth.getUser();
+  if (authReadErr) throw authReadErr;
+  const u = authData?.user;
+  if (!u) throw new Error('Sign in to remove your cover photo.');
+
+  const { data: profileBefore } = await client
+    .from('user_profiles')
+    .select('cover_url')
+    .eq('id', u.id)
+    .maybeSingle();
+  const currentUrl = String(profileBefore?.cover_url ?? '').trim();
+  if (!currentUrl) throw new Error('No cover photo to remove.');
+
+  try {
+    await deleteUserAvatarFiles(client, u.id, currentUrl);
+  } catch {
+    /* best-effort storage cleanup */
+  }
+
+  const { error: profileErr } = await client.from('user_profiles').upsert(
+    {
+      id: u.id,
+      username: username || usernameForRow(null, u),
+      cover_url: null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'id' }
+  );
+  if (profileErr) throw profileErr;
+
+  const profileRow = await fetchProfileRow(client, u.id);
+  return { user: u, profileRow };
 }
 
 export async function canRemoveAvatar(client) {

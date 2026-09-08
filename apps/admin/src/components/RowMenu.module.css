@@ -1,0 +1,71 @@
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.trigger:hover,
+.triggerOpen {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+  color: var(--text);
+}
+
+.trigger:focus-visible {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(107, 142, 35, 0.14);
+}
+
+.panel {
+  position: fixed;
+  z-index: 200;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #e6ebf1;
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16);
+}
+
+.panel:focus {
+  outline: none;
+}
+
+.item {
+  display: block;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.itemActive {
+  background: rgba(107, 142, 35, 0.12);
+  color: var(--primary-dark);
+}
+
+.itemDanger {
+  color: #b91c1c;
+}
+
+.itemDanger.itemActive {
+  background: rgba(239, 68, 68, 0.12);
+  color: #991b1b;
+}

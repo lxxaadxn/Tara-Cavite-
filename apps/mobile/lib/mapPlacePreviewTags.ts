@@ -68,13 +68,14 @@ export function getMapPlacePreviewTags(place: Place, maxTags = 3): MapPreviewTag
     tags.push({ label: trimmed, variant });
   };
 
-  if (place.ntdp_category) {
-    add(formatNtdpCategoryTagLabel(place.ntdp_category), 'teal');
+  // Type reads first on the map preview card, then the NTDP category.
+  const typeLabel = (place.ta_category || place.type || '').trim();
+  if (typeLabel) {
+    add(typeLabel, 'olive');
   }
 
-  const typeLabel = (place.ta_category || place.type || '').trim();
-  if (typeLabel && !tags.some((t) => labelsMatch(t.label, typeLabel))) {
-    add(typeLabel, 'olive');
+  if (place.ntdp_category) {
+    add(formatNtdpCategoryTagLabel(place.ntdp_category), 'teal');
   }
 
   for (const opt of CATEGORY_OPTIONS) {

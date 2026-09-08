@@ -1,4 +1,5 @@
-﻿import { useEffect, useId } from 'react';
+import { useEffect, useId } from 'react';
+import { createPortal } from 'react-dom';
 
 const DEFAULT_PRIMARY = '#10A37F';
 
@@ -88,7 +89,7 @@ export function SaveToListModal({
     }
   };
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[1200] flex items-end justify-center bg-neutral-900/35 p-0 backdrop-blur-[2px] sm:items-center sm:p-4"
       role="dialog"
@@ -203,6 +204,7 @@ export function SaveToListModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

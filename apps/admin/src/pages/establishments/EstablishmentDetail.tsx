@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useAdminPathPrefix } from '../../contexts/AdminPathPrefixContext';
 import { usePageHeader } from '../../contexts/PageHeaderContext';
@@ -70,6 +70,10 @@ export function EstablishmentDetail() {
   const { ownerId = '' } = useParams();
   const toast = useToast();
   const prefix = useAdminPathPrefix();
+  const [searchParams] = useSearchParams();
+  const editRequested = searchParams.get('edit') === '1';
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
+  const focusedEdit = useRef(false);
 
   const [row, setRow] = useState<AdminEstablishment | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,6 +82,7 @@ export function EstablishmentDetail() {
     businessName: '',
     businessType: '',
     lgu: '',
+    barangay: '',
     address: '',
     googleMapsLink: '',
     fullName: '',
@@ -107,6 +112,7 @@ export function EstablishmentDetail() {
         businessName: next.businessName,
         businessType: next.businessType,
         lgu: next.lgu,
+        barangay: next.barangay,
         address: next.address,
         googleMapsLink: next.googleMapsLink,
         fullName: next.fullName,
@@ -123,6 +129,16 @@ export function EstablishmentDetail() {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  useEffect(() => {
+    if (!editRequested || loading || !row || focusedEdit.current) return;
+    focusedEdit.current = true;
+    const input = nameInputRef.current;
+    if (!input) return;
+    input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    input.focus({ preventScroll: true });
+    input.select();
+  }, [editRequested, loading, row]);
 
   const runDeactivate = async () => {
     if (!row) return;
@@ -202,7 +218,9 @@ export function EstablishmentDetail() {
           businessType: row.businessType,
           address: row.address,
           lgu: row.lgu,
+          barangay: row.barangay,
           phone: row.phone,
+          inviteMessage: row.inviteMessage,
         },
         establishmentSetupRedirect(),
         true
@@ -264,6 +282,7 @@ export function EstablishmentDetail() {
               <label className={styles.field}>
                 <span className={styles.label}>Establishment name</span>
                 <input
+                  ref={nameInputRef}
                   className={styles.input}
                   value={form.businessName}
                   onChange={(e) => setForm((f) => ({ ...f, businessName: e.target.value }))}
@@ -305,6 +324,14 @@ export function EstablishmentDetail() {
                   onChange={(e) => setForm((f) => ({ ...f, lgu: e.target.value }))}
                 />
               </label>
+              <label className={styles.field}>
+                <span className={styles.label}>Barangay / District</span>
+                <input
+                  className={styles.input}
+                  value={form.barangay}
+                  onChange={(e) => setForm((f) => ({ ...f, barangay: e.target.value }))}
+                />
+              </label>
               <label className={`${styles.field} ${styles.span2}`}>
                 <span className={styles.label}>Address</span>
                 <textarea
@@ -324,6 +351,12 @@ export function EstablishmentDetail() {
                   onChange={(e) => setForm((f) => ({ ...f, googleMapsLink: e.target.value }))}
                 />
               </label>
+              {row.inviteMessage ? (
+                <label className={`${styles.field} ${styles.span2}`}>
+                  <span className={styles.label}>Invitation note</span>
+                  <textarea className={styles.textarea} value={row.inviteMessage} rows={2} readOnly />
+                </label>
+              ) : null}
             </div>
 
             {/* QR Code section */}

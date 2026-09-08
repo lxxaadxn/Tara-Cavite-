@@ -3,3 +3,6 @@ project_id = "bmsftpvixpvtjrlclnlz"
 
 [functions.invite-establishment]
 verify_jwt = true
+
+[functions.kira-ai]
+verify_jwt = true

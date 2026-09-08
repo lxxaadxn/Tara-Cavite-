@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import {
@@ -12,6 +12,7 @@ import { PlaceImageLightbox } from '../components/PlaceImageLightbox';
 import { SaveSuccessToast } from '../components/SaveSuccessToast';
 import { PlaceReviewForm } from '../components/PlaceReviewForm';
 import { fetchPlaceReviews } from '../lib/placeReviews';
+import { resolveAvatarUrl } from 'cavitour-shared/defaultAvatar';
 import { hasQrPlaceVisit } from 'cavitour-shared/placeCheckin';
 import { fetchSavedListsForUser, savePlaceToListIdRemote, savePlaceToListRemote } from '../lib/savedPlacesSupabase';
 import { useSaveSuccessToast } from '../lib/useSaveSuccessToast';
@@ -35,6 +36,55 @@ function formatProximityKm(km) {
     return `${m} m`;
   }
   return `${km.toFixed(km < 10 ? 1 : 0)} km`;
+}
+
+function Skel({ className = '' }) {
+  return <div className={`animate-pulse rounded-lg bg-neutral-200/80 ${className}`} />;
+}
+
+function PlaceDetailSkeleton() {
+  return (
+    <div className="mx-auto w-full max-w-[1200px] px-4 py-6 sm:px-6 lg:px-8" aria-busy="true" aria-label="Loading place">
+      <Skel className="mb-4 h-4 w-28" />
+      <div className="grid gap-6 lg:grid-cols-12">
+        <div className="lg:col-span-7 space-y-4">
+          <Skel className="aspect-[16/10] w-full rounded-2xl" />
+          <Skel className="h-8 w-72 max-w-full" />
+          <Skel className="h-4 w-48 max-w-full" />
+          <div className="flex gap-2">
+            <Skel className="h-10 w-28 rounded-full" />
+            <Skel className="h-10 w-28 rounded-full" />
+          </div>
+          <Skel className="h-32 w-full rounded-2xl" />
+        </div>
+        <div className="lg:col-span-5 space-y-4">
+          <Skel className="h-64 w-full rounded-2xl" />
+          <Skel className="h-40 w-full rounded-2xl" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReviewsSkeleton() {
+  return (
+    <ul className="divide-y divide-neutral-100 overflow-hidden rounded-xl border border-neutral-100 bg-white" aria-busy="true" aria-label="Loading reviews">
+      {[0, 1, 2].map((i) => (
+        <li key={i} className="flex items-start gap-2.5 px-3 py-3">
+          <Skel className="h-9 w-9 shrink-0 rounded-full" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="flex justify-between gap-2">
+              <Skel className="h-4 w-28" />
+              <Skel className="h-3 w-16" />
+            </div>
+            <Skel className="h-3 w-24" />
+            <Skel className="h-4 w-full" />
+            <Skel className="h-4 w-56 max-w-full" />
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 function formatClockAnalog(raw) {
@@ -632,21 +682,28 @@ export function PlaceDetailPage() {
     return (
       <div className="min-h-screen flex flex-col bg-white font-['Poppins',sans-serif]">
         <AppHeader />
-        <main className="flex-1 flex flex-col items-center justify-center gap-3 p-8 text-center text-neutral-600">
+        <main className="flex-1">
           {loading ? (
-            <p>Loading place…</p>
+            <PlaceDetailSkeleton />
           ) : (
-            <>
+            <div className="flex flex-col items-center justify-center gap-3 p-8 text-center text-neutral-600">
               <p className="text-lg font-semibold text-neutral-800">Establishment not found</p>
               <p className="max-w-md text-sm text-neutral-500">
                 {placeNotFound && id
                   ? 'This listing is not in public.places yet. Run sync_places_with_images.sql in Supabase SQL Editor.'
                   : 'Invalid place link.'}
               </p>
-              <Link to="/search" className="text-sm font-semibold text-[#10A37F] hover:underline">
-                Back to search
+              <Link
+                to="/search"
+                className="inline-flex items-center gap-2 rounded-full border border-neutral-200/90 bg-white px-3 py-2 text-sm font-semibold text-neutral-700 shadow-sm transition hover:border-neutral-300 hover:bg-neutral-50"
+                aria-label="Back to search"
+              >
+                <svg className="h-4 w-4 text-neutral-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 18l-6-6 6-6" />
+                </svg>
+                Search
               </Link>
-            </>
+            </div>
           )}
         </main>
       </div>
@@ -749,12 +806,13 @@ export function PlaceDetailPage() {
       <main className="flex w-full min-w-0 flex-1 flex-col px-4 py-4 sm:px-6 lg:px-10 xl:px-12">
         <Link
           to="/search"
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-neutral-500 transition hover:text-neutral-900"
+          className="inline-flex w-fit items-center gap-2 rounded-full border border-neutral-200/90 bg-white px-3 py-2 text-sm font-semibold text-neutral-700 shadow-sm transition hover:border-neutral-300 hover:bg-neutral-50"
+          aria-label="Back to search"
         >
-          <span aria-hidden className="text-lg leading-none">
-            ‹
-          </span>
-          Back to search
+          <svg className="h-4 w-4 shrink-0 text-neutral-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 18l-6-6 6-6" />
+          </svg>
+          Search
         </Link>
 
         <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
@@ -1076,42 +1134,70 @@ export function PlaceDetailPage() {
                   <p className="text-sm text-red-600">{reviewsError}</p>
                 ) : null}
                 {reviewsLoading ? (
-                  <p className="text-sm text-neutral-500">Loading reviews…</p>
+                  <ReviewsSkeleton />
                 ) : visitorReviews.length > 0 ? (
                   <ul className="divide-y divide-neutral-100 overflow-hidden rounded-xl border border-neutral-100 bg-white">
                     {visitorReviews.map((r) => {
                       const displayNickname =
                         typeof r.nickname === 'string' && r.nickname.trim() ? r.nickname.trim() : 'Traveler';
+                      const profileHref = r.userId ? `/u/${encodeURIComponent(r.userId)}` : null;
+                      const avatar = (
+                        <img
+                          src={r.avatarUrl || resolveAvatarUrl(null)}
+                          alt=""
+                          className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-neutral-200"
+                        />
+                      );
                       return (
                         <li key={r.id} className="px-3 py-3">
-                          <div className="flex flex-wrap items-baseline justify-between gap-2">
-                            <p className="text-sm font-semibold text-neutral-900">{displayNickname}</p>
-                            <time
-                              className="text-[11px] text-neutral-400 tabular-nums"
-                              dateTime={new Date(r.at).toISOString()}
-                            >
-                              {formatReviewTime(r.at)}
-                            </time>
-                          </div>
-                          <div className="mt-1">
-                            <ReviewStars value={r.rating} size="h-3.5 w-3.5" />
-                          </div>
-                          <p className="mt-1.5 text-sm leading-relaxed text-neutral-700">{r.text}</p>
-                          {Array.isArray(r.photoUrls) && r.photoUrls.length > 0 ? (
-                            <div className="mt-2 flex flex-wrap gap-1.5">
-                              {r.photoUrls.map((url, photoIndex) => (
-                                <button
-                                  key={`${r.id}-${url}`}
-                                  type="button"
-                                  onClick={() => setReviewPhotoLightbox({ images: r.photoUrls, index: photoIndex })}
-                                  className="h-14 w-14 overflow-hidden rounded-lg border border-neutral-200"
-                                  aria-label="Open review photo"
+                          <div className="flex items-start gap-2.5">
+                            {profileHref ? (
+                              <Link to={profileHref} className="shrink-0" aria-label={`${displayNickname}'s profile`}>
+                                {avatar}
+                              </Link>
+                            ) : (
+                              avatar
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                                {profileHref ? (
+                                  <Link
+                                    to={profileHref}
+                                    className="text-sm font-semibold text-neutral-900 hover:text-[#1B8A70] hover:underline"
+                                  >
+                                    {displayNickname}
+                                  </Link>
+                                ) : (
+                                  <p className="text-sm font-semibold text-neutral-900">{displayNickname}</p>
+                                )}
+                                <time
+                                  className="text-[11px] text-neutral-400 tabular-nums"
+                                  dateTime={new Date(r.at).toISOString()}
                                 >
-                                  <img src={url} alt="" className="h-full w-full object-cover" />
-                                </button>
-                              ))}
+                                  {formatReviewTime(r.at)}
+                                </time>
+                              </div>
+                              <div className="mt-1">
+                                <ReviewStars value={r.rating} size="h-3.5 w-3.5" />
+                              </div>
+                              <p className="mt-1.5 text-sm leading-relaxed text-neutral-700">{r.text}</p>
+                              {Array.isArray(r.photoUrls) && r.photoUrls.length > 0 ? (
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  {r.photoUrls.map((url, photoIndex) => (
+                                    <button
+                                      key={`${r.id}-${url}`}
+                                      type="button"
+                                      onClick={() => setReviewPhotoLightbox({ images: r.photoUrls, index: photoIndex })}
+                                      className="h-14 w-14 overflow-hidden rounded-lg border border-neutral-200"
+                                      aria-label="Open review photo"
+                                    >
+                                      <img src={url} alt="" className="h-full w-full object-cover" />
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : null}
                             </div>
-                          ) : null}
+                          </div>
                         </li>
                       );
                     })}

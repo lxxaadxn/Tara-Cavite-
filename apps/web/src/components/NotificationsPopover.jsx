@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  announcementNotificationSummary,
   fetchPublishedAnnouncements,
   groupAnnouncementsByDay,
   markAnnouncementsRead,
@@ -34,6 +35,46 @@ function NotificationGlyph({ kind }) {
       />
       <path d="M15 9a4 4 0 0 1 0 6M18 7a7 7 0 0 1 0 10" strokeLinecap="round" />
     </svg>
+  );
+}
+
+function Skel({ className = '' }) {
+  return <div className={`animate-pulse rounded-lg bg-neutral-200/80 ${className}`} />;
+}
+
+const NOTIFICATION_BODY_WORD_LIMIT = 28;
+
+function truncateWords(text, limit) {
+  const raw = String(text ?? '').trim();
+  if (!raw) return { text: '', truncated: false };
+  const words = raw.split(/\s+/).filter(Boolean);
+  if (words.length <= limit) return { text: raw, truncated: false };
+  return { text: words.slice(0, limit).join(' '), truncated: true };
+}
+
+function NotificationsSkeleton() {
+  return (
+    <div className="space-y-5" aria-busy="true" aria-label="Loading notifications">
+      {[0, 1].map((group) => (
+        <section key={group}>
+          <div className="mb-2 flex items-baseline justify-between gap-3 px-1">
+            <Skel className="h-4 w-20" />
+            <Skel className="h-3 w-16" />
+          </div>
+          <ul className="space-y-2">
+            {[0, 1, 2].map((i) => (
+              <li key={i} className="flex items-start gap-3 rounded-[16px] bg-white px-3 py-3">
+                <Skel className="mt-0.5 h-9 w-9 shrink-0 rounded-full" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Skel className="h-4 w-full" />
+                  <Skel className="h-3 w-40 max-w-full" />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </div>
   );
 }
 
@@ -93,7 +134,7 @@ export function NotificationsPopover({ onClose }) {
 
       <div className="max-h-[min(70vh,28rem)] overflow-y-auto px-3 py-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         {loading ? (
-          <p className="px-1 py-6 text-center text-sm text-[#707D7D]">Loading notifications…</p>
+          <NotificationsSkeleton />
         ) : error ? (
           <p className="px-1 py-6 text-center text-sm text-red-600">{error}</p>
         ) : groups.length === 0 ? (
@@ -107,7 +148,11 @@ export function NotificationsPopover({ onClose }) {
                   <p className="text-[11px] font-medium text-[#707D7D]">{group.timeLabel}</p>
                 </div>
                 <ul className="space-y-2">
-                  {group.items.map((item) => (
+                  {group.items.map((item) => {
+                    const bodyPreview = item.body
+                      ? truncateWords(item.body, NOTIFICATION_BODY_WORD_LIMIT)
+                      : null;
+                    return (
                     <li key={item.id}>
                       <Link
                         to={`/announcements#${item.id}`}
@@ -118,15 +163,22 @@ export function NotificationsPopover({ onClose }) {
                           <NotificationGlyph kind={item.kind} />
                         </span>
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-[#16352E]">{item.title}</p>
-                          <p className="mt-0.5 text-xs leading-relaxed text-[#707D7D]">
-                            {item.place ? `${item.place}. ` : ''}
-                            {item.body}
+                          <p className="text-sm font-normal text-[#16352E]">
+                            {announcementNotificationSummary(item)}
                           </p>
+                          {bodyPreview ? (
+                            <p className="mt-0.5 text-xs font-normal leading-relaxed text-[#707D7D]">
+                              {bodyPreview.text}
+                              {bodyPreview.truncated ? (
+                                <span className="font-semibold text-[#1B8A70]"> see more..</span>
+                              ) : null}
+                            </p>
+                          ) : null}
                         </div>
                       </Link>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               </section>
             ))}

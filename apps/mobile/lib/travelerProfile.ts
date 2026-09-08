@@ -7,11 +7,19 @@ import {
 } from 'cavitour-shared/defaultAvatar';
 import { deleteUserAvatarFiles } from './avatarStorage';
 import { getDevOAuthBridgeBaseUrl } from './authOAuth';
+import { imageExtensionFromUri, imageMimeType, readLocalImageBytes } from './readImageBytes';
+import {
+  BIO_MAX_LENGTH,
+  normalizeInterestTags,
+  normalizeSocialUrl,
+} from './travelerInterests';
 
 export const AVATAR_UPDATED_EVENT = 'cavitour:avatar-updated';
+export const COVER_UPDATED_EVENT = 'cavitour:cover-updated';
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const PROFILE_SELECT = 'username, avatar_url, city, phone, birthday';
+const PROFILE_SELECT =
+  'username, avatar_url, city, phone, birthday, bio, interest_tags, cover_url, social_instagram, social_facebook, social_tiktok';
 const PROFILE_SELECT_FALLBACK = 'username, avatar_url, city, phone';
 
 export type TravelerProfileView = {
@@ -22,6 +30,12 @@ export type TravelerProfileView = {
   phone: string;
   email: string;
   birthday: string;
+  bio: string;
+  interestTags: string[];
+  coverUrl: string;
+  socialInstagram: string;
+  socialFacebook: string;
+  socialTiktok: string;
   memberSince: string;
   lastSignIn: string;
   avatarUrl: string;
@@ -71,6 +85,12 @@ export function deriveProfile(
     phone: String(profileRow?.phone || user?.phone || meta.phone || '').trim(),
     email: user?.email || 'No email on account',
     birthday: dateOnly(profileRow?.birthday),
+    bio: String(profileRow?.bio ?? '').trim(),
+    interestTags: normalizeInterestTags(profileRow?.interest_tags),
+    coverUrl: String(profileRow?.cover_url ?? '').trim(),
+    socialInstagram: String(profileRow?.social_instagram ?? '').trim(),
+    socialFacebook: String(profileRow?.social_facebook ?? '').trim(),
+    socialTiktok: String(profileRow?.social_tiktok ?? '').trim(),
     memberSince: user?.created_at || '',
     lastSignIn: user?.last_sign_in_at || '',
     avatarUrl: resolveAvatarFromSources(
@@ -91,7 +111,17 @@ export async function fetchProfileRow(
   const full = await client.from('user_profiles').select(PROFILE_SELECT).eq('id', userId).maybeSingle();
   if (!full.error) return (full.data as Record<string, unknown> | null) ?? null;
   const msg = String(full.error.message ?? '');
-  if (/birthday|favorite_categories|preferred_lgus|accessibility_notes|column/i.test(msg)) {
+  if (
+    /birthday|favorite_categories|preferred_lgus|accessibility_notes|bio|interest_tags|cover_url|social_|column/i.test(
+      msg
+    )
+  ) {
+    const mid = await client
+      .from('user_profiles')
+      .select('username, avatar_url, city, phone, birthday')
+      .eq('id', userId)
+      .maybeSingle();
+    if (!mid.error) return (mid.data as Record<string, unknown> | null) ?? null;
     const retry = await client.from('user_profiles').select(PROFILE_SELECT_FALLBACK).eq('id', userId).maybeSingle();
     return (retry.data as Record<string, unknown> | null) ?? null;
   }
@@ -122,12 +152,22 @@ export async function saveProfileIdentity(
     phone,
     city,
     birthday,
+    bio,
+    interestTags,
+    socialInstagram,
+    socialFacebook,
+    socialTiktok,
   }: {
     nickname: string;
     email: string;
     phone: string;
     city: string;
     birthday: string;
+    bio?: string;
+    interestTags?: string[];
+    socialInstagram?: string;
+    socialFacebook?: string;
+    socialTiktok?: string;
   }
 ): Promise<{
   profileRow: Record<string, unknown> | null;
@@ -142,6 +182,10 @@ export async function saveProfileIdentity(
   const nick = String(nickname ?? '').trim();
   const emailTrim = String(email ?? '').trim().toLowerCase();
   const currentEmail = String(u.email ?? '').trim().toLowerCase();
+  const bioTrim = String(bio ?? '').trim();
+  if (bioTrim.length > BIO_MAX_LENGTH) {
+    throw new Error(`Bio must be ${BIO_MAX_LENGTH} characters or fewer.`);
+  }
 
   if (!nick) throw new Error('Please enter a nickname.');
   if (!emailTrim) throw new Error('Please enter an email address.');
@@ -174,10 +218,30 @@ export async function saveProfileIdentity(
     city: String(city ?? '').trim() || null,
     phone: String(phone ?? '').trim() || null,
     birthday: dateOnly(birthday) || null,
+    bio: bioTrim || null,
+    interest_tags: normalizeInterestTags(interestTags),
+    social_instagram: normalizeSocialUrl(socialInstagram) || null,
+    social_facebook: normalizeSocialUrl(socialFacebook) || null,
+    social_tiktok: normalizeSocialUrl(socialTiktok) || null,
     updated_at: new Date().toISOString(),
   };
+
   let birthdaySkipped = false;
   let { error: upsertErr } = await client.from('user_profiles').upsert(payload, { onConflict: 'id' });
+  if (upsertErr && /bio|interest_tags|social_|cover_url|column|schema cache/i.test(String(upsertErr.message ?? ''))) {
+    const retryExtra = await client.from('user_profiles').upsert(
+      {
+        id: u.id,
+        username: nick,
+        city: payload.city,
+        phone: payload.phone,
+        birthday: payload.birthday,
+        updated_at: payload.updated_at,
+      },
+      { onConflict: 'id' }
+    );
+    upsertErr = retryExtra.error;
+  }
   if (upsertErr && /birthday|column|schema cache/i.test(String(upsertErr.message ?? ''))) {
     const retry = await client.from('user_profiles').upsert(
       {
@@ -205,6 +269,18 @@ export async function saveProfileIdentity(
 
 export function emitAvatarUpdated() {
   DeviceEventEmitter.emit(AVATAR_UPDATED_EVENT);
+}
+
+export function emitCoverUpdated() {
+  DeviceEventEmitter.emit(COVER_UPDATED_EVENT);
+}
+
+export async function canRemoveAvatar(client: SupabaseClient): Promise<boolean> {
+  const { data } = await client.auth.getUser();
+  const u = data?.user;
+  if (!u) return false;
+  const { data: profileRow } = await client.from('user_profiles').select('avatar_url').eq('id', u.id).maybeSingle();
+  return hasCustomAvatarFromSources(profileRow, u.user_metadata ?? {});
 }
 
 export async function removeUserAvatar(client: SupabaseClient, username?: string): Promise<void> {
@@ -261,3 +337,113 @@ export async function removeUserAvatar(client: SupabaseClient, username?: string
   await client.auth.refreshSession();
   emitAvatarUpdated();
 }
+
+export async function uploadUserCover(
+  client: SupabaseClient,
+  file: { uri: string; mimeType?: string; name?: string } | ArrayBuffer,
+  username?: string
+): Promise<{ user: User; profileRow: Record<string, unknown> | null; publicUrl: string }> {
+  const { data: authData, error: authReadErr } = await client.auth.getUser();
+  if (authReadErr) throw authReadErr;
+  const u = authData?.user;
+  if (!u) throw new Error('Sign in to upload a cover photo.');
+
+  let buffer: ArrayBuffer;
+  let mimeType = 'image/jpeg';
+  let ext: 'jpg' | 'png' | 'webp' = 'jpg';
+
+  if (file instanceof ArrayBuffer) {
+    buffer = file;
+  } else {
+    buffer = await readLocalImageBytes(file.uri);
+    ext = imageExtensionFromUri(file.uri);
+    mimeType = imageMimeType(ext, file.mimeType);
+  }
+
+  const path = `${u.id}/cover-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
+  const { error: upErr } = await client.storage.from('avatars').upload(path, buffer, {
+    upsert: true,
+    contentType: mimeType,
+    cacheControl: '3600',
+  });
+
+  if (upErr) {
+    const msg = upErr.message || '';
+    if (/policy|permission|row-level security|not authorized|denied/i.test(msg)) {
+      throw new Error(
+        'Upload blocked by storage rules. In Supabase: create a public "avatars" bucket, then run storage-policies.sql from the project repo (SQL Editor).'
+      );
+    }
+    if (/bucket|not found|does not exist/i.test(msg)) {
+      throw new Error(
+        'Storage bucket "avatars" is missing. Create it under Storage in the Supabase Dashboard, then apply storage-policies.sql.'
+      );
+    }
+    throw upErr;
+  }
+
+  const { data: urlData } = client.storage.from('avatars').getPublicUrl(path);
+  const publicUrl = urlData.publicUrl;
+
+  const { error: profileErr } = await client.from('user_profiles').upsert(
+    {
+      id: u.id,
+      username: username || usernameForRow(null, u),
+      cover_url: publicUrl,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'id' }
+  );
+  if (profileErr) {
+    if (/cover_url|column|schema cache/i.test(String(profileErr.message ?? ''))) {
+      throw new Error(
+        'Cover photos are not enabled yet. Run supabase/migrations/20260907140000_user_profile_social_bio.sql in the Supabase SQL Editor.'
+      );
+    }
+    throw profileErr;
+  }
+
+  const profileRow = await fetchProfileRow(client, u.id);
+  emitCoverUpdated();
+  return { user: u, profileRow, publicUrl };
+}
+
+export async function removeUserCover(
+  client: SupabaseClient,
+  username?: string
+): Promise<{ user: User; profileRow: Record<string, unknown> | null }> {
+  const { data: authData, error: authReadErr } = await client.auth.getUser();
+  if (authReadErr) throw authReadErr;
+  const u = authData?.user;
+  if (!u) throw new Error('Sign in to remove your cover photo.');
+
+  const { data: profileBefore } = await client
+    .from('user_profiles')
+    .select('cover_url')
+    .eq('id', u.id)
+    .maybeSingle();
+  const currentUrl = String(profileBefore?.cover_url ?? '').trim();
+  if (!currentUrl) throw new Error('No cover photo to remove.');
+
+  try {
+    await deleteUserAvatarFiles(client, u.id, currentUrl);
+  } catch {
+    /* best-effort storage cleanup */
+  }
+
+  const { error: profileErr } = await client.from('user_profiles').upsert(
+    {
+      id: u.id,
+      username: username || usernameForRow(null, u),
+      cover_url: null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'id' }
+  );
+  if (profileErr) throw profileErr;
+
+  const profileRow = await fetchProfileRow(client, u.id);
+  emitCoverUpdated();
+  return { user: u, profileRow };
+}
+

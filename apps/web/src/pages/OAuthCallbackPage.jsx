@@ -2,20 +2,50 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   completeOAuthFromUrl,
+  isStaleOAuthStateError,
   urlHasOAuthParams,
   waitForSupabaseSession,
 } from '../lib/oauthCallback';
 import { supabase } from '../lib/supabase';
-import { isAdminReservedEmail } from '../lib/adminReservedEmail';
+import { isAdminReservedEmailAsync } from '../lib/adminReservedEmail';
 import { markLocationPromptPending } from '../lib/promptLocationOnLogin';
 import { TRAVELER_ACCOUNT_DISABLED_MESSAGE } from 'cavitour-shared/accountStatus';
 import { rejectDisabledTraveler } from '../lib/rejectDisabledTraveler';
 import { resolveAccountHome } from '../lib/accountHome';
+import { clearOAuthNextPath, peekOAuthNextPath, startGoogleOAuth } from '../lib/startGoogleOAuth';
+
+/** Guards the one automatic restart so a broken redirect config cannot loop. */
+const OAUTH_RESTARTED_KEY = 'cavitour.oauth.restarted';
+
+function oauthRestartUsed() {
+  try {
+    return sessionStorage.getItem(OAUTH_RESTARTED_KEY) === '1';
+  } catch {
+    return true;
+  }
+}
+
+function setOAuthRestartUsed(used) {
+  try {
+    if (used) sessionStorage.setItem(OAUTH_RESTARTED_KEY, '1');
+    else sessionStorage.removeItem(OAUTH_RESTARTED_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 
 function safeNextPath(raw) {
   const next = String(raw ?? '').trim();
   if (!next.startsWith('/') || next.startsWith('//')) return null;
   return next;
+}
+
+function friendlyGoogleError(message) {
+  const text = String(message || '').trim();
+  if (isStaleOAuthStateError(text)) {
+    return 'Google sign-in could not be completed on this browser. Tap “Sign in with Google” to try again.';
+  }
+  return text || 'Google sign in failed';
 }
 
 /** Finishes Google (and other Supabase OAuth) redirects on the web app. */
@@ -26,30 +56,47 @@ export function OAuthCallbackPage() {
 
   useEffect(() => {
     let active = true;
-    const nextPath = safeNextPath(searchParams.get('next'));
+    const nextPath = safeNextPath(searchParams.get('next')) || peekOAuthNextPath();
 
     const finish = async () => {
+      const href = window.location.href;
       let authError = null;
+      let staleState = false;
 
       try {
-        const href = window.location.href;
         if (urlHasOAuthParams(href)) {
           await completeOAuthFromUrl(href);
+          clearOAuthNextPath();
+          setOAuthRestartUsed(false);
           const cleanPath = window.location.pathname;
           const cleanSearch = nextPath ? `?next=${encodeURIComponent(nextPath)}` : '';
           window.history.replaceState({}, document.title, `${cleanPath}${cleanSearch}`);
         }
       } catch (err) {
-        authError = err instanceof Error ? err.message : 'Google sign in failed';
+        const raw = err instanceof Error ? err.message : 'Google sign in failed';
+        staleState = isStaleOAuthStateError(raw);
+        authError = friendlyGoogleError(raw);
       }
 
       if (!active) return;
+
+      // The security code that pairs this browser with Google is missing or spent —
+      // usually a reused link or a stale tab. One fresh round trip fixes it.
+      if (staleState && !oauthRestartUsed()) {
+        setOAuthRestartUsed(true);
+        setStatusMessage('Restarting Google sign-in…');
+        try {
+          await startGoogleOAuth({ next: nextPath });
+          return;
+        } catch {
+          /* fall through to the error message below */
+        }
+      }
 
       if (authError) {
         setStatusMessage(authError);
         window.setTimeout(() => {
           if (active) {
-            const next = safeNextPath(searchParams.get('next'));
             const loginPath = '/login';
             navigate(loginPath, { replace: true, state: { googleError: authError } });
           }
@@ -72,7 +119,7 @@ export function OAuthCallbackPage() {
 
       const email = session?.user?.email?.trim().toLowerCase() ?? '';
       const wantsAdmin = Boolean(nextPath?.startsWith('/admin'));
-      const isAdmin = Boolean(email && isAdminReservedEmail(email));
+      const isAdmin = Boolean(email && (await isAdminReservedEmailAsync(email)));
 
       if (!session) {
         setStatusMessage('Sign in did not complete. Try again.');

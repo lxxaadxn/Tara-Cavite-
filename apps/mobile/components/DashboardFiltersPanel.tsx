@@ -59,7 +59,7 @@ const SECTIONS: FilterSection[] = [
       { key: 'mun-alfonso', label: 'Alfonso' },
       { key: 'mun-indang', label: 'Indang' },
       { key: 'mun-magallanes', label: 'Magallanes' },
-      { key: 'mun-mendez', label: 'Mendez - Nuñez' },
+      { key: 'mun-mendez', label: 'Mendez-Nuñez' },
       { key: 'mun-noveleta', label: 'Noveleta' },
       { key: 'mun-silang', label: 'Silang' },
       { key: 'mun-tanza', label: 'Tanza' },

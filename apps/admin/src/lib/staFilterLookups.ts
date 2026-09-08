@@ -138,6 +138,17 @@ export async function fetchFilterLookupRows(client: SupabaseClient): Promise<Fil
   return rows;
 }
 
+async function nextLookupId(
+  client: SupabaseClient,
+  table: string,
+  idCol: string
+): Promise<number> {
+  const { data, error } = await client.from(table).select(idCol).order(idCol, { ascending: false }).limit(1);
+  if (error) throw friendlyWriteError(error, 'create');
+  const max = Number((data?.[0] as Record<string, unknown> | undefined)?.[idCol] ?? 0);
+  return Number.isFinite(max) && max > 0 ? max + 1 : 1;
+}
+
 export async function createFilterLookup(
   client: SupabaseClient,
   form: FilterLookupForm
@@ -145,7 +156,12 @@ export async function createFilterLookup(
   const label = form.label.trim();
   if (!label) throw new Error('Label is required');
   const meta = KIND_META[form.kind];
-  const { error } = await client.from(meta.table).insert({ [meta.labelCol]: label });
+  // category_id / ntdp_category_id / type_code_id may be NOT NULL without a DEFAULT sequence.
+  const nextId = await nextLookupId(client, meta.table, meta.idCol);
+  const { error } = await client.from(meta.table).insert({
+    [meta.idCol]: nextId,
+    [meta.labelCol]: label,
+  });
   if (error) throw friendlyWriteError(error, 'create');
 }
 

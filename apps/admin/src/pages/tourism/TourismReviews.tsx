@@ -10,6 +10,9 @@ import {
   setAdminPlaceReviewPublished,
 } from '../../lib/adminPlaceReviews';
 import { supabase } from '../../lib/supabase';
+import crud from '../../components/ContentCrudPage.module.css';
+import { RowMenu } from '../../components/RowMenu';
+import { EyeIcon } from '../../components/rowIcons';
 import styles from '../users/UsersAdmin.module.css';
 
 type Visibility = 'all' | 'published' | 'hidden';
@@ -124,7 +127,7 @@ export function TourismReviews() {
               <th>Review</th>
               <th>Status</th>
               <th>Date</th>
-              <th>Actions</th>
+              <th className={crud.actionsHead}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -162,18 +165,21 @@ export function TourismReviews() {
                     )}
                   </td>
                   <td>{formatAdminDate(row.createdAt)}</td>
-                  <td>
-                    <div className={styles.actions}>
-                      <button type="button" className={styles.actionBtn} onClick={() => void togglePublished(row)}>
-                        {row.isPublished ? 'Hide' : 'Show'}
-                      </button>
+                  <td className={crud.actionsHead}>
+                    <div className={crud.rowTools}>
                       <button
                         type="button"
-                        className={`${styles.actionBtn} ${styles.danger}`}
-                        onClick={() => setPending(row)}
+                        className={crud.iconBtn}
+                        aria-label={`${row.isPublished ? 'Hide' : 'Show'} the review by ${row.reviewerName}`}
+                        title={row.isPublished ? 'Hide review' : 'Show review'}
+                        onClick={() => void togglePublished(row)}
                       >
-                        Delete
+                        <EyeIcon hidden={row.isPublished} />
                       </button>
+                      <RowMenu
+                        label={`More actions for the review by ${row.reviewerName}`}
+                        items={[{ label: 'Delete', onSelect: () => setPending(row), danger: true }]}
+                      />
                     </div>
                   </td>
                 </tr>

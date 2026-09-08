@@ -16,7 +16,9 @@ export function foldLguName(name) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
+    .replace(/^city of\s+/i, '')
     .replace(/\s+city\s*$/i, '')
+    .replace(/[-–—]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }

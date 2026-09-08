@@ -5,20 +5,16 @@ import { useToast } from '../../components/Toast';
 import { useAdminHref } from '../../contexts/AdminPathPrefixContext';
 import { usePageHeader } from '../../contexts/PageHeaderContext';
 import {
-  applyStopTags,
   CATEGORY_OPTIONS,
-  COST_TAGS,
   DURATION_PRESETS,
   emptyItinerary,
   emptyStop,
   mapsSearchUrl,
   persistAdminItinerary,
   fetchAdminItinerary,
-  selectedStopTags,
   parseTimeWindow,
   formatTimeWindow,
   durationHintFromTimes,
-  VIBE_TAGS,
   type AdminItinerary,
   type AdminItineraryStatus,
   type AdminItineraryStop,
@@ -27,6 +23,15 @@ import { parseCoordsFromMapsUrl } from '../../lib/staV3CatalogAdmin';
 import { fetchAdminDestinations } from '../../lib/destinationPlaces';
 import { supabase } from '../../lib/supabase';
 import styles from './ItineraryEditorPage.module.css';
+
+type ItineraryEditorPageProps = {
+  /** When set, load this itinerary instead of the route `:id` param. */
+  id?: string | null;
+  /** When set, closing/saving returns to the list via callback instead of routing. */
+  onClose?: () => void;
+  /** Render inside a modal overlay (skips page header override). */
+  embedded?: boolean;
+};
 
 type VenueOption = {
   id: string;
@@ -114,71 +119,6 @@ function CategoryMultiSelect({
               })
             )}
           </ul>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function TagMultiSelect({
-  selected,
-  onChange,
-}: {
-  selected: string[];
-  onChange: (next: string[]) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const groups = [
-    { label: 'Cost', options: COST_TAGS },
-    { label: 'Vibe', options: VIBE_TAGS },
-  ];
-
-  useEffect(() => {
-    const onDoc = (e: MouseEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
-  }, []);
-
-  const toggle = (value: string) => {
-    onChange(selected.includes(value) ? selected.filter((t) => t !== value) : [...selected, value]);
-  };
-
-  return (
-    <div className={styles.tagSelect} ref={wrapRef}>
-      <button
-        type="button"
-        className={`${styles.tagSelectBtn} ${open ? styles.tagSelectBtnOpen : ''}`}
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span>{selected.length === 0 ? 'Select...' : `${selected.length} Selected`}</span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-          {open ? <path d="m18 15-6-6-6 6" /> : <path d="m6 9 6 6 6-6" />}
-        </svg>
-      </button>
-      {open ? (
-        <div className={styles.tagSelectMenu} role="listbox" aria-multiselectable>
-          {groups.map((g) => (
-            <div key={g.label} className={styles.tagSelectGroup}>
-              {g.options.map((opt) => {
-                const on = selected.includes(opt);
-                return (
-                  <label key={opt} className={`${styles.tagSelectOption} ${on ? styles.tagSelectOptionOn : ''}`}>
-                    <input
-                      className={styles.tagCheck}
-                      type="checkbox"
-                      checked={on}
-                      onChange={() => toggle(opt)}
-                    />
-                    <span className={styles.tagSelectLabel}>{opt}</span>
-                  </label>
-                );
-              })}
-            </div>
-          ))}
         </div>
       ) : null}
     </div>
@@ -293,9 +233,10 @@ function VenueSearch({
   );
 }
 
-export function ItineraryEditorPage() {
+export function ItineraryEditorPage(props: ItineraryEditorPageProps = {}) {
+  const { onClose, embedded = false, id: idProp } = props;
   const params = useParams();
-  const id = params.id;
+  const id = idProp !== undefined ? idProp || undefined : params.id;
   const isNew = !id;
   const navigate = useNavigate();
   const href = useAdminHref;
@@ -303,6 +244,11 @@ export function ItineraryEditorPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const coverFileRef = useRef<File | null>(null);
   const listHref = href('/web/itineraries/created');
+
+  const exitEditor = () => {
+    if (onClose) onClose();
+    else navigate(listHref);
+  };
 
   const [existing, setExisting] = useState<AdminItinerary | null>(null);
   const [form, setForm] = useState<Omit<AdminItinerary, 'id'>>(() => emptyItinerary());
@@ -317,7 +263,7 @@ export function ItineraryEditorPage() {
   const [step, setStep] = useState<WizardStep>(1);
   const [openStop, setOpenStop] = useState<string | null>(null);
 
-  usePageHeader(isNew ? 'Create Itinerary' : 'Edit Itinerary', null);
+  usePageHeader(embedded ? null : isNew ? 'Create Itinerary' : 'Edit Itinerary', null);
 
   useEffect(() => {
     if (isNew || !id) {
@@ -472,7 +418,7 @@ export function ItineraryEditorPage() {
         { previous: existing ?? undefined, coverFile: coverFileRef.current }
       );
       toast(status === 'published' ? 'Itinerary published' : 'Draft saved', 'success');
-      navigate(listHref);
+      exitEditor();
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Could not save itinerary', 'error');
     }
@@ -519,7 +465,7 @@ export function ItineraryEditorPage() {
   return (
     <form
       id="itinerary-editor-form"
-      className={`${styles.page} ${styles.wizard}`}
+      className={`${styles.page} ${styles.wizard} ${embedded ? styles.embedded : ''}`}
       onSubmit={(e: FormEvent) => e.preventDefault()}
       aria-labelledby="itinerary-editor-title"
     >
@@ -802,13 +748,6 @@ export function ItineraryEditorPage() {
                               {stop.durationHint || '—'}
                             </span>
                           </div>
-                          <div className={styles.stopField}>
-                            <span>Tags</span>
-                            <TagMultiSelect
-                              selected={selectedStopTags(stop)}
-                              onChange={(tags) => setStop(index, applyStopTags(stop, tags))}
-                            />
-                          </div>
                         </div>
                       ) : null}
                     </article>
@@ -872,32 +811,22 @@ export function ItineraryEditorPage() {
                   <p className={styles.reviewStopsEmpty}>No stops yet</p>
                 ) : (
                   <ol className={styles.reviewStops}>
-                    {form.stopList.map((s, i) => {
-                      const tags = selectedStopTags(s);
-                      return (
-                        <li key={s.clientId} className={styles.reviewStopCard}>
-                          <span className={styles.stopBadge}>{i + 1}</span>
-                          <div className={styles.reviewStopBody}>
-                            <strong className={styles.reviewStopName}>
-                              {s.venueName || s.name || 'No venue'}
-                            </strong>
-                            <span className={styles.reviewStopTime}>{s.timeWindow || 'No time set'}</span>
-                            {s.durationHint || tags.length ? (
-                              <div className={styles.chips}>
-                                {s.durationHint ? (
-                                  <span className={`${styles.chip} ${styles.stayChip}`}>{s.durationHint}</span>
-                                ) : null}
-                                {tags.map((tag) => (
-                                  <span key={tag} className={styles.chip}>
-                                    {tag}
-                                  </span>
-                                ))}
-                              </div>
-                            ) : null}
-                          </div>
-                        </li>
-                      );
-                    })}
+                    {form.stopList.map((s, i) => (
+                      <li key={s.clientId} className={styles.reviewStopCard}>
+                        <span className={styles.stopBadge}>{i + 1}</span>
+                        <div className={styles.reviewStopBody}>
+                          <strong className={styles.reviewStopName}>
+                            {s.venueName || s.name || 'No venue'}
+                          </strong>
+                          <span className={styles.reviewStopTime}>{s.timeWindow || 'No time set'}</span>
+                          {s.durationHint ? (
+                            <div className={styles.chips}>
+                              <span className={`${styles.chip} ${styles.stayChip}`}>{s.durationHint}</span>
+                            </div>
+                          ) : null}
+                        </div>
+                      </li>
+                    ))}
                   </ol>
                 )}
               </div>
@@ -908,6 +837,11 @@ export function ItineraryEditorPage() {
 
       <div className={styles.modalFooter}>
         <div className={styles.footerGrow} />
+        {step === 1 && onClose ? (
+          <button type="button" className={styles.ghostBtn} onClick={onClose}>
+            Cancel
+          </button>
+        ) : null}
         {step > 1 ? (
           <button type="button" className={styles.ghostBtn} onClick={() => setStep((s) => (s === 3 ? 2 : 1))}>
             Back

@@ -15,7 +15,10 @@ function mapNtdpRows(rows: Record<string, unknown>[] | null): AppFilterCategoryO
   const seen = new Set<string>();
   const out: AppFilterCategoryOption[] = [];
   for (const r of rows ?? []) {
-    const opt = ntdpToFilterOption(r.ntdp_category_name, r.ntdp_category_id) as AppFilterCategoryOption | null;
+    const opt = ntdpToFilterOption(
+      String(r.ntdp_category_name ?? ''),
+      String(r.ntdp_category_id ?? '')
+    ) as AppFilterCategoryOption | null;
     if (!opt) continue;
     const fold = opt.key.toLowerCase();
     if (seen.has(fold)) continue;

@@ -238,6 +238,99 @@ export async function fetchSavedListsForUser(userId) {
   return lists;
 }
 
+/**
+ * Load another user's public (shared) saved lists — requires RLS for type=shared.
+ * @param {string} userId
+ */
+export async function fetchPublicListsForUser(userId) {
+  const uid = String(userId ?? '').trim();
+  if (!uid) return [];
+
+  const { data: listRows, error: listErr } = await supabase
+    .from('saved_lists')
+    .select('id, name, created_at, updated_at, type')
+    .eq('user_id', uid)
+    .eq('type', 'shared')
+    .order('updated_at', { ascending: false });
+  if (listErr) throw listErr;
+
+  const lists = [];
+  let skipItineraryItems = false;
+  let published = [];
+  try {
+    published = await fetchPublishedItineraries(supabase);
+  } catch {
+    published = [];
+  }
+  for (const list of listRows ?? []) {
+    const placeQuery = supabase
+      .from('saved_list_items')
+      .select('place_id, created_at')
+      .eq('list_id', list.id)
+      .order('created_at', { ascending: false });
+    const itineraryQuery = skipItineraryItems
+      ? Promise.resolve({ data: [], error: null })
+      : supabase
+          .from('saved_list_itinerary_items')
+          .select('itinerary_ref, created_at')
+          .eq('list_id', list.id)
+          .order('created_at', { ascending: false });
+    const [placeLinksRes, itineraryLinksRes] = await Promise.all([placeQuery, itineraryQuery]);
+    if (placeLinksRes.error) throw placeLinksRes.error;
+    if (itineraryLinksRes.error) skipItineraryItems = true;
+    const itineraryLinks = itineraryLinksRes.error ? [] : (itineraryLinksRes.data ?? []);
+
+    const items = [];
+    const placeIds = (placeLinksRes.data ?? []).map((r) => r.place_id);
+    if (placeIds.length > 0) {
+      const { data: placeRows, error: placesErr } = await supabase
+        .from(CONTENT_PIPELINE.establishmentsView)
+        .select(
+          'establishment_public_id, ta_name, address, type, picture, gallery_urls, ntdp_category, created_at'
+        )
+        .in('establishment_public_id', placeIds);
+      if (placesErr) throw placesErr;
+      const savedAtByPlaceId = new Map(
+        (placeLinksRes.data ?? []).map((r) => [r.place_id, r.created_at]),
+      );
+      const foundIds = new Set();
+      for (const row of placeRows ?? []) {
+        const pid = row.establishment_public_id;
+        if (pid) foundIds.add(pid);
+        items.push(mapPlaceRowToItem(row, savedAtByPlaceId.get(pid)));
+      }
+      for (const pid of placeIds) {
+        if (foundIds.has(pid)) continue;
+        items.push({
+          id: pid,
+          name: 'Saved place',
+          image: '',
+          subtitle: 'Cavite, Philippines',
+          establishmentTag: '',
+          savedAt: savedAtByPlaceId.get(pid) ?? null,
+        });
+      }
+    }
+
+    for (const link of itineraryLinks) {
+      items.push(mapItineraryRefToItem(link.itinerary_ref, link.created_at, published));
+    }
+
+    items.sort((a, b) => String(b.savedAt ?? '').localeCompare(String(a.savedAt ?? '')));
+
+    lists.push({
+      id: list.id,
+      name: list.name,
+      privacy: 'public',
+      createdAt: list.created_at,
+      updatedAt: list.updated_at,
+      items,
+    });
+  }
+
+  return lists;
+}
+
 async function insertPlaceIntoList(listId, placeId) {
   const candidates = await resolveCanonicalPlaceIds(placeId);
   if (candidates.length === 0) {
@@ -416,4 +509,66 @@ export async function updateSavedListRemote(userId, listId, patch) {
 
   dispatchSavedListsUpdated();
   return { ok: true, listName: nextName };
+}
+
+/**
+ * Create an empty saved list (places + itineraries can be added later).
+ * @param {string} userId
+ * @param {string} name
+ * @param {'private' | 'public'} [privacy]
+ */
+export async function createSavedListRemote(userId, name, privacy = 'private') {
+  const uid = String(userId ?? '').trim();
+  const cleanName = String(name ?? '').trim();
+  if (!uid || !cleanName) return { ok: false, reason: 'invalid_input' };
+
+  const { data: others, error: othersErr } = await supabase
+    .from('saved_lists')
+    .select('id, name')
+    .eq('user_id', uid);
+  if (othersErr) throw othersErr;
+  const duplicate = (others ?? []).some(
+    (row) => String(row.name).toLowerCase() === cleanName.toLowerCase(),
+  );
+  if (duplicate) return { ok: false, reason: 'duplicate_name' };
+
+  const payload = {
+    user_id: uid,
+    name: cleanName,
+    type: privacy === 'public' ? 'shared' : 'private',
+  };
+
+  let { data, error } = await supabase.from('saved_lists').insert(payload).select('id, name').single();
+  if (error && /type/i.test(String(error.message ?? ''))) {
+    const retry = await supabase
+      .from('saved_lists')
+      .insert({ user_id: uid, name: cleanName })
+      .select('id, name')
+      .single();
+    data = retry.data;
+    error = retry.error;
+  }
+  if (error) {
+    if (isDuplicateError(error)) return { ok: false, reason: 'duplicate_name' };
+    throw error;
+  }
+
+  dispatchSavedListsUpdated();
+  return { ok: true, listId: data?.id, listName: data?.name ?? cleanName };
+}
+
+/**
+ * Delete a saved list (item rows cascade via FK).
+ * @param {string} userId
+ * @param {string} listId
+ */
+export async function deleteSavedListRemote(userId, listId) {
+  const list = await getListForUser(userId, listId);
+  if (!list) return { ok: false, reason: 'list_not_found' };
+
+  const { error } = await supabase.from('saved_lists').delete().eq('id', list.id).eq('user_id', userId);
+  if (error) throw error;
+
+  dispatchSavedListsUpdated();
+  return { ok: true };
 }

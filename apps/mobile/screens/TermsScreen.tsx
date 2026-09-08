@@ -1,8 +1,7 @@
 import React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { JamIcon } from '../components/JamIcon';
+import { Header } from '../components/Header';
 
 const PAGE_BG = '#f4f7f9';
 const TITLE = '#171717';
@@ -32,24 +31,15 @@ const SECTIONS = [
 ];
 
 export default function TermsScreen() {
-  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top + 8 }]}>
-      <View style={styles.titleRow}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          hitSlop={10}
-        >
-          <JamIcon ionicon="chevron-left" size={22} color={TITLE} />
-        </TouchableOpacity>
-        <Text style={styles.screenTitle}>Terms of Use</Text>
-      </View>
-      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 24 }} showsVerticalScrollIndicator={false}>
+    <View style={styles.root}>
+      <Header title="Terms of Use" showBack darkBackground />
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
+        showsVerticalScrollIndicator={false}
+      >
         {SECTIONS.map((section) => (
           <View key={section.title} style={styles.card}>
             <Text style={styles.heading}>{section.title}</Text>
@@ -65,25 +55,10 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: PAGE_BG,
+  },
+  scrollContent: {
     paddingHorizontal: 16,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: -6,
-    marginBottom: 12,
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  screenTitle: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 20,
-    color: TITLE,
-    flex: 1,
+    paddingTop: 16,
   },
   card: {
     backgroundColor: '#fff',

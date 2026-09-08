@@ -18,7 +18,7 @@ import {
 import * as SplashScreen from 'expo-splash-screen';
 import * as Linking from 'expo-linking';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Platform, StyleSheet, View, Alert } from 'react-native';
+import { Platform, StyleSheet, View, Alert, useWindowDimensions } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createNavigationContainerRef } from '@react-navigation/native';
 
@@ -51,12 +51,10 @@ import HomeScreen from './screens/HomeScreen';
 import ItinerariesScreen from './screens/ItinerariesScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
 import MapScreen from './screens/MapScreen';
-import MapCommuteDetailScreen from './screens/MapCommuteDetailScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
 import PlaceDetailScreen from './screens/PlaceDetailScreen';
 import AboutEstablishmentScreen from './screens/AboutEstablishmentScreen';
 import CheckinScreen from './screens/CheckinScreen';
-import EstablishmentsBrowseScreen from './screens/EstablishmentsBrowseScreen';
 import PreferencesScreen from './screens/PreferencesScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import SavedListScreen from './screens/SavedListScreen';
@@ -78,6 +76,13 @@ import { LocationPermissionModal, markMobileLocationPromptPending, clearMobileLo
 import { LogoWordmark } from './components/LogoWordmark';
 import { CheckinScannerModal } from './components/CheckinScannerModal';
 import { ScanTabButton } from './components/ScanTabButton';
+import {
+  getMainFloatingTabBarStyle,
+  getMainTabBarItemStyle,
+  tabBarShowsLabels,
+  TAB_BAR_LABEL_FONT_SIZE,
+  TAB_BAR_LABEL_LINE_HEIGHT,
+} from './lib/mainTabBarStyle';
 import AnnouncementsScreen from './screens/AnnouncementsScreen';
 
 const Stack = createStackNavigator();
@@ -127,7 +132,6 @@ const DashboardStack = () => (
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
     <Stack.Screen name="AboutEstablishment" component={AboutEstablishmentScreen} />
     <Stack.Screen name="Checkin" component={CheckinScreen} />
-    <Stack.Screen name="EstablishmentsBrowse" component={EstablishmentsBrowseScreen} />
     <Stack.Screen name="Directions" component={DirectionsScreen} />
     <Stack.Screen name="FullRouteMap" component={FullRouteMapScreen} />
     <Stack.Screen name="Categories" component={CategoriesScreen} />
@@ -145,7 +149,6 @@ const ItinerariesStack = () => (
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
     <Stack.Screen name="AboutEstablishment" component={AboutEstablishmentScreen} />
     <Stack.Screen name="Checkin" component={CheckinScreen} />
-    <Stack.Screen name="EstablishmentsBrowse" component={EstablishmentsBrowseScreen} />
     <Stack.Screen name="Directions" component={DirectionsScreen} />
     <Stack.Screen name="FullRouteMap" component={FullRouteMapScreen} />
     <Stack.Screen name="NewList" component={NewListScreen} />
@@ -162,13 +165,24 @@ const ProfileStack = () => (
     <Stack.Screen name="History" component={HistoryScreen} />
     <Stack.Screen name="TravelHistory" component={TravelHistoryScreen} />
     <Stack.Screen name="Privacy" component={PrivacyScreen} />
+    <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
+    <Stack.Screen name="AboutEstablishment" component={AboutEstablishmentScreen} />
+    <Stack.Screen name="Checkin" component={CheckinScreen} />
+    <Stack.Screen name="Directions" component={DirectionsScreen} />
+    <Stack.Screen name="FullRouteMap" component={FullRouteMapScreen} />
+    <Stack.Screen name="Notifications" component={NotificationsScreen} />
+  </Stack.Navigator>
+);
+
+// Saved Stack
+const SavedStack = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="SavedList" component={SavedListScreen} />
     <Stack.Screen name="SavedListDetail" component={SavedListDetailScreen} />
     <Stack.Screen name="NewList" component={NewListScreen} />
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
     <Stack.Screen name="AboutEstablishment" component={AboutEstablishmentScreen} />
     <Stack.Screen name="Checkin" component={CheckinScreen} />
-    <Stack.Screen name="EstablishmentsBrowse" component={EstablishmentsBrowseScreen} />
     <Stack.Screen name="Directions" component={DirectionsScreen} />
     <Stack.Screen name="FullRouteMap" component={FullRouteMapScreen} />
     <Stack.Screen name="Notifications" component={NotificationsScreen} />
@@ -182,9 +196,7 @@ const MapStack = () => (
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
     <Stack.Screen name="AboutEstablishment" component={AboutEstablishmentScreen} />
     <Stack.Screen name="Checkin" component={CheckinScreen} />
-    <Stack.Screen name="EstablishmentsBrowse" component={EstablishmentsBrowseScreen} />
     <Stack.Screen name="Directions" component={DirectionsScreen} />
-    <Stack.Screen name="MapCommuteDetail" component={MapCommuteDetailScreen} />
     <Stack.Screen name="FullRouteMap" component={FullRouteMapScreen} />
     <Stack.Screen name="Notifications" component={NotificationsScreen} />
   </Stack.Navigator>
@@ -201,6 +213,11 @@ function ScanPlaceholder() {
 }
 
 const HIDE_TAB_ROUTES = new Set([
+  // Roots that carry the solid teal app bar and navigate back instead of via tabs.
+  'ItinerariesMain',
+  'SavedList',
+  'ProfileMain',
+  'AnnouncementsMain',
   'Notifications',
   'Directions',
   'FullRouteMap',
@@ -208,7 +225,6 @@ const HIDE_TAB_ROUTES = new Set([
   'PlaceDetail',
   'NewList',
   'CreateItinerary',
-  'SavedList',
   'SavedListDetail',
   'ItineraryDetail',
   'UserDetails',
@@ -225,32 +241,31 @@ function tabIconName(routeName: string) {
   if (routeName === 'Dashboard') return 'home-outline';
   if (routeName === 'Itineraries') return 'document-text-outline';
   if (routeName === 'Map') return 'map-outline';
+  if (routeName === 'Saved') return 'bookmark-outline';
   if (routeName === 'Announcements') return 'notifications-outline';
   return 'circle';
 }
 
-// Main Tabs: Home · Itineraries · Scan · Map · Announcements (Saved lives on Profile; Profile is header-only)
+const TAB_BAR_ICON_SIZE = 26;
+
+/**
+ * Announcements and Profile are reached from header buttons, not the pill.
+ * `tabBarButton` alone only blanks the item — BottomTabItem still renders a
+ * `flex: 1` wrapper, which would leave two empty slots on the right.
+ */
+const HIDDEN_TAB_ITEM = {
+  tabBarButton: () => null,
+  tabBarItemStyle: { display: 'none' as const },
+};
+
+// Main Tabs: Home · Itineraries · Scan · Map · Saved · Alerts · Profile
 function MainTabs() {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const [scanOpen, setScanOpen] = useState(false);
-  const bottomPad = Math.max(insets.bottom, 10);
-  const mainTabBarStyle = {
-    position: 'absolute' as const,
-    left: 8,
-    right: 8,
-    bottom: bottomPad,
-    height: 72 + Math.min(insets.bottom, 8),
-    paddingTop: 10,
-    paddingBottom: Math.min(insets.bottom, 12) || 8,
-    borderRadius: 30,
-    backgroundColor: Colors.white,
-    borderTopWidth: 0,
-    borderWidth: 1,
-    borderColor: 'rgba(122, 120, 120, 0.5)',
-    elevation: 0,
-    shadowOpacity: 0,
-    overflow: 'visible' as const,
-  };
+  const showTabLabels = tabBarShowsLabels(windowWidth);
+  const mainTabBarStyle = getMainFloatingTabBarStyle(insets.bottom, showTabLabels);
+  const mainTabBarItemStyle = getMainTabBarItemStyle(showTabLabels);
 
   const tabOpts = (fallback: string) =>
     ({ route }: { route: object }) => ({
@@ -261,22 +276,21 @@ function MainTabs() {
     <View style={{ flex: 1 }}>
       <Tab.Navigator
         screenOptions={({ route }) => ({
-          tabBarIcon: ({ color, size }) => (
-            <JamIcon ionicon={tabIconName(route.name)} size={Math.min(size, 22)} color={color} />
+          tabBarIcon: ({ color }) => (
+            <JamIcon ionicon={tabIconName(route.name)} size={TAB_BAR_ICON_SIZE} color={color} />
           ),
           tabBarActiveTintColor: Colors.accent,
           tabBarInactiveTintColor: Colors.primary,
           headerShown: false,
-          tabBarShowLabel: true,
+          tabBarShowLabel: showTabLabels,
           tabBarLabelStyle: {
-            fontSize: 9,
+            fontSize: TAB_BAR_LABEL_FONT_SIZE,
+            lineHeight: TAB_BAR_LABEL_LINE_HEIGHT,
             fontFamily: 'Poppins_500Medium',
             marginBottom: 0,
           },
           tabBarStyle: mainTabBarStyle,
-          tabBarItemStyle: {
-            height: 48,
-          },
+          tabBarItemStyle: mainTabBarItemStyle,
         })}
       >
         <Tab.Screen
@@ -295,7 +309,7 @@ function MainTabs() {
           options={{
             tabBarLabel: () => null,
             tabBarIcon: () => null,
-            tabBarButton: (props) => <ScanTabButton {...props} />,
+            tabBarButton: (props) => <ScanTabButton {...props} showLabel={showTabLabels} />,
           }}
           listeners={{
             tabPress: (e) => {
@@ -310,17 +324,26 @@ function MainTabs() {
           options={(args) => ({ ...tabOpts('MapMain')(args), tabBarLabel: 'Map' })}
         />
         <Tab.Screen
+          name="Saved"
+          component={SavedStack}
+          options={(args) => ({ ...tabOpts('SavedList')(args), tabBarLabel: 'Saved' })}
+        />
+        <Tab.Screen
           name="Announcements"
           component={AnnouncementsStack}
-          options={(args) => ({ ...tabOpts('AnnouncementsMain')(args), tabBarLabel: 'Announcements' })}
+          options={(args) => ({
+            ...tabOpts('AnnouncementsMain')(args),
+            tabBarLabel: 'Alerts',
+            ...HIDDEN_TAB_ITEM,
+          })}
         />
         <Tab.Screen
           name="Profile"
           component={ProfileStack}
           options={(args) => ({
             ...tabOpts('ProfileMain')(args),
-            tabBarButton: () => null,
-            tabBarItemStyle: { width: 0, height: 0, display: 'none' as const },
+            tabBarLabel: 'Profile',
+            ...HIDDEN_TAB_ITEM,
           })}
         />
       </Tab.Navigator>
@@ -363,10 +386,14 @@ export default function App() {
   const navigateToRecoveryScreen = useCallback(() => {
     requestAnimationFrame(() => {
       if (navigationRef.isReady()) {
-        navigationRef.navigate('Unauthed' as never, {
+        (
+          navigationRef as unknown as {
+            navigate: (name: string, params: object) => void;
+          }
+        ).navigate('Unauthed', {
           screen: 'Auth',
           params: { screen: 'ResetPassword' },
-        } as never);
+        });
       }
     });
   }, []);

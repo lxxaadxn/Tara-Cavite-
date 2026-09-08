@@ -89,6 +89,7 @@ export const SITE_CONTENT_DEFAULTS = {
   'auth.reset.helper': 'Enter your email and we will send you a link to choose a new password.',
   'brand.logo_light_url': '',
   'brand.logo_dark_url': '',
+  'brand.name': 'Tara, Cavite!',
   'brand.favicon_url': '',
   'brand.tab_title': 'Tara, Cavite! – Your Guide to Exploring Cavite',
   'brand.meta_description':

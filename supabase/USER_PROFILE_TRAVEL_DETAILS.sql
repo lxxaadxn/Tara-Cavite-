@@ -5,7 +5,13 @@ ALTER TABLE public.user_profiles
   ADD COLUMN IF NOT EXISTS birthday DATE,
   ADD COLUMN IF NOT EXISTS favorite_categories TEXT[] NOT NULL DEFAULT '{}'::text[],
   ADD COLUMN IF NOT EXISTS preferred_lgus TEXT[] NOT NULL DEFAULT '{}'::text[],
-  ADD COLUMN IF NOT EXISTS accessibility_notes TEXT;
+  ADD COLUMN IF NOT EXISTS accessibility_notes TEXT,
+  ADD COLUMN IF NOT EXISTS bio TEXT,
+  ADD COLUMN IF NOT EXISTS interest_tags TEXT[] NOT NULL DEFAULT '{}'::text[],
+  ADD COLUMN IF NOT EXISTS cover_url TEXT,
+  ADD COLUMN IF NOT EXISTS social_instagram TEXT,
+  ADD COLUMN IF NOT EXISTS social_facebook TEXT,
+  ADD COLUMN IF NOT EXISTS social_tiktok TEXT;
 
 COMMENT ON COLUMN public.user_profiles.birthday IS
   'Optional traveler birthday shown on the web profile.';

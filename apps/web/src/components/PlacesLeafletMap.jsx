@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet.markercluster';
+import 'leaflet.markercluster/dist/MarkerCluster.css';
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
+import './PlacesLeafletMap.css';
 import {
   CAVITE_LEAFLET_MAP_OPTIONS,
   CAVITE_MAP_BOUNDS,
@@ -77,7 +81,23 @@ export function PlacesLeafletMap({ places, userLocation, onMarkerClick, onMarker
     }).addTo(map);
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-    const layer = L.layerGroup().addTo(map);
+    const clusters = L.markerClusterGroup({
+      showCoverageOnHover: false,
+      maxClusterRadius: 50,
+      spiderfyOnMaxZoom: true,
+      disableClusteringAtZoom: CAVITE_MAP_MAX_ZOOM,
+      iconCreateFunction(cluster) {
+        const count = cluster.getChildCount();
+        const size = count < 10 ? 'small' : count < 50 ? 'medium' : 'large';
+        return L.divIcon({
+          html: `<span>${count}</span>`,
+          className: `cavitour-cluster cavitour-cluster--${size}`,
+          iconSize: L.point(size === 'large' ? 48 : size === 'medium' ? 40 : 34, size === 'large' ? 48 : size === 'medium' ? 40 : 34),
+        });
+      },
+    });
+    map.addLayer(clusters);
+
     const iconCache = new Map();
 
     const hasUserLocation =
@@ -98,17 +118,18 @@ export function PlacesLeafletMap({ places, userLocation, onMarkerClick, onMarker
           icon = url ? L.icon(leafletPinIconOptions(url, label)) : greenLeafletPinIcon;
           iconCache.set(cacheKey, icon);
         }
-        const m = L.marker([p.lat, p.lng], { icon }).addTo(layer);
+        const m = L.marker([p.lat, p.lng], { icon });
         m.bindPopup(String(p.name || 'Establishment'));
         m.on('click', () => clickRef.current?.(p));
         m.on('mouseover', () => hoverRef.current?.(p));
         m.on('mouseout', () => hoverEndRef.current?.());
+        clusters.addLayer(m);
       });
 
       if (hasUserLocation) {
         const userLatLng = [userLocation.lat, userLocation.lng];
         L.circleMarker(userLatLng, greenUserDotOptions({ radius: 8 }))
-          .addTo(layer)
+          .addTo(map)
           .bindPopup('You are here');
 
         L.circle(userLatLng, {
@@ -117,7 +138,7 @@ export function PlacesLeafletMap({ places, userLocation, onMarkerClick, onMarker
           weight: 1,
           fillColor: CAVITOUR_USER_DOT_GREEN,
           fillOpacity: 0.12,
-        }).addTo(layer);
+        }).addTo(map);
       }
 
       const boundsPoints = valid.map((p) => [p.lat, p.lng]);

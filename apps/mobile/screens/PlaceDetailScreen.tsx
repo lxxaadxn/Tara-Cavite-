@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { JamIcon } from '../components/JamIcon';
 import { Colors, Theme } from '../constants/theme';
@@ -34,7 +33,9 @@ const PlaceDetailScreen: React.FC = () => {
 
   useLayoutEffect(() => {
     if (initialPlace) {
-      (navigation as { replace: (name: string, params: object) => void }).replace('AboutEstablishment', {
+      (
+        navigation as unknown as { replace: (name: string, params: object) => void }
+      ).replace('AboutEstablishment', {
         place: initialPlace,
       });
     }
@@ -71,7 +72,9 @@ const PlaceDetailScreen: React.FC = () => {
   useLayoutEffect(() => {
     if (!isSearchFlow || loading || fetchError) return;
     if (candidates.length === 1) {
-      (navigation as { replace: (name: string, params: object) => void }).replace('AboutEstablishment', {
+      (
+        navigation as unknown as { replace: (name: string, params: object) => void }
+      ).replace('AboutEstablishment', {
         place: candidates[0],
       });
     }
@@ -89,22 +92,17 @@ const PlaceDetailScreen: React.FC = () => {
 
   if (initialPlace) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <View style={styles.container}>
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <Header
-        title=""
-        showBack
-        showNotification
-        onNotificationPress={() => navigation.navigate('Notifications' as never)}
-      />
+    <View style={styles.container}>
+      <Header title="" showBack showNotification />
 
       {showLoading ? (
         <View style={styles.centered}>
@@ -143,7 +141,9 @@ const PlaceDetailScreen: React.FC = () => {
               key={item.id}
               style={styles.resultRow}
               onPress={() =>
-                navigation.navigate('AboutEstablishment' as never, { place: item } as never)
+                (
+                  navigation as unknown as { navigate: (name: string, params: object) => void }
+                ).navigate('AboutEstablishment', { place: item })
               }
               accessibilityRole="button"
               accessibilityLabel={`${item.name}, ${item.address}`}
@@ -162,7 +162,7 @@ const PlaceDetailScreen: React.FC = () => {
           ))}
         </ScrollView>
       ) : null}
-    </SafeAreaView>
+    </View>
   );
 };
 

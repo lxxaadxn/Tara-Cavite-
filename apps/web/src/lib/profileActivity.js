@@ -1,7 +1,7 @@
 import { CONTENT_PIPELINE } from 'cavitour-shared';
 import { isCheckinVisitSource } from 'cavitour-shared/travelAchievements';
 
-const REVIEW_LIMIT = 6;
+const REVIEW_LIMIT = 50;
 const VISIT_LIMIT = 100;
 
 const EMPTY_ACTIVITY = { reviews: [], reviewCount: 0, checkinCount: 0, visits: [] };
@@ -124,4 +124,31 @@ export async function fetchProfileActivity(client, userId) {
     checkinCount: checkinCountRes.error ? 0 : checkinCountRes.count ?? 0,
     visits: visitRows.map((r) => mapVisit(r, meta)),
   };
+}
+
+/**
+ * Public-safe travel stats for another traveler's profile map.
+ * @param {import('@supabase/supabase-js').SupabaseClient} client
+ * @param {string} userId
+ * @returns {Promise<{ checkinCount: number, visits: { cityMun: string }[] }>}
+ */
+export async function fetchPublicProfileTravel(client, userId) {
+  const uid = String(userId ?? '').trim();
+  if (!uid) return { checkinCount: 0, visits: [] };
+
+  const { data, error } = await client.rpc('get_public_profile_travel', { p_user_id: uid });
+  if (error || !data) return { checkinCount: 0, visits: [] };
+
+  const payload = typeof data === 'string' ? JSON.parse(data) : data;
+  const checkinCount = Number(payload?.checkin_count) || 0;
+  const cities = Array.isArray(payload?.visit_cities) ? payload.visit_cities : [];
+  /** @type {{ cityMun: string }[]} */
+  const visits = [];
+  for (const row of cities) {
+    const cityMun = String(row?.city_mun ?? '').trim();
+    const n = Math.max(0, Math.min(500, Number(row?.n) || 0));
+    if (!cityMun || n <= 0) continue;
+    for (let i = 0; i < n; i += 1) visits.push({ cityMun });
+  }
+  return { checkinCount, visits };
 }

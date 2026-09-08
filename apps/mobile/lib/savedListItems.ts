@@ -25,20 +25,30 @@ function bump(counts: Record<string, number>, listId: string) {
   counts[listId] = (counts[listId] ?? 0) + 1;
 }
 
-/** Places-only counts (establishments in DB). */
-export async function fetchPlaceCountByListId(
+/**
+ * Places saved by a traveler, de-duplicated across lists.
+ *
+ * Summing per-list counts double-counts a place kept in two lists, which is why the
+ * mobile and web profile numbers used to disagree. Web's `countSavedPlaces` de-dupes
+ * by place id; this is the single count the mobile profile uses.
+ */
+export async function countDistinctSavedPlacesForUser(
   client: SupabaseClient,
-  listIds: string[]
-): Promise<Record<string, number>> {
-  if (listIds.length === 0) return {};
-  const { data, error } = await client.from('saved_list_items').select('list_id').in('list_id', listIds);
+  userId: string
+): Promise<number> {
+  const listIds = await fetchSavedListIdsForUser(client, userId);
+  if (!listIds.length) return 0;
+  const { data, error } = await client
+    .from('saved_list_items')
+    .select('place_id')
+    .in('list_id', listIds);
   if (error) throw error;
-  const counts: Record<string, number> = {};
-  for (const id of listIds) counts[id] = 0;
+  const seen = new Set<string>();
   for (const row of data ?? []) {
-    bump(counts, (row as { list_id: string }).list_id);
+    const id = String((row as { place_id?: unknown }).place_id ?? '').trim();
+    if (id) seen.add(id);
   }
-  return counts;
+  return seen.size;
 }
 
 /** Total saved rows per list: places + itineraries. */

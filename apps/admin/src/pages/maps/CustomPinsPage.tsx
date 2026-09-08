@@ -129,7 +129,7 @@ export function CustomPinsPage() {
       {loading ? <p className={styles.meta}>Loading map pins…</p> : null}
       {!loading && categories.length === 0 && !error ? (
         <p className={styles.empty}>
-          No NTDP categories found. Add them under Tourism Management → Filters, then return here.
+          No NTDP categories found. Add them under Content Management → App/Web Filter, then return here.
         </p>
       ) : null}
 

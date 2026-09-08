@@ -28,7 +28,7 @@ import {
 } from '../lib/supabase';
 import { isNetworkErrorMsg, NETWORK_ERROR_USER_MESSAGE } from '../lib/authHelpers';
 import { signInWithGoogleMobile } from '../lib/googleAuth';
-import { getAdminReservedEmailMessage, isAdminReservedEmail } from '../lib/adminReservedEmail';
+import { getAdminReservedEmailMessage, isAdminReservedEmailAsync } from '../lib/adminReservedEmail';
 
 const MUTED = '#737373';
 const BORDER = '#E5E5E5';
@@ -88,7 +88,7 @@ const SignUpScreen: React.FC = () => {
       setFormError('Please enter a valid email address.');
       return;
     }
-    if (isAdminReservedEmail(trimmedEmail)) {
+    if (await isAdminReservedEmailAsync(trimmedEmail)) {
       setFormError(getAdminReservedEmailMessage());
       return;
     }

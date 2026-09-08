@@ -1,11 +1,10 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { Header } from '../components/Header';
 import { JamIcon } from '../components/JamIcon';
 import { mockRoutes, Route } from '../data/mockData';
 
-const GREEN = '#10A37F';
 const TEAL = '#1B8A70';
 const TITLE = '#241D13';
 const MUTED = '#7A7878';
@@ -93,7 +92,6 @@ function formatMonthDay(dateKey: string): string {
 }
 
 const HistoryScreen: React.FC = () => {
-  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
 
   const sections = useMemo((): GroupedRoute[] => {
@@ -146,22 +144,7 @@ const HistoryScreen: React.FC = () => {
 
   return (
     <View style={styles.root}>
-      <View style={[styles.greenHeader, { paddingTop: insets.top + 8 }]}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            style={styles.headerIconBtn}
-            onPress={() => navigation.goBack()}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <JamIcon ionicon="chevron-left" size={26} color={WHITE} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={1} pointerEvents="none">
-            History
-          </Text>
-          <View style={styles.headerIconBtn} />
-        </View>
-      </View>
+      <Header title="History" showBack darkBackground />
 
       <ScrollView
         style={styles.scroll}
@@ -209,30 +192,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: WHITE,
-  },
-  greenHeader: {
-    backgroundColor: GREEN,
-    paddingBottom: 12,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
-  },
-  headerIconBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 20,
-    lineHeight: 24,
-    color: WHITE,
-    textAlign: 'center',
   },
   scroll: {
     flex: 1,

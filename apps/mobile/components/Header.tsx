@@ -1,13 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image, DeviceEventEmitter } from 'react-native';
-import { useIsFocused, useNavigation } from '@react-navigation/native';
+import React, { useCallback } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { setStatusBarStyle } from 'expo-status-bar';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Theme } from '../constants/theme';
 import { JamIcon } from './JamIcon';
 import { LogoWordmark } from './LogoWordmark';
-import { supabase } from '../lib/supabase';
-import { subscribeAnnouncementsChanged, unreadAnnouncementCount } from 'cavitour-shared/announcements';
-import { resolveAvatarFromSources } from 'cavitour-shared/defaultAvatar';
-import { AVATAR_UPDATED_EVENT } from '../lib/travelerProfile';
+import { HeaderIconCluster } from './HeaderIconCluster';
 
 interface HeaderProps {
   title: string;
@@ -17,25 +16,13 @@ interface HeaderProps {
   showLogo?: boolean;
   /** Home wordmark: Tara, Cavite! in Bebas Neue */
   homeBranding?: boolean;
-  onNotificationPress?: () => void;
   onMenuPress?: () => void;
   showFilter?: boolean;
   onFilterPress?: () => void;
   darkBackground?: boolean;
   showProfile?: boolean;
-}
-
-function navigateNamed(navigation: { getParent?: () => unknown; navigate?: (n: string) => void }, name: string) {
-  let nav: { getState?: () => { routeNames?: string[] }; getParent?: () => unknown; navigate?: (n: string) => void } | undefined =
-    navigation;
-  while (nav) {
-    const names = nav.getState?.()?.routeNames ?? [];
-    if (names.includes(name) && nav.navigate) {
-      nav.navigate(name);
-      return;
-    }
-    nav = nav.getParent?.() as typeof nav;
-  }
+  /** Trailing slot on the title bar, e.g. a save button or the icon cluster. */
+  right?: React.ReactNode;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -45,125 +32,37 @@ export const Header: React.FC<HeaderProps> = ({
   showNotification = false,
   showLogo = false,
   homeBranding = false,
-  onNotificationPress,
   onMenuPress,
   showFilter = false,
   onFilterPress,
   darkBackground = false,
-  showProfile = true,
+  showProfile = false,
+  right,
 }) => {
   const navigation = useNavigation();
-  const focused = useIsFocused();
-  const [unread, setUnread] = useState(0);
-  const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const insets = useSafeAreaInsets();
 
-  useEffect(() => {
-    if (!showNotification) return;
-    let cancelled = false;
-    const loadUnread = async () => {
-      const { data } = await supabase.auth.getUser();
-      const userId = data.user?.id;
-      if (!userId) {
-        if (!cancelled) setUnread(0);
-        return;
-      }
-      try {
-        const count = await unreadAnnouncementCount(supabase, userId);
-        if (!cancelled) setUnread(count);
-      } catch {
-        if (!cancelled) setUnread(0);
-      }
-    };
-    if (focused) void loadUnread();
-    const unsubscribe = subscribeAnnouncementsChanged(() => {
-      void loadUnread();
-    });
-    return () => {
-      cancelled = true;
-      unsubscribe();
-    };
-  }, [showNotification, focused]);
-
-  useEffect(() => {
-    if (!showProfile) return;
-    let cancelled = false;
-    const loadAvatar = async () => {
-      const { data } = await supabase.auth.getUser();
-      const user = data.user;
-      if (!user) {
-        if (!cancelled) setAvatarUri(null);
-        return;
-      }
-      const { data: row } = await supabase
-        .from('user_profiles')
-        .select('avatar_url')
-        .eq('id', user.id)
-        .maybeSingle();
-      if (cancelled) return;
-      setAvatarUri(
-        resolveAvatarFromSources(row as { avatar_url?: string | null }, user.user_metadata ?? {})
-      );
-    };
-    if (focused) void loadAvatar();
-    const sub = DeviceEventEmitter.addListener(AVATAR_UPDATED_EVENT, () => {
-      void loadAvatar();
-    });
-    return () => {
-      cancelled = true;
-      sub.remove();
-    };
-  }, [showProfile, focused]);
-
-  const openProfile = () => navigateNamed(navigation, 'Profile');
-  const openAnnouncements = () => {
-    if (onNotificationPress) {
-      onNotificationPress();
-      return;
-    }
-    navigateNamed(navigation, 'Announcements');
-  };
-
+  /** The header owns the status-bar inset, so its hosts never wrap it in a SafeAreaView. */
+  const topInset = { paddingTop: insets.top + (homeBranding ? 14 : 6) };
+  const hasTrailingContent = Boolean(right) || showFilter || showNotification;
   const headerStyle = darkBackground ? styles.darkHeader : styles.lightHeader;
   const textColor = darkBackground ? Colors.white : Colors.primary;
   const iconColor = darkBackground ? Colors.white : Colors.primary;
 
-  const profileBtn =
-    showProfile ? (
-      <TouchableOpacity
-        onPress={openProfile}
-        style={styles.avatarBtn}
-        accessibilityLabel="Open profile"
-        accessibilityRole="button"
-      >
-        {avatarUri ? (
-          <Image source={{ uri: avatarUri }} style={styles.avatar} />
-        ) : (
-          <View style={[styles.avatar, styles.avatarFallback]}>
-            <JamIcon ionicon="person-outline" size={18} color={Colors.primary} />
-          </View>
-        )}
-      </TouchableOpacity>
-    ) : null;
-
-  const bellBtn = showNotification ? (
-    <TouchableOpacity
-      onPress={openAnnouncements}
-      style={styles.iconButton}
-      accessibilityLabel={unread > 0 ? `View announcements, ${unread} unread` : 'View announcements'}
-      accessibilityRole="button"
-    >
-      <JamIcon ionicon="notifications-outline" size={26} color={homeBranding ? Colors.primary : iconColor} />
-      {unread > 0 ? (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{unread > 9 ? '9+' : String(unread)}</Text>
-        </View>
-      ) : null}
-    </TouchableOpacity>
-  ) : null;
+  /**
+   * Android draws edge to edge, so the bar paints behind the status bar and its
+   * clock has to invert with the header. Done on focus rather than declaratively
+   * because tab screens stay mounted, and the last mount would otherwise win.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      setStatusBarStyle(darkBackground ? 'light' : 'dark');
+    }, [darkBackground])
+  );
 
   if (homeBranding) {
     return (
-      <View style={[styles.container, styles.lightHeader, styles.homeHeader]}>
+      <View style={[styles.container, styles.lightHeader, styles.homeHeader, topInset]}>
         <View style={styles.homeHeaderRow}>
           <View
             style={styles.wordmarkRow}
@@ -176,29 +75,15 @@ export const Header: React.FC<HeaderProps> = ({
               <Text style={styles.wordmarkPrimary}>, Cavite!</Text>
             </Text>
           </View>
-          <View style={styles.homeRightColumn}>
-            <View style={styles.rightGroup}>
-              {bellBtn}
-              {profileBtn}
-            </View>
-            {showFilter ? (
-              <TouchableOpacity
-                onPress={onFilterPress}
-                style={styles.filterCircle}
-                accessibilityLabel="Open filters"
-                accessibilityRole="button"
-              >
-                <JamIcon ionicon="options-outline" size={22} color={Colors.primary} />
-              </TouchableOpacity>
-            ) : null}
-          </View>
+          {/* Announcements live beside the search filter on Home, not up here. */}
+          <HeaderIconCluster showBell={showNotification} showProfile={showProfile} />
         </View>
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, headerStyle]}>
+    <View style={[styles.container, headerStyle, topInset]}>
       {showBack ? (
         <TouchableOpacity
           onPress={onBackPress ?? (() => navigation.goBack())}
@@ -231,7 +116,9 @@ export const Header: React.FC<HeaderProps> = ({
       ) : (
         <Text style={[styles.title, { color: textColor }]}>{title}</Text>
       )}
+      {/* Empty trailing slot still needs the back button's width so the title stays centred. */}
       <View style={styles.rightGroup}>
+        {hasTrailingContent ? null : <View style={styles.iconButton} />}
         {showFilter ? (
           <TouchableOpacity
             onPress={onFilterPress}
@@ -242,17 +129,36 @@ export const Header: React.FC<HeaderProps> = ({
             <JamIcon ionicon="filter" size={24} color={iconColor} />
           </TouchableOpacity>
         ) : null}
-        {bellBtn}
-        {profileBtn}
+        {showNotification ? (
+          <HeaderIconCluster showProfile={false} tint={iconColor} />
+        ) : null}
+        {right}
       </View>
     </View>
   );
 };
 
+/** Trailing header button, sized to mirror the back chevron's tap target. */
+export const HeaderAction: React.FC<{
+  onPress: () => void;
+  accessibilityLabel: string;
+  disabled?: boolean;
+  children: React.ReactNode;
+}> = ({ onPress, accessibilityLabel, disabled = false, children }) => (
+  <TouchableOpacity
+    onPress={onPress}
+    disabled={disabled}
+    style={styles.iconButton}
+    accessibilityRole="button"
+    accessibilityLabel={accessibilityLabel}
+  >
+    {children}
+  </TouchableOpacity>
+);
+
 const styles = StyleSheet.create({
   container: {
-    paddingTop: 50,
-    paddingBottom: 16,
+    paddingBottom: 8,
     paddingHorizontal: Theme.spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
@@ -266,8 +172,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 20,
-    fontFamily: 'Poppins',
-    fontWeight: '500',
+    lineHeight: 26,
+    fontFamily: 'Poppins_700Bold',
     flex: 1,
     textAlign: 'center',
   },
@@ -283,53 +189,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     position: 'relative',
   },
-  avatarBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    overflow: 'hidden',
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#E8ECEF',
-  },
-  avatarFallback: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badge: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    minWidth: 16,
-    height: 16,
-    paddingHorizontal: 4,
-    borderRadius: 8,
-    backgroundColor: '#E76365',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badgeText: {
-    color: '#FFFFFF',
-    fontSize: 9,
-    fontFamily: 'Poppins_500Medium',
-    lineHeight: 12,
-  },
   rightGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
   homeHeader: {
-    paddingTop: 18,
     paddingBottom: 8,
   },
   homeHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     width: '100%',
   },
   wordmarkRow: {
@@ -348,17 +219,5 @@ const styles = StyleSheet.create({
   },
   wordmarkPrimary: {
     color: Colors.primary,
-  },
-  homeRightColumn: {
-    alignItems: 'flex-end',
-    gap: 10,
-  },
-  filterCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#D9D9D9',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });

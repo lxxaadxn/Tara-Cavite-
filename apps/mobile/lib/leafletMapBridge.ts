@@ -11,6 +11,7 @@ export function buildLeafletMapPayload(
       lat: m.lat,
       lng: m.lng,
       iconUrl: m.iconUrl || null,
+      iconRetinaUrl: m.iconRetinaUrl || m.iconUrl || null,
     })),
     userLat: userLocation?.lat ?? null,
     userLng: userLocation?.lng ?? null,

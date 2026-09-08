@@ -4,7 +4,30 @@ import { fetchAdminTravelers } from './adminUsers';
 import { fetchStaV3Rows } from './staV3CatalogAdmin';
 import { CONTENT_PIPELINE } from 'cavitour-shared';
 
-export type ReportRange = 'all' | 'month' | 'quarter' | 'year';
+export type ReportRange =
+  | 'today'
+  | 'week'
+  | 'month'
+  | 'last_month'
+  | 'last_30'
+  | 'quarter'
+  | 'last_quarter'
+  | 'year'
+  | 'last_year'
+  | 'all';
+
+export const REPORT_RANGE_OPTIONS: { value: ReportRange; label: string }[] = [
+  { value: 'today', label: 'Today' },
+  { value: 'week', label: 'Last 7 days' },
+  { value: 'month', label: 'This month' },
+  { value: 'last_month', label: 'Last month' },
+  { value: 'last_30', label: 'Last 30 days' },
+  { value: 'quarter', label: 'This quarter' },
+  { value: 'last_quarter', label: 'Last quarter' },
+  { value: 'year', label: 'This year' },
+  { value: 'last_year', label: 'Last year' },
+  { value: 'all', label: 'All time' },
+];
 
 export type VisitReportRow = {
   rank: number;
@@ -38,29 +61,61 @@ export type AnalyticsReportBundle = {
   listedPlaces: number;
 };
 
-const RANGE_LABEL: Record<ReportRange, string> = {
-  all: 'All time',
-  month: 'This month',
-  quarter: 'This quarter',
-  year: 'This year',
-};
+const RANGE_LABEL: Record<ReportRange, string> = Object.fromEntries(
+  REPORT_RANGE_OPTIONS.map((o) => [o.value, o.label])
+) as Record<ReportRange, string>;
 
 export function reportRangeLabel(range: ReportRange): string {
   return RANGE_LABEL[range];
 }
 
+function endOfLocalDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+}
+
 export function reportRangeBounds(range: ReportRange): { from: string | null; to: string | null } {
   if (range === 'all') return { from: null, to: null };
   const now = new Date();
-  const to = now.toISOString();
+  const toNow = now.toISOString();
+
+  if (range === 'today') {
+    return { from: new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString(), to: toNow };
+  }
+  if (range === 'week') {
+    return { from: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(), to: toNow };
+  }
   if (range === 'month') {
-    return { from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString(), to };
+    return { from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString(), to: toNow };
+  }
+  if (range === 'last_month') {
+    const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const to = endOfLocalDay(new Date(now.getFullYear(), now.getMonth(), 0));
+    return { from: from.toISOString(), to: to.toISOString() };
+  }
+  if (range === 'last_30') {
+    return { from: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString(), to: toNow };
+  }
+  if (range === 'quarter') {
+    const q = Math.floor(now.getMonth() / 3) * 3;
+    return { from: new Date(now.getFullYear(), q, 1).toISOString(), to: toNow };
+  }
+  if (range === 'last_quarter') {
+    let year = now.getFullYear();
+    let startMonth = Math.floor(now.getMonth() / 3) * 3 - 3;
+    if (startMonth < 0) {
+      startMonth = 9;
+      year -= 1;
+    }
+    const from = new Date(year, startMonth, 1);
+    const to = endOfLocalDay(new Date(year, startMonth + 3, 0));
+    return { from: from.toISOString(), to: to.toISOString() };
   }
   if (range === 'year') {
-    return { from: new Date(now.getFullYear(), 0, 1).toISOString(), to };
+    return { from: new Date(now.getFullYear(), 0, 1).toISOString(), to: toNow };
   }
-  const q = Math.floor(now.getMonth() / 3) * 3;
-  return { from: new Date(now.getFullYear(), q, 1).toISOString(), to };
+  const from = new Date(now.getFullYear() - 1, 0, 1);
+  const to = endOfLocalDay(new Date(now.getFullYear() - 1, 11, 31));
+  return { from: from.toISOString(), to: to.toISOString() };
 }
 
 function csvCell(value: string | number): string {
@@ -235,46 +290,3 @@ export function downloadReportCsv(kind: 'visits' | 'itineraries' | 'distribution
   else downloadTextFile(`tara-cavite-tourism-report-${day}.csv`, fullReportCsv(bundle), 'text/csv;charset=utf-8');
 }
 
-function tableHtml(headers: string[], rows: (string | number)[][]): string {
-  const head = headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('');
-  const body = rows
-    .map((r) => `<tr>${r.map((c) => `<td>${escapeHtml(String(c))}</td>`).join('')}</tr>`)
-    .join('');
-  return `<table><thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="${headers.length}">No rows</td></tr>`}</tbody></table>`;
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-export function printAnalyticsPdf(bundle: AnalyticsReportBundle): void {
-  const win = window.open('', '_blank');
-  if (!win) return;
-  win.document.write(`<!doctype html><html><head><title>Tara, Cavite! tourism report</title>
-    <style>
-      body { font-family: Poppins, Segoe UI, sans-serif; color: #16352E; margin: 32px; }
-      h1 { font-size: 22px; margin: 0 0 4px; }
-      p { color: #707D7D; margin: 0 0 20px; font-size: 13px; }
-      h2 { font-size: 15px; margin: 28px 0 10px; }
-      table { width: 100%; border-collapse: collapse; font-size: 12px; }
-      th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #e4ece9; }
-      th { color: #707D7D; font-size: 11px; }
-      @media print { body { margin: 16px; } }
-    </style></head><body>
-    <h1>Tara, Cavite! tourism report</h1>
-    <p>${escapeHtml(bundle.rangeLabel)} · generated ${escapeHtml(new Date(bundle.generatedAt).toLocaleString())} · ${bundle.listedPlaces} listed establishments</p>
-    <h2>Most visited destinations</h2>
-    ${tableHtml(['Rank', 'Destination', 'LGU', 'Visits'], bundle.visits.map((r) => [r.rank, r.name, r.city, r.visits]))}
-    <h2>Itineraries</h2>
-    ${tableHtml(['Title', 'Status', 'Featured', 'Stops', 'Duration'], bundle.itineraries.map((r) => [r.title, r.status, r.featured, r.stops, r.duration]))}
-    <h2>Establishments by LGU</h2>
-    ${tableHtml(['LGU', 'Count'], bundle.byLgu.map((r) => [r.label, r.count]))}
-    <h2>Establishments by category</h2>
-    ${tableHtml(['Category', 'Count'], bundle.byCategory.map((r) => [r.label, r.count]))}
-    <h2>Accounts</h2>
-    ${tableHtml(['Role', 'Count'], bundle.accounts.map((r) => [r.label, r.count]))}
-    </body></html>`);
-  win.document.close();
-  win.focus();
-  win.print();
-}

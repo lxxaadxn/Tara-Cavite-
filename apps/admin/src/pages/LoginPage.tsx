@@ -1,8 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AdminBrandMark } from '../components/AdminBrandMark';
-import { ADMIN_ALLOWED_EMAIL, isAllowedAdminEmail } from '../lib/adminEmail';
-import { startAdminGoogleOAuth } from '../lib/startGoogleOAuth';
+import { ADMIN_ALLOWED_EMAIL, adminAllowlistHint, isAllowedAdminEmailAsync } from '../lib/adminEmail';
+import { consumePendingAdminGoogleOAuth, startAdminGoogleOAuth } from '../lib/startGoogleOAuth';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useAdminHref } from '../contexts/AdminPathPrefixContext';
@@ -45,7 +45,12 @@ export function LoginPage() {
   useEffect(() => {
     const googleError = (location.state as { googleError?: string } | null)?.googleError;
     if (typeof googleError === 'string' && googleError.trim()) {
-      setError(googleError);
+      const normalized = googleError.toLowerCase();
+      setError(
+        normalized.includes('oauth state has expired') || normalized.includes('flow_state')
+          ? 'Google sign-in expired. Please try Sign in with Google again.'
+          : googleError
+      );
       navigate(location.pathname + location.search, { replace: true, state: {} });
     }
   }, [location.pathname, location.search, location.state, navigate]);
@@ -67,6 +72,12 @@ export function LoginPage() {
     }
   };
 
+  useEffect(() => {
+    if (!consumePendingAdminGoogleOAuth()) return;
+    void handleGoogle();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- resume once after localhost bounce
+  }, []);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
@@ -75,13 +86,14 @@ export function LoginPage() {
       setError('Enter email and password.');
       return;
     }
-    if (!isAllowedAdminEmail(trimmed)) {
-      setError(`Only ${ADMIN_ALLOWED_EMAIL} can access the admin app.`);
-      return;
-    }
 
     setLoading(true);
     try {
+      if (!(await isAllowedAdminEmailAsync(supabase, trimmed))) {
+        setError(`Only ${adminAllowlistHint()} can access the admin app.`);
+        return;
+      }
+
       const { data, error: err } = await supabase.auth.signInWithPassword({
         email: trimmed,
         password,
@@ -89,9 +101,9 @@ export function LoginPage() {
       if (err) throw err;
 
       const signedInEmail = data.user?.email?.trim().toLowerCase() ?? '';
-      if (!isAllowedAdminEmail(signedInEmail)) {
+      if (!(await isAllowedAdminEmailAsync(supabase, signedInEmail))) {
         await supabase.auth.signOut();
-        setError(`Only ${ADMIN_ALLOWED_EMAIL} can access the admin app.`);
+        setError(`Only ${adminAllowlistHint()} can access the admin app.`);
         return;
       }
 
@@ -112,7 +124,7 @@ export function LoginPage() {
         </div>
         <h1 className={styles.title}>Sign in</h1>
         <p className={styles.hint}>
-          Only <strong>{ADMIN_ALLOWED_EMAIL}</strong> can log in here.
+          Only <strong>{adminAllowlistHint()}</strong> can log in here.
         </p>
 
         <button

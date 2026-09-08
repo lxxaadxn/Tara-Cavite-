@@ -1,17 +1,19 @@
-﻿import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AppHeader } from '../components/AppHeader';
 import { SavedListEditModal } from '../components/SavedListEditModal';
 import { lookupLocalEstablishmentUrls } from '../lib/establishmentLocalImages';
+import { fetchPlaceReviewStats } from '../lib/placeReviews';
 import { SAVED_LISTS_UPDATED_EVENT } from '../lib/savedPlaces';
 import {
+  createSavedListRemote,
+  deleteSavedListRemote,
   fetchSavedListsForUser,
   removeItemFromListRemote,
   updateSavedListRemote,
 } from '../lib/savedPlacesSupabase';
 import { supabase } from '../lib/supabase';
 
-const savedTabs = ['Saved', 'Itineraries'];
 const PLACEHOLDER_IMG = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80';
 
 function folderKey(folder) {
@@ -26,39 +28,19 @@ function privacyLabel(value) {
   return normalizePrivacy(value) === 'public' ? 'Public' : 'Private';
 }
 
-function savedCardSeed(id) {
-  let h = 0;
-  const s = String(id ?? '');
-  for (let i = 0; i < s.length; i += 1) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return Math.abs(h);
+function isItineraryItem(item) {
+  return item?.kind === 'itinerary' || String(item?.id || '').startsWith('itinerary-');
 }
 
-function cardRating(seed) {
-  return (4.6 + ((seed % 5) * 0.1)).toFixed(1);
-}
-
-function cardReviewCount(seed) {
-  return 640 + ((seed * 137) % 1800);
-}
-
-function SavedEmptyState({ activeTab, variant = 'global' }) {
-  const isItineraries = activeTab === 'Itineraries';
+function SavedEmptyState({ variant = 'global' }) {
   const isList = variant === 'list';
-
-  let title = isItineraries ? 'No saved itineraries' : 'No saved places yet';
-  let description = isItineraries
-    ? 'Save a curated route from an itinerary page to see it here.'
-    : 'Browse Search and tap the heart on any place to add it to a list.';
-
-  if (isList) {
-    title = isItineraries ? 'No itineraries in this list' : 'No places in this list';
-    description = isItineraries
-      ? 'This collection has no saved routes for the Itineraries tab.'
-      : 'This collection has no saved places for the Saved tab.';
-  }
+  const title = isList ? 'Nothing in this list yet' : 'No saved lists yet';
+  const description = isList
+    ? 'Save places from Search or itineraries from a route page into this collection.'
+    : 'Create a list, then save places and itineraries into it.';
 
   return (
-    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-neutral-200 bg-white/60 px-6 py-14 text-center">
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-neutral-200 bg-white/70 px-6 py-14 text-center">
       <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-neutral-200">
         <svg className="h-7 w-7 text-[#10A37F]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
           <path
@@ -70,6 +52,56 @@ function SavedEmptyState({ activeTab, variant = 'global' }) {
       </div>
       <p className="mt-4 font-['Poppins',sans-serif] text-lg font-semibold text-neutral-900">{title}</p>
       <p className="mt-1.5 max-w-sm text-sm text-neutral-600">{description}</p>
+      <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+        <Link
+          to="/search"
+          className="inline-flex items-center justify-center rounded-xl bg-[#1B8A70] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#167a63]"
+        >
+          Explore spots
+        </Link>
+        <Link
+          to="/itinerary"
+          className="inline-flex items-center justify-center rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
+        >
+          Browse itineraries
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function Skel({ className = '' }) {
+  return <div className={`animate-pulse rounded-lg bg-neutral-200/80 ${className}`} />;
+}
+
+function SavedPageSkeleton() {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row lg:gap-6" aria-busy="true" aria-label="Loading saved lists">
+      <div className="hidden shrink-0 flex-col overflow-hidden rounded-2xl bg-white p-3 shadow-[0_1px_0_rgba(0,0,0,0.04)] ring-1 ring-neutral-200/80 lg:flex lg:w-[260px]">
+        <div className="space-y-2">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="rounded-xl px-3 py-2.5">
+              <Skel className="h-4 w-28" />
+              <Skel className="mt-2 h-3 w-20" />
+            </div>
+          ))}
+        </div>
+        <Skel className="mt-3 h-10 w-full rounded-xl" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <Skel className="mb-3 h-6 w-48" />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="overflow-hidden rounded-xl bg-white ring-1 ring-neutral-200/80">
+              <Skel className="aspect-[4/3] w-full rounded-none" />
+              <div className="space-y-2 px-3 py-2.5">
+                <Skel className="h-4 w-full" />
+                <Skel className="h-3 w-24" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -79,7 +111,9 @@ function PrivacyTag({ privacy }) {
   return (
     <span
       className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold leading-none ${
-        isPublic ? 'bg-[#e8f4fc] text-[#1B8A70] ring-1 ring-[#1B8A70]/15' : 'bg-neutral-100 text-neutral-600 ring-1 ring-neutral-200/80'
+        isPublic
+          ? 'bg-[#e8f4fc] text-[#1B8A70] ring-1 ring-[#1B8A70]/15'
+          : 'bg-neutral-100 text-neutral-600 ring-1 ring-neutral-200/80'
       }`}
     >
       {privacyLabel(privacy)}
@@ -87,24 +121,99 @@ function PrivacyTag({ privacy }) {
   );
 }
 
-function IconPencil(props) {
+function IconMore(props) {
   return (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden {...props}>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"
-      />
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden {...props}>
+      <circle cx="12" cy="5" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="12" cy="19" r="1.6" />
     </svg>
   );
 }
 
-function SavedListNav({ folders, selectedKey, onSelect, onEditList }) {
+function ListMenu({ folder, onEdit, onDelete, open, onToggle, onClose }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDoc = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) onClose();
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open, onClose]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-neutral-400 transition hover:bg-white hover:text-neutral-700"
+        aria-label={`List actions for ${folder.name}`}
+        aria-expanded={open}
+        aria-haspopup="menu"
+      >
+        <IconMore />
+      </button>
+      {open ? (
+        <div
+          role="menu"
+          className="absolute right-0 z-20 mt-1 min-w-[11rem] overflow-hidden rounded-xl bg-white py-1 shadow-lg ring-1 ring-neutral-200"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className="block w-full px-3 py-2 text-left text-sm text-neutral-800 hover:bg-neutral-50"
+            onClick={() => {
+              onClose();
+              onEdit(folder);
+            }}
+          >
+            Rename / visibility
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="block w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+            onClick={() => {
+              onClose();
+              onDelete(folder);
+            }}
+          >
+            Delete list
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SavedListNav({
+  folders,
+  selectedKey,
+  onSelect,
+  onEditList,
+  onDeleteList,
+  onCreateList,
+  menuKey,
+  setMenuKey,
+}) {
   return (
     <>
-      <nav className="hidden shrink-0 lg:block lg:w-[300px]" aria-label="Collections">
-        <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-neutral-500">Your lists</p>
-        <ul className="max-h-[min(70vh,640px)] space-y-0.5 overflow-y-auto rounded-xl border border-neutral-200/80 bg-white p-1.5 shadow-sm">
+      <nav
+        className="hidden shrink-0 flex-col overflow-hidden rounded-2xl bg-white p-3 shadow-[0_1px_0_rgba(0,0,0,0.04)] ring-1 ring-neutral-200/80 lg:flex lg:w-[260px] lg:self-stretch"
+        aria-label="Collections"
+      >
+        <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto [scrollbar-width:thin]">
           {folders.map((folder) => {
             const key = folderKey(folder);
             const isActive = key === selectedKey;
@@ -112,43 +221,50 @@ function SavedListNav({ folders, selectedKey, onSelect, onEditList }) {
             return (
               <li key={key}>
                 <div
-                  className={`flex items-center rounded-lg transition ${
-                    isActive ? 'bg-[#10A37F]/10' : 'hover:bg-neutral-50'
+                  className={`flex items-center rounded-xl transition ${
+                    isActive ? 'bg-[#10A37F]/12' : 'hover:bg-neutral-50'
                   }`}
                 >
                   <button
                     type="button"
                     onClick={() => onSelect(key)}
-                    className="min-w-0 flex-1 px-3 py-3 text-left"
+                    className="min-w-0 flex-1 px-3 py-2.5 text-left"
                     aria-current={isActive ? 'true' : undefined}
                   >
                     <span
                       className={`block truncate text-sm font-semibold ${
-                        isActive ? 'text-[#3d5210]' : 'text-neutral-900'
+                        isActive ? 'text-[#146B57]' : 'text-neutral-900'
                       }`}
                     >
                       {folder.name}
                     </span>
-                    <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <span className="mt-1 flex flex-wrap items-center gap-1.5">
                       <span className="text-xs text-neutral-500">
                         {count} {count === 1 ? 'item' : 'items'}
                       </span>
                       <PrivacyTag privacy={folder.privacy} />
                     </span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => onEditList(folder)}
-                    className="shrink-0 px-2.5 py-3 text-neutral-400 transition hover:text-neutral-700"
-                    aria-label={`Edit ${folder.name}`}
-                  >
-                    <IconPencil />
-                  </button>
+                  <ListMenu
+                    folder={folder}
+                    open={menuKey === key}
+                    onToggle={() => setMenuKey(menuKey === key ? null : key)}
+                    onClose={() => setMenuKey(null)}
+                    onEdit={onEditList}
+                    onDelete={onDeleteList}
+                  />
                 </div>
               </li>
             );
           })}
         </ul>
+        <button
+          type="button"
+          onClick={onCreateList}
+          className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-[#1B8A70]/35 bg-[#F7FBFA] px-3 py-2 text-sm font-semibold text-[#1B8A70] transition hover:bg-[#E7F6F1]"
+        >
+          <span aria-hidden>+</span> Create new list
+        </button>
       </nav>
 
       <div className="flex gap-2 overflow-x-auto pb-1 lg:hidden" role="tablist" aria-label="Collections">
@@ -173,16 +289,23 @@ function SavedListNav({ folders, selectedKey, onSelect, onEditList }) {
             </button>
           );
         })}
+        <button
+          type="button"
+          onClick={onCreateList}
+          className="shrink-0 rounded-full bg-white px-3.5 py-2 text-sm font-semibold text-[#1B8A70] ring-1 ring-[#1B8A70]/30"
+        >
+          + List
+        </button>
       </div>
     </>
   );
 }
 
-function SavedItemCard({ card, onOpen, onRemove }) {
-  const isItin = card.kind === 'itinerary' || String(card.id || '').startsWith('itinerary-');
-  const seed = savedCardSeed(card.id);
-  const rating = cardRating(seed);
-  const reviewCount = cardReviewCount(seed);
+function SavedItemCard({ card, onOpen, onRemove, reviewStats }) {
+  const isItin = isItineraryItem(card);
+  const stats = reviewStats?.[String(card.id)];
+  const reviewCount = stats?.reviewCount ?? 0;
+  const avgRating = stats?.avgRating;
 
   return (
     <article
@@ -195,13 +318,14 @@ function SavedItemCard({ card, onOpen, onRemove }) {
           onOpen();
         }
       }}
-      className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-[16px] bg-white text-left shadow-[0_8px_24px_rgba(22,53,46,0.06)] ring-1 ring-[#16352E]/[0.06] transition hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(22,53,46,0.1)]"
+      className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-xl bg-white text-left shadow-[0_4px_14px_rgba(22,53,46,0.05)] ring-1 ring-[#16352E]/[0.06] transition hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(22,53,46,0.09)]"
     >
-      <div className="relative overflow-hidden bg-neutral-100">
+      <div className="relative aspect-[4/3] overflow-hidden bg-neutral-100">
         <img
           src={card.image}
-          alt={card.name}
-          className="h-36 w-full object-cover transition duration-300 group-hover:scale-[1.03] sm:h-40"
+          alt=""
+          className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+          loading="lazy"
         />
         <button
           type="button"
@@ -209,22 +333,18 @@ function SavedItemCard({ card, onOpen, onRemove }) {
             e.stopPropagation();
             onRemove();
           }}
-          className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-neutral-500 shadow-sm ring-1 ring-neutral-200/80 transition hover:bg-red-50 hover:text-red-600 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 sm:focus-visible:opacity-100"
-          aria-label={`Remove ${card.name}`}
+          className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-[#E76365] shadow-sm ring-1 ring-neutral-200/80 transition hover:bg-red-50 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 sm:focus-visible:opacity-100"
+          aria-label={`Unsave ${card.name}`}
         >
-          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-            />
+          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
           </svg>
         </button>
       </div>
-      <div className="flex flex-1 flex-col px-3.5 pb-3.5 pt-3">
-        <p className="line-clamp-1 text-sm font-semibold leading-snug text-[#16352E]">{card.name}</p>
-        <p className="mt-1.5 flex items-start gap-1.5 text-xs leading-snug text-[#707D7D]">
-          <svg className="mt-px h-3.5 w-3.5 shrink-0 text-[#39A98F]" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <div className="flex flex-1 flex-col px-3 pb-3 pt-2.5">
+        <p className="line-clamp-2 text-sm font-semibold leading-snug text-[#16352E]">{card.name}</p>
+        <p className="mt-1.5 flex items-start gap-1.5 text-xs leading-snug text-neutral-600">
+          <svg className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#39A98F]" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
             <path
               fillRule="evenodd"
               d="M12 2.25a7.5 7.5 0 00-7.5 7.5c0 5.25 7.5 12 7.5 12s7.5-6.75 7.5-12a7.5 7.5 0 00-7.5-7.5zm0 10.5a3 3 0 100-6 3 3 0 000 6z"
@@ -233,10 +353,14 @@ function SavedItemCard({ card, onOpen, onRemove }) {
           </svg>
           <span className="line-clamp-1">{card.subtitle}</span>
         </p>
-        <p className="mt-1.5 text-xs text-[#707D7D]">
-          <span className="mr-1 text-[#f4c430]">★</span>
-          {isItin ? 'Itinerary' : `${rating} (${reviewCount.toLocaleString()} Reviews)`}
-        </p>
+        {isItin ? (
+          <p className="mt-1.5 text-xs font-medium text-[#1B8A70]">Itinerary</p>
+        ) : reviewCount > 0 ? (
+          <p className="mt-1.5 text-xs text-neutral-600">
+            <span className="mr-1 text-[#f4c430]">★</span>
+            {avgRating} ({reviewCount.toLocaleString()})
+          </p>
+        ) : null}
       </div>
     </article>
   );
@@ -246,12 +370,15 @@ export function SavedPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const listFromUrl = searchParams.get('list');
-  const [activeTab, setActiveTab] = useState('Saved');
   const [authUserId, setAuthUserId] = useState(undefined);
   const [savedLists, setSavedLists] = useState([]);
+  const [listsLoading, setListsLoading] = useState(true);
   const [selectedListKey, setSelectedListKey] = useState(null);
   const [editList, setEditList] = useState(null);
+  const [editMode, setEditMode] = useState('edit');
   const [editError, setEditError] = useState('');
+  const [menuKey, setMenuKey] = useState(null);
+  const [reviewStats, setReviewStats] = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -273,8 +400,10 @@ export function SavedPage() {
     if (authUserId === undefined) return;
     if (!authUserId) {
       setSavedLists([]);
+      setListsLoading(false);
       return;
     }
+    setListsLoading(true);
     try {
       const lists = await fetchSavedListsForUser(authUserId);
       setSavedLists(
@@ -287,6 +416,8 @@ export function SavedPage() {
       );
     } catch {
       setSavedLists([]);
+    } finally {
+      setListsLoading(false);
     }
   }, [authUserId]);
 
@@ -300,27 +431,36 @@ export function SavedPage() {
     };
   }, [loadSavedLists]);
 
-  const visibleFolders = useMemo(() => {
-    return savedLists
-      .map((list) => {
-        const items = list.items
-          .map((item) => ({
-            ...item,
-            image: item.image || lookupLocalEstablishmentUrls(item.name)?.[0] || PLACEHOLDER_IMG,
-            subtitle: item.subtitle || 'Cavite, Philippines',
-          }))
-          .filter((item) => {
-            const isItin = item.kind === 'itinerary' || String(item.id || '').startsWith('itinerary-');
-            if (activeTab === 'Saved' && isItin) return false;
-            if (activeTab === 'Itineraries' && !isItin) return false;
-            return true;
-          });
-        return { ...list, items };
+  useEffect(() => {
+    let cancelled = false;
+    void fetchPlaceReviewStats(supabase)
+      .then((stats) => {
+        if (!cancelled) setReviewStats(stats);
+      })
+      .catch(() => {
+        if (!cancelled) setReviewStats({});
       });
-  }, [activeTab, savedLists]);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const visibleFolders = useMemo(() => {
+    return savedLists.map((list) => {
+      const items = list.items.map((item) => ({
+        ...item,
+        image: item.image || lookupLocalEstablishmentUrls(item.name)?.[0] || PLACEHOLDER_IMG,
+        subtitle: item.subtitle || 'Cavite, Philippines',
+      }));
+      return { ...list, items };
+    });
+  }, [savedLists]);
 
   useEffect(() => {
-    if (visibleFolders.length === 0) return;
+    if (visibleFolders.length === 0) {
+      setSelectedListKey(null);
+      return;
+    }
     const keys = visibleFolders.map(folderKey);
     if (listFromUrl) {
       const match = visibleFolders.find(
@@ -354,14 +494,9 @@ export function SavedPage() {
     }));
   }, [selectedFolder]);
 
-  const totalSavedResults = useMemo(
-    () => visibleFolders.reduce((sum, folder) => sum + folder.items.length, 0),
-    [visibleFolders],
-  );
-
   const openCard = (card) => {
     const itinId = card.itineraryId || String(card.id || '').replace(/^itinerary-/, '');
-    if (card.kind === 'itinerary' || String(card.id || '').startsWith('itinerary-')) {
+    if (isItineraryItem(card)) {
       navigate(`/itinerary/${itinId}`);
     } else {
       navigate(`/place/${card.id}`);
@@ -370,11 +505,23 @@ export function SavedPage() {
 
   const handleRemove = (listId, card) => {
     if (!authUserId) return;
-    void removeItemFromListRemote(authUserId, listId, card.id).catch(() => {});
+    setSavedLists((prev) =>
+      prev.map((list) => {
+        if (String(list.id || list.name) !== String(listId)) return list;
+        return {
+          ...list,
+          items: (list.items ?? []).filter((item) => String(item.id) !== String(card.id)),
+        };
+      }),
+    );
+    void removeItemFromListRemote(authUserId, listId, card.id).catch(() => {
+      void loadSavedLists();
+    });
   };
 
   const handleEditList = (folder) => {
     setEditError('');
+    setEditMode('edit');
     setEditList({
       id: folder.id || folder.name,
       name: folder.name,
@@ -382,9 +529,44 @@ export function SavedPage() {
     });
   };
 
-  const handleSaveListEdit = async (patch) => {
-    if (!editList?.id || !authUserId) return;
+  const handleCreateList = () => {
+    setEditError('');
+    setEditMode('create');
+    setEditList({ name: '', privacy: 'private' });
+  };
+
+  const handleDeleteList = async (folder) => {
+    if (!authUserId) return;
+    const ok = window.confirm(`Delete “${folder.name}”? Saved items in this list will be removed.`);
+    if (!ok) return;
     try {
+      await deleteSavedListRemote(authUserId, folder.id || folder.name);
+      await loadSavedLists();
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleSaveListModal = async (patch) => {
+    if (!authUserId) return;
+    try {
+      if (editMode === 'create') {
+        const result = await createSavedListRemote(authUserId, patch.name, patch.privacy);
+        if (!result.ok) {
+          setEditError(
+            result.reason === 'duplicate_name'
+              ? 'A list with that name already exists.'
+              : 'Could not create this list. Try again.',
+          );
+          return;
+        }
+        setEditList(null);
+        setEditError('');
+        await loadSavedLists();
+        if (result.listId) setSelectedListKey(String(result.listId));
+        return;
+      }
+      if (!editList?.id) return;
       const result = await updateSavedListRemote(authUserId, editList.id, patch);
       if (!result.ok) {
         setEditError(
@@ -398,60 +580,68 @@ export function SavedPage() {
       setEditError('');
       await loadSavedLists();
     } catch {
-      setEditError('Could not update this list. Try again.');
+      setEditError(
+        editMode === 'create' ? 'Could not create this list. Try again.' : 'Could not update this list. Try again.',
+      );
     }
   };
 
+  const hasAnyLists = savedLists.length > 0;
+  const itemCount = gridItems.length;
+  const showSkeleton = authUserId === undefined || listsLoading;
+
   return (
-    <div className="min-h-screen bg-[#efefec] font-['Poppins',sans-serif] text-neutral-900">
+    <div className="min-h-screen bg-[#F1F7F6] font-['Poppins',sans-serif] text-neutral-900">
       <AppHeader />
 
-      <div className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-white/80 p-1 ring-1 ring-neutral-200/80">
-            {savedTabs.map((tab) => (
+      <div className="mx-auto flex w-full max-w-[1600px] flex-col px-4 py-6 sm:px-6 lg:min-h-[calc(100dvh-72px)] lg:px-8">
+        {showSkeleton ? (
+          <SavedPageSkeleton />
+        ) : !hasAnyLists ? (
+          <div className="flex-1">
+            <SavedEmptyState />
+            <div className="mt-4 flex justify-center">
               <button
-                key={tab}
                 type="button"
-                onClick={() => setActiveTab(tab)}
-                className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
-                  activeTab === tab
-                    ? 'bg-[#1B8A70] text-white shadow-[0_6px_16px_rgba(27,138,112,0.28)]'
-                    : 'text-[#707D7D] hover:text-[#16352E]'
-                }`}
+                onClick={handleCreateList}
+                className="inline-flex items-center justify-center rounded-xl border border-dashed border-[#1B8A70]/40 bg-white px-4 py-2.5 text-sm font-semibold text-[#1B8A70] transition hover:bg-[#E7F6F1]"
               >
-                {tab}
+                + Create new list
               </button>
-            ))}
-          </div>
-
-          <p className="text-xs font-medium text-neutral-500">
-            {totalSavedResults} {totalSavedResults === 1 ? 'result' : 'results'}
-          </p>
-        </div>
-
-        {visibleFolders.length === 0 ? (
-          <div className="mt-6">
-            <SavedEmptyState activeTab={activeTab} />
+            </div>
           </div>
         ) : (
-          <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:gap-6">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row lg:gap-6">
             <SavedListNav
               folders={visibleFolders}
               selectedKey={selectedListKey}
               onSelect={setSelectedListKey}
               onEditList={handleEditList}
+              onDeleteList={(folder) => void handleDeleteList(folder)}
+              onCreateList={handleCreateList}
+              menuKey={menuKey}
+              setMenuKey={setMenuKey}
             />
 
             <div className="min-w-0 flex-1">
-              {gridItems.length === 0 ? (
-                <SavedEmptyState activeTab={activeTab} variant="list" />
+              {selectedFolder ? (
+                <h2 className="mb-3 text-base font-semibold text-[#16352E] sm:text-lg">
+                  {selectedFolder.name}{' '}
+                  <span className="font-medium text-neutral-500">
+                    ({itemCount} {itemCount === 1 ? 'item' : 'items'})
+                  </span>
+                </h2>
+              ) : null}
+
+              {itemCount === 0 ? (
+                <SavedEmptyState variant="list" />
               ) : (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                   {gridItems.map((card) => (
                     <SavedItemCard
                       key={`${card._listKey}-${card.id}`}
                       card={card}
+                      reviewStats={reviewStats}
                       onOpen={() => openCard(card)}
                       onRemove={() => handleRemove(card._listId, card)}
                     />
@@ -465,17 +655,15 @@ export function SavedPage() {
 
       <SavedListEditModal
         open={Boolean(editList)}
+        mode={editMode}
         list={editList}
         error={editError}
         onClose={() => {
           setEditList(null);
           setEditError('');
         }}
-        onSave={(patch) => void handleSaveListEdit(patch)}
+        onSave={(patch) => void handleSaveListModal(patch)}
       />
     </div>
   );
 }
-
-
-

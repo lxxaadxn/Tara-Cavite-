@@ -1,18 +1,6 @@
-import { Component, useState, type ErrorInfo, type ReactNode } from 'react';
-import { ChevronStepper } from '../../components/ChevronStepper';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { SiteContentEditor } from './SiteContentEditor';
 import stack from './LandingPageAdmin.module.css';
-
-const AUTH_STEPS = [
-  { id: 'login', title: 'Login', support: 'Welcome and banner' },
-  { id: 'signup', title: 'Sign up', support: 'Terms and privacy' },
-  { id: 'reset', title: 'Password reset', support: 'Heading and helper copy' },
-];
-
-const BRAND_STEPS = [
-  { id: 'logo', title: 'Logo', support: 'Light and dark marks' },
-  { id: 'meta', title: 'Favicon & metadata', support: 'Tab name, icon, and description' },
-];
 
 export class CmsCatch extends Component<{ children: ReactNode }, { message: string | null }> {
   state: { message: string | null } = { message: null };
@@ -48,6 +36,17 @@ export function LandingHeroAdmin() {
           span: 2,
           altKey: 'landing.hero.image_alt',
           altLabel: 'Hero image alt text',
+        },
+        {
+          key: 'landing.nav',
+          label: 'Header navigation labels',
+          type: 'group',
+          span: 2,
+          fields: [
+            { key: 'landing.nav.features', label: 'Nav: features' },
+            { key: 'landing.nav.destinations', label: 'Nav: destinations' },
+            { key: 'landing.nav.itineraries', label: 'Nav: curated itineraries', span: 2 },
+          ],
         },
       ]}
     />
@@ -104,9 +103,6 @@ export function LandingFooterAdmin() {
         { key: 'landing.footer.copyright', label: 'Copyright' },
         { key: 'landing.footer.contact_email', label: 'Contact email' },
         { key: 'landing.footer.contact_phone', label: 'Contact phone' },
-        { key: 'landing.nav.features', label: 'Nav: features' },
-        { key: 'landing.nav.destinations', label: 'Nav: destinations' },
-        { key: 'landing.nav.itineraries', label: 'Nav: curated itineraries', span: 2 },
       ]}
     />
   );
@@ -116,12 +112,10 @@ export function AuthLoginCmsAdmin() {
   return (
     <SiteContentEditor
       title="Login"
-      intro="Welcome message and optional banner on the traveler login screen."
+      intro="Welcome message for the traveler login screen."
       folder="auth"
-      fields={[
-        { key: 'auth.login.welcome', label: 'Welcome message', type: 'textarea' },
-        { key: 'auth.login.banner_url', label: 'Banner image', type: 'image' },
-      ]}
+      embedded
+      fields={[{ key: 'auth.login.welcome', label: 'Welcome message', type: 'textarea', compact: true }]}
     />
   );
 }
@@ -130,10 +124,12 @@ export function AuthSignupCmsAdmin() {
   return (
     <SiteContentEditor
       title="Sign up"
-      intro="Terms checkbox text and privacy notice on traveler sign-up."
+      intro="Terms and privacy copy on traveler sign-up."
+      folder="auth"
+      embedded
       fields={[
-        { key: 'auth.signup.terms', label: 'Terms checkbox text', type: 'textarea' },
-        { key: 'auth.signup.privacy', label: 'Privacy notice', type: 'textarea' },
+        { key: 'auth.signup.terms', label: 'Terms checkbox text', type: 'textarea', compact: true },
+        { key: 'auth.signup.privacy', label: 'Privacy notice', type: 'textarea', compact: true },
       ]}
     />
   );
@@ -143,69 +139,102 @@ export function AuthResetCmsAdmin() {
   return (
     <SiteContentEditor
       title="Password reset"
-      intro="Heading and helper copy on the password reset screen."
+      intro="Heading and helper text on password reset."
+      folder="auth"
+      embedded
       fields={[
         { key: 'auth.reset.heading', label: 'Heading' },
-        { key: 'auth.reset.helper', label: 'Helper text', type: 'textarea' },
+        { key: 'auth.reset.helper', label: 'Helper text', type: 'textarea', compact: true },
       ]}
     />
   );
 }
 
-export function BrandLogoCmsAdmin() {
+export function BrandLogoCmsAdmin({ embedded = false }: { embedded?: boolean }) {
   return (
     <SiteContentEditor
       title="Logo"
-      intro="Optional image logos for light and dark surfaces. Empty values keep the Tara, Cavite! wordmark."
+      intro="Logo mark and brand name shown on traveler auth and header surfaces."
       folder="brand"
+      embedded={embedded}
       fields={[
-        { key: 'brand.logo_light_url', label: 'Light-mode logo', type: 'image' },
-        { key: 'brand.logo_dark_url', label: 'Dark-mode logo', type: 'image' },
+        {
+          key: 'brand.logo_light_url',
+          label: 'Logo',
+          type: 'image',
+          sideFields: [{ key: 'brand.name', label: 'Brand name' }],
+        },
       ]}
     />
   );
 }
 
-export function BrandMetaCmsAdmin() {
+export function BrandMetaCmsAdmin({ embedded = false }: { embedded?: boolean }) {
   return (
     <SiteContentEditor
       title="Favicon & metadata"
       intro="Controls the traveler site’s browser tab: icon, tab name, and default page description."
       folder="brand"
+      embedded={embedded}
       fields={[
-        { key: 'brand.tab_title', label: 'Tab title' },
-        { key: 'brand.favicon_url', label: 'Favicon', type: 'image' },
-        { key: 'brand.meta_description', label: 'Metadata description', type: 'textarea' },
+        {
+          key: 'brand.favicon_url',
+          label: 'Favicon',
+          type: 'image',
+          sideFields: [
+            { key: 'brand.tab_title', label: 'Tab title' },
+            {
+              key: 'brand.meta_description',
+              label: 'Metadata description',
+              type: 'textarea',
+              compact: true,
+            },
+          ],
+        },
       ]}
     />
   );
 }
 
 export function AuthPagesAdmin() {
-  const [step, setStep] = useState(0);
   return (
     <CmsCatch>
-      <div className={stack.stack}>
-        <ChevronStepper steps={AUTH_STEPS} current={step} onChange={setStep} />
-        <div className={stack.section}>
-          {step === 0 ? <AuthLoginCmsAdmin /> : null}
-          {step === 1 ? <AuthSignupCmsAdmin /> : null}
-          {step === 2 ? <AuthResetCmsAdmin /> : null}
+      <div className={stack.authPage}>
+        <div className={stack.authPanel}>
+          <header className={stack.authPanelHead}>
+            <h2 className={stack.authPanelTitle}>Auth screens</h2>
+            <p className={stack.authPanelIntro}>
+              Edit traveler login, sign up, and password reset content. Each column saves on its own.
+            </p>
+          </header>
+          <div className={stack.columns3}>
+            <div className={stack.column}>
+              <AuthLoginCmsAdmin />
+            </div>
+            <div className={stack.column}>
+              <AuthSignupCmsAdmin />
+            </div>
+            <div className={stack.column}>
+              <AuthResetCmsAdmin />
+            </div>
+          </div>
         </div>
-      </div>
-    </CmsCatch>
-  );
-}
 
-export function BrandAssetsAdmin() {
-  const [step, setStep] = useState(0);
-  return (
-    <CmsCatch>
-      <div className={stack.stack}>
-        <ChevronStepper steps={BRAND_STEPS} current={step} onChange={setStep} />
-        <div className={stack.section}>
-          {step === 0 ? <BrandLogoCmsAdmin /> : null}
-          {step === 1 ? <BrandMetaCmsAdmin /> : null}
+        <div className={`${stack.authPanel} ${stack.authPanelSpaced}`}>
+          <header className={stack.authPanelHead}>
+            <h2 className={stack.authPanelTitle}>Brand Assets</h2>
+            <p className={stack.authPanelIntro}>
+              Logos, favicon, and tab metadata used across the traveler site and auth screens.
+            </p>
+          </header>
+          <div className={stack.columns2}>
+            <div className={stack.column}>
+              <BrandLogoCmsAdmin embedded />
+            </div>
+            <div className={stack.column}>
+              <BrandMetaCmsAdmin embedded />
+            </div>
+          </div>
         </div>
       </div>
     </CmsCatch>

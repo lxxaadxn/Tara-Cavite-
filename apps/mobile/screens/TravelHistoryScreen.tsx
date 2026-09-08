@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { JamIcon } from '../components/JamIcon';
+import { Header } from '../components/Header';
 import { supabase } from '../lib/supabase';
 import { fetchProfileActivity, type ProfileVisit } from '../lib/profileActivity';
 
@@ -68,19 +68,8 @@ export default function TravelHistoryScreen() {
   };
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top + 8 }]}>
-      <View style={styles.titleRow}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          hitSlop={10}
-        >
-          <JamIcon ionicon="chevron-left" size={22} color={TITLE} />
-        </TouchableOpacity>
-        <Text style={styles.screenTitle}>Travel history</Text>
-      </View>
+    <View style={styles.root}>
+      <Header title="Travel history" showBack darkBackground />
 
       {loading ? (
         <View style={styles.centered}>
@@ -140,26 +129,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    marginBottom: 8,
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  screenTitle: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 20,
-    color: TITLE,
-    flex: 1,
-  },
   scrollContent: {
     paddingHorizontal: 16,
+    paddingTop: 16,
   },
   card: {
     backgroundColor: '#fff',

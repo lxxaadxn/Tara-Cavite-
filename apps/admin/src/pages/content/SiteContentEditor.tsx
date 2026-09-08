@@ -13,16 +13,20 @@ export type SiteContentField = {
   key: string;
   label: string;
   hint?: string;
-  type?: 'text' | 'textarea' | 'image' | 'featureCard';
+  type?: 'text' | 'textarea' | 'image' | 'featureCard' | 'group';
   span?: 1 | 2;
   altKey?: string;
   altLabel?: string;
+  /** Extra inputs rendered beside an image (e.g. favicon + tab title). */
+  sideFields?: SiteContentField[];
   compact?: boolean;
   titleKey?: string;
   titleLabel?: string;
   bodyKey?: string;
   bodyLabel?: string;
   urlLabel?: string;
+  /** Nested fields rendered inside one container (e.g. nav labels). */
+  fields?: SiteContentField[];
 };
 
 function DevicePhotoPicker({
@@ -82,6 +86,8 @@ type Props = {
   fields: SiteContentField[];
   folder?: string;
   layout?: 'stack' | 'twoColumn';
+  /** No card chrome — for multi-column page layouts. */
+  embedded?: boolean;
   children?: ReactNode;
 };
 
@@ -91,6 +97,7 @@ export function SiteContentEditor({
   fields,
   folder = 'cms',
   layout = 'stack',
+  embedded = false,
   children,
 }: Props) {
   const toast = useToastSoft();
@@ -102,10 +109,15 @@ export function SiteContentEditor({
   const fieldKeys = (list: SiteContentField[]) => {
     const keys: string[] = [];
     for (const field of list) {
+      if (field.type === 'group' && field.fields?.length) {
+        keys.push(...fieldKeys(field.fields));
+        continue;
+      }
       keys.push(field.key);
       if (field.altKey) keys.push(field.altKey);
       if (field.titleKey) keys.push(field.titleKey);
       if (field.bodyKey) keys.push(field.bodyKey);
+      if (field.sideFields?.length) keys.push(...fieldKeys(field.sideFields));
     }
     return keys;
   };
@@ -172,7 +184,7 @@ export function SiteContentEditor({
 
   return (
     <form
-      className={`${styles.page} ${layout === 'twoColumn' ? styles.pageWide : ''}`}
+      className={`${styles.page} ${layout === 'twoColumn' ? styles.pageWide : ''} ${embedded ? styles.pageBare : ''}`}
       onSubmit={(e) => void onSave(e)}
     >
       {title ? <h2 className={styles.heading}>{title}</h2> : null}
@@ -186,7 +198,37 @@ export function SiteContentEditor({
           >
             <span className={styles.label}>{field.label}</span>
             {field.hint && field.type === 'textarea' ? <span className={styles.hint}>{field.hint}</span> : null}
-            {field.type === 'featureCard' ? (
+            {field.type === 'group' && field.fields?.length ? (
+              <div className={styles.fieldGroup}>
+                {field.fields.map((child) => (
+                  <div
+                    key={child.key}
+                    className={`${styles.field} ${child.span === 2 ? styles.span2 : ''}`}
+                  >
+                    <span className={styles.label}>{child.label}</span>
+                    {child.type === 'textarea' ? (
+                      <textarea
+                        className={`${styles.textarea} ${child.compact ? styles.textareaCompact : ''}`}
+                        rows={child.compact ? 2 : 3}
+                        value={values[child.key] ?? ''}
+                        onChange={(e) =>
+                          setValues((prev) => ({ ...prev, [child.key]: e.target.value }))
+                        }
+                      />
+                    ) : (
+                      <input
+                        className={styles.input}
+                        placeholder={child.hint}
+                        value={values[child.key] ?? ''}
+                        onChange={(e) =>
+                          setValues((prev) => ({ ...prev, [child.key]: e.target.value }))
+                        }
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : field.type === 'featureCard' ? (
               <div className={styles.featureCard}>
                 <div className={styles.featureMedia}>
                   <DevicePhotoPicker
@@ -226,7 +268,11 @@ export function SiteContentEditor({
                 onChange={(e) => setValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
               />
             ) : field.type === 'image' ? (
-              <div className={field.altKey ? styles.imageSplit : styles.imageRow}>
+              <div
+                className={
+                  field.altKey || field.sideFields?.length ? styles.imageSplit : styles.imageRow
+                }
+              >
                 <div className={styles.imageMedia}>
                   <DevicePhotoPicker
                     src={values[field.key] ?? ''}
@@ -250,6 +296,30 @@ export function SiteContentEditor({
                       />
                     </>
                   ) : null}
+                  {field.sideFields?.map((side) => (
+                    <div key={side.key} className={styles.field}>
+                      <span className={styles.label}>{side.label}</span>
+                      {side.type === 'textarea' ? (
+                        <textarea
+                          className={`${styles.textarea} ${side.compact ? styles.textareaCompact : ''}`}
+                          rows={side.compact ? 2 : 3}
+                          value={values[side.key] ?? ''}
+                          onChange={(e) =>
+                            setValues((prev) => ({ ...prev, [side.key]: e.target.value }))
+                          }
+                        />
+                      ) : (
+                        <input
+                          className={styles.input}
+                          placeholder={side.hint}
+                          value={values[side.key] ?? ''}
+                          onChange={(e) =>
+                            setValues((prev) => ({ ...prev, [side.key]: e.target.value }))
+                          }
+                        />
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             ) : (

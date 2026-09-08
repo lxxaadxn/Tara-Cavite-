@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { readLocalImageBytes } from './readImageBytes';
 
 export const MAX_REVIEW_PHOTOS = 4;
 export const REVIEW_PHOTOS_BUCKET = 'review-photos';
@@ -125,10 +126,7 @@ async function uploadReviewPhotos(
   const list = assets.slice(0, MAX_REVIEW_PHOTOS);
   const urls: string[] = [];
   for (const asset of list) {
-    const fileResponse = await fetch(asset.uri);
-    if (!fileResponse.ok) throw new Error('Failed to read selected image file.');
-    const fileBuffer = await fileResponse.arrayBuffer();
-    if (!fileBuffer?.byteLength) throw new Error('Selected image is empty.');
+    const fileBuffer = await readLocalImageBytes(asset.uri);
 
     const ext = extFromAsset(asset);
     const mimeType =
@@ -190,6 +188,80 @@ export async function fetchPlaceReviews(
     rows.map((r) => r.user_id)
   );
   return rows.map((r) => rowToReview(r, names));
+}
+
+export type PlaceRatingSummary = {
+  /** Mean of published ratings, rounded to one decimal. */
+  average: number;
+  count: number;
+};
+
+/** Live rating for one place, read straight from published `place_reviews`. */
+export async function fetchPlaceRatingSummary(
+  client: SupabaseClient,
+  placeId: string
+): Promise<PlaceRatingSummary> {
+  const id = String(placeId ?? '').trim();
+  if (!id) return { average: 0, count: 0 };
+
+  const { data, error } = await client
+    .from('place_reviews')
+    .select('rating')
+    .eq('place_id', id)
+    .eq('is_published', true);
+
+  if (error) {
+    throw new Error(formatPlaceReviewError(error, 'Could not load ratings.'));
+  }
+
+  let sum = 0;
+  let count = 0;
+  for (const row of data ?? []) {
+    const rating = Number(row.rating);
+    if (!Number.isFinite(rating)) continue;
+    sum += rating;
+    count += 1;
+  }
+  if (!count) return { average: 0, count: 0 };
+  return { average: Math.round((sum / count) * 10) / 10, count };
+}
+
+/** Average rating and review count per place, keyed by place id (mirrors web). */
+export async function fetchPlaceReviewStats(
+  client: SupabaseClient
+): Promise<Record<string, PlaceRatingSummary>> {
+  const totals = new Map<string, { sum: number; count: number }>();
+  const pageSize = 1000;
+  let from = 0;
+
+  for (;;) {
+    const { data, error } = await client
+      .from('place_reviews')
+      .select('place_id, rating')
+      .eq('is_published', true)
+      .range(from, from + pageSize - 1);
+    if (error) {
+      throw new Error(formatPlaceReviewError(error, 'Could not load ratings.'));
+    }
+    const rows = data ?? [];
+    for (const row of rows) {
+      const id = String(row.place_id ?? '').trim();
+      const rating = Number(row.rating);
+      if (!id || !Number.isFinite(rating)) continue;
+      const cur = totals.get(id) ?? { sum: 0, count: 0 };
+      cur.sum += rating;
+      cur.count += 1;
+      totals.set(id, cur);
+    }
+    if (rows.length < pageSize) break;
+    from += pageSize;
+  }
+
+  const out: Record<string, PlaceRatingSummary> = {};
+  for (const [id, { sum, count }] of totals) {
+    out[id] = { average: Math.round((sum / count) * 10) / 10, count };
+  }
+  return out;
 }
 
 export async function submitPlaceReview(

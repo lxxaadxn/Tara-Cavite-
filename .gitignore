@@ -30,6 +30,11 @@ apps/mobile/expo-go-qr.png
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+debug-*.log
+.cursor/debug-*.log
+
+# Supabase CLI local link state (machine specific)
+supabase/.temp/
 
 # macOS
 .DS_Store

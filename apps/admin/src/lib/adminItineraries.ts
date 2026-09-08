@@ -63,7 +63,7 @@ export const CATEGORY_OPTIONS = [
   'Cafe',
 ];
 
-export const DURATION_PRESETS = ['2 hrs', '4 hrs', '6 hrs', '8 hrs', '1 day'];
+export const DURATION_PRESETS = ['2 hrs', '4 hrs', '6 hrs', '8 hrs', '1 day', '2 days', '3 days'];
 
 function pad2(n: number) {
   return String(n).padStart(2, '0');

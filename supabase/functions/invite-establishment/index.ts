@@ -5,7 +5,10 @@ const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const ADMIN_RESERVED_EMAIL = 'forcapstone222@gmail.com';
+const ADMIN_RESERVED_EMAILS = new Set([
+  'forcapstone111@gmail.com',
+  'forcapstone222@gmail.com',
+]);
 
 type InviteBody = {
   email?: string;
@@ -16,6 +19,9 @@ type InviteBody = {
   address?: string;
   phone?: string;
   googleMapsLink?: string;
+  barangay?: string;
+  /** Optional note from the Tourism Office, printed in the invitation email. */
+  inviteMessage?: string;
   redirectTo?: string;
   resend?: boolean;
 };
@@ -88,14 +94,22 @@ Deno.serve(async (req) => {
   const address = trim(body.address);
   const phone = trim(body.phone);
   const googleMapsLink = trim(body.googleMapsLink);
+  const barangay = trim(body.barangay);
+  const inviteMessage = trim(body.inviteMessage).slice(0, 1000);
   const redirectTo = safeRedirectTo(body.redirectTo);
   const resend = body.resend === true;
 
   if (!email || !email.includes('@')) {
     return json(400, { error: 'Establishment email is required.' });
   }
-  if (email === ADMIN_RESERVED_EMAIL) {
+  if (ADMIN_RESERVED_EMAILS.has(email)) {
     return json(400, { error: 'That email is reserved for the Tourism Office admin.' });
+  }
+  {
+    const { data: reservedAdmin } = await userClient.rpc('is_cavitour_admin_email', { p_email: email });
+    if (reservedAdmin) {
+      return json(400, { error: 'That email is reserved for the Tourism Office admin.' });
+    }
   }
   if (!resend && !businessName) {
     return json(400, { error: 'Establishment name is required.' });
@@ -121,7 +135,10 @@ Deno.serve(async (req) => {
     if (existingOwner.setup_completed_at || existingOwner.verification_status !== 'invited') {
       return json(400, { error: 'This establishment already finished setup. Use the profile instead of resending.' });
     }
-    const sent = await sendSetupEmail(admin, supabaseUrl, anonKey, email, redirectTo, false);
+    const sent = await sendSetupEmail(admin, supabaseUrl, anonKey, email, redirectTo, false, {
+      role: 'establishment',
+      custom_message: inviteMessage,
+    });
     if (!sent.ok) return json(400, { error: sent.error });
     await admin
       .from('establishment_owners')
@@ -147,6 +164,8 @@ Deno.serve(async (req) => {
     role: 'establishment',
     full_name: fullName,
     business_name: businessName,
+    // Rendered by the "Invite user" email template as {{ .Data.custom_message }}.
+    custom_message: inviteMessage,
   };
 
   const invited = await admin.auth.admin.inviteUserByEmail(email, {
@@ -170,26 +189,36 @@ Deno.serve(async (req) => {
   }
 
   const now = new Date().toISOString();
-  const { error: upsertErr } = await admin.from('establishment_owners').upsert(
-    {
-      id: userId,
-      email,
-      full_name: fullName || null,
-      phone: phone || null,
-      business_name: businessName,
-      business_type: businessType || null,
-      lgu: lgu || null,
-      address: address || null,
-      google_maps_link: googleMapsLink || null,
-      auth_provider: 'email',
-      verification_status: 'invited',
-      account_status: 'active',
-      public_visible: false,
-      invited_at: now,
-      setup_completed_at: null,
-    },
-    { onConflict: 'id' }
-  );
+  const ownerRow: Record<string, unknown> = {
+    id: userId,
+    email,
+    full_name: fullName || null,
+    phone: phone || null,
+    business_name: businessName,
+    business_type: businessType || null,
+    lgu: lgu || null,
+    address: address || null,
+    google_maps_link: googleMapsLink || null,
+    auth_provider: 'email',
+    verification_status: 'invited',
+    account_status: 'active',
+    public_visible: false,
+    invited_at: now,
+    setup_completed_at: null,
+  };
+
+  // Added by 20260908120000_establishment_drafts.sql. The invitation is already
+  // sent by this point, so fall back to the older shape if it has not been run.
+  const withNewColumns = {
+    ...ownerRow,
+    barangay: barangay || null,
+    invite_message: inviteMessage || null,
+  };
+
+  let upsertErr = (await admin.from('establishment_owners').upsert(withNewColumns, { onConflict: 'id' })).error;
+  if (upsertErr && /barangay|invite_message|schema cache/i.test(upsertErr.message ?? '')) {
+    upsertErr = (await admin.from('establishment_owners').upsert(ownerRow, { onConflict: 'id' })).error;
+  }
   if (upsertErr) {
     return json(400, { error: upsertErr.message });
   }
@@ -238,10 +267,11 @@ async function sendSetupEmail(
   anonKey: string,
   email: string,
   redirectTo: string,
-  recoveryFallback: boolean
+  recoveryFallback: boolean,
+  meta?: Record<string, unknown>
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!recoveryFallback) {
-    const invited = await admin.auth.admin.inviteUserByEmail(email, { redirectTo });
+    const invited = await admin.auth.admin.inviteUserByEmail(email, { redirectTo, data: meta });
     if (!invited.error) return { ok: true };
     if (!/already|registered|exists/i.test(invited.error.message ?? '')) {
       return { ok: false, error: invited.error.message };

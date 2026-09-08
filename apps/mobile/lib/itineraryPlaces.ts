@@ -175,43 +175,36 @@ export function buildEnrichedItinerary(
     };
   });
 
-  const heroFromCatalog = stopList.find((s) => s.place?.image)?.place?.image;
-
   return {
     ...template,
     stopList,
     stops: stopList.length,
-    image: heroFromCatalog || template.image,
+    // Keep the itinerary cover photo — never replace with establishment images.
+    image: String(template.image || '').trim() || template.image,
   };
 }
 
-/** Unique photo URLs for list-card carousels: template hero, then stop photos. */
+/** Cover photo only for list cards (itinerary image, not stop/establishment photos). */
 export function itineraryGalleryUrls(
   itinerary: PublishedItinerary | EnrichedItinerary | null | undefined
 ): string[] {
-  const urls: string[] = [];
-  const seen = new Set<string>();
-  const add = (value: unknown) => {
-    const src = String(value || '').trim();
-    if (!src || seen.has(src)) return;
-    seen.add(src);
-    urls.push(src);
-  };
-  add(itinerary?.image);
-  const stops = (itinerary as EnrichedItinerary | undefined)?.stopList;
-  if (stops) {
-    for (const stop of stops) {
-      add(stop?.place?.image);
-    }
-  }
-  return urls;
+  const src = String(itinerary?.image || '').trim();
+  return src ? [src] : [];
+}
+
+/** Route + stop count for card subtitle, e.g. "Silang → Tagaytay · 5 stops". */
+export function itineraryCardSubtitle(
+  itinerary: PublishedItinerary | EnrichedItinerary | null | undefined
+): string {
+  const route = String(itinerary?.route || itinerary?.subtitle || '').trim();
+  const n = itinerary?.stopList?.length || itinerary?.stops;
+  const stopPart = n ? `${n} ${n === 1 ? 'stop' : 'stops'}` : '';
+  if (route && stopPart) return `${route} · ${stopPart}`;
+  return route || stopPart || '';
 }
 
 export function itineraryCardChips(
   itinerary: PublishedItinerary | EnrichedItinerary | null | undefined
 ): string[] {
-  const chips = [...(itinerary?.tags || [])].filter(Boolean) as string[];
-  const n = itinerary?.stopList?.length || itinerary?.stops;
-  if (n) chips.push(`${n} ${n === 1 ? 'stop' : 'stops'}`);
-  return chips;
+  return [...(itinerary?.tags || [])].filter(Boolean) as string[];
 }

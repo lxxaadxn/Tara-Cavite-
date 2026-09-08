@@ -1,12 +1,25 @@
 /** Filters aligned with mobile `dashboardPlaceFilters.ts`. */
 
 import { ntdpCategoriesMatch } from 'cavitour-shared/ntdpFilterMeta';
+import { foldLguName } from 'cavitour-shared/lguKind';
 import { FILTER_OPTION_LABEL_BY_KEY } from './dashboardFilterOptions';
 
 const DEFAULT_CAT_KEYWORDS = {
   'cat-nature': ['nature', 'eco', 'farm', 'agri', 'agritourism', 'wildlife', 'forest'],
   'cat-mice': ['mice', 'meeting', 'convention', 'conference', 'event venue', 'events', 'banquet'],
-  'cat-restaurant': ['restaurant', 'dining', 'food service', 'eatery', 'bistro', 'cafe', 'café', 'food hub'],
+  'cat-restaurant': [
+    'restaurant',
+    'dining',
+    'food service',
+    'eatery',
+    'bistro',
+    'cafe',
+    'café',
+    'food hub',
+    'culinary',
+    'gastronomy',
+    'food',
+  ],
   'cat-health': ['health', 'wellness', 'spa', 'medical', 'retirement', 'clinic', 'therapy', 'rehab'],
   'cat-cultural': ['cultural', 'museum', 'church', 'heritage', 'historical', 'shrine', 'parish'],
   'cat-education': ['education', 'school', 'university', 'college', 'training', 'academy', 'learning'],
@@ -66,13 +79,6 @@ export function placeSearchBlobWeb(place) {
   );
 }
 
-function normalizeAreaLabel(label) {
-  return String(label ?? '')
-    .replace(/\s+City\s*$/i, '')
-    .trim()
-    .toLowerCase();
-}
-
 function categorySelectionLabel(key) {
   if (!key) return '';
   return EXTRA_CATEGORY_LABELS[key] || FILTER_OPTION_LABEL_BY_KEY[key] || key;
@@ -100,31 +106,22 @@ export function placeMatchesCategoryKeysWeb(place, keys) {
 
 export function placeMatchesLocationKeysWeb(place, keys) {
   if (!keys?.length) return true;
-  const cmRaw = (place.city_mun ?? '').trim().toLowerCase();
-  const cm = foldHaystack(place.city_mun ?? '');
-  const addr = foldHaystack(place.address ?? '');
+  const cm = foldLguName(place.city_mun ?? '');
+  const addr = foldLguName(place.address ?? '');
   const hay = `${cm} ${addr}`;
   return keys.some((key) => {
     const label = EXTRA_LOCATION_LABELS[key] || FILTER_OPTION_LABEL_BY_KEY[key] || key;
     if (!label) return false;
-    const core = foldHaystack(normalizeAreaLabel(label));
+    const core = foldLguName(label);
     if (!core) return false;
     if (hay.includes(core)) return true;
-    if (cm.includes(core) || core.includes(cm)) return true;
-    const rawFold = foldHaystack(cmRaw);
-    return rawFold.includes(core) || core.includes(rawFold);
+    return cm.includes(core) || core.includes(cm);
   });
 }
 
 /** Diacritic-insensitive match for `city_mun` (itinerary browse). */
 export function foldCityLabel(value) {
-  return String(value ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/\s+city\s*$/i, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return foldLguName(value);
 }
 
 export function cityMunMatchesFilter(placeCityMun, selectedCityValue) {

@@ -1,10 +1,14 @@
 .root {
   --primary: #1b8a70;
   --primary-dark: #16352e;
+  --accent: #34b39a;
   --card: #ffffff;
   --text: #16352e;
   --text-secondary: #707d7d;
   --shadow-soft: 0 4px 18px rgba(22, 53, 46, 0.06);
+  /* The analytics tab borrows the admin Overview stylesheet, which reads these. */
+  --radius: 18px;
+  --shadow: 0 4px 18px rgba(22, 53, 46, 0.06);
   height: 100vh;
   overflow: hidden;
   background: #f7f9fb;
@@ -151,40 +155,6 @@
   flex: 1;
 }
 
-.profileChip {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 12px 4px 4px;
-  border-radius: 999px;
-  background: #fff;
-  border: 1px solid #e8edf2;
-  color: var(--text-secondary);
-  box-shadow: var(--shadow-soft);
-}
-
-.chipAvatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 999px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--primary);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.chipName {
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-  color: var(--text);
-}
-
 .main {
   flex: 1;
   min-height: 0;
@@ -257,18 +227,91 @@
   color: var(--text-secondary);
 }
 
-.stamps {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(108px, 1fr));
-  gap: 8px;
+.profileTitle {
+  margin: 0 0 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--primary);
 }
 
-.stamp {
+.profileGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 28px;
+  margin: 0;
+}
+
+.profileRow {
   min-width: 0;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.88);
-  border: 1px dashed rgba(22, 53, 46, 0.18);
+}
+
+/* An address or a pasted link needs the full width to stay readable. */
+.profileRowWide {
+  grid-column: 1 / -1;
+}
+
+.profileLabel {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.profileValue {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.profileLink {
+  color: var(--primary-dark);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(27, 138, 112, 0.35);
+}
+
+.profileLink:hover {
+  text-decoration-color: currentColor;
+}
+
+.profileEmpty {
+  color: #94a3b8;
+}
+
+.footnote {
+  margin: 20px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+/* The three states the tourism office owns, stacked in the masthead. */
+.mastStamps {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.mastStamp {
+  display: grid;
+  grid-template-columns: 96px auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.mastStamp .stampLabel {
+  margin-bottom: 0;
+}
+
+@media (max-width: 900px) {
+  .profileGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .stampLabel {
@@ -300,6 +343,16 @@
   color: #475569;
 }
 
+.toneBlue {
+  background: rgba(59, 130, 246, 0.14);
+  color: #1d4ed8;
+}
+
+.toneRed {
+  background: rgba(220, 38, 38, 0.14);
+  color: #b91c1c;
+}
+
 .body {
   padding: 22px 24px 20px;
 }
@@ -329,7 +382,7 @@
 }
 
 .label {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-secondary);
 }
@@ -338,10 +391,10 @@
 .select,
 .textarea {
   width: 100%;
-  padding: 11px 13px;
+  padding: 12px 14px;
   border-radius: 12px;
   border: 1px solid #dce6e2;
-  font-size: 14px;
+  font-size: 15px;
   font-family: inherit;
   color: var(--text);
   background: #fff;
@@ -361,7 +414,7 @@
 }
 
 .textarea {
-  min-height: 88px;
+  min-height: 120px;
   resize: vertical;
 }
 
@@ -385,6 +438,19 @@
   padding: 16px 24px 20px;
   border-top: 1px solid #e8edf2;
   background: #fbfdfc;
+}
+
+/* Closes the run of section cards, so it needs no rule of its own to sit under. */
+.pageFoot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+}
+
+.pageFoot .ok,
+.pageFoot .err {
+  margin: 0;
 }
 
 .primaryBtn {
@@ -538,10 +604,6 @@
   .mast {
     grid-template-columns: auto minmax(0, 1fr);
   }
-
-  .stamps {
-    grid-column: 1 / -1;
-  }
 }
 
 @media (max-width: 900px) {
@@ -606,12 +668,656 @@
     grid-template-columns: 1fr;
   }
 
-  .stamps,
   .grid {
     grid-template-columns: 1fr;
   }
+}
 
-  .chipName {
-    display: none;
-  }
+/* Analytics: check-in QR ---------------------------------------------------- */
+
+/* Placeholder lines where the latest reviews will go, so an unreviewed
+   listing shows the shape of the card instead of a sentence. */
+.reviewSkeleton {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.reviewSkeleton li {
+  display: grid;
+  gap: 10px;
+  padding: 14px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.reviewSkeleton li:last-child {
+  border-bottom: none;
+}
+
+.reviewSkeleton span {
+  display: block;
+  height: 10px;
+  border-radius: 999px;
+  background: #eef2f6;
+}
+
+.reviewSkeleton span:first-child {
+  width: 96px;
+}
+
+.reviewSkeleton span:last-child {
+  width: min(100%, 420px);
+}
+
+.qrBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.qrImage {
+  width: 168px;
+  height: 168px;
+  border-radius: 14px;
+  border: 1px solid #e4ece9;
+  background: #fff;
+  padding: 8px;
+}
+
+.qrCode {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text);
+}
+
+.qrActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.qrHint {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+/* Establishment tab: sections ---------------------------------------------- */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sectionHead {
+  padding: 20px 24px 0;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.sectionHint {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.ghostBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  border: 1px solid #dce6e2;
+  background: #fff;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.ghostBtn:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.ghostBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.notice {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* Location picker ---------------------------------------------------------- */
+
+.mapFrame {
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid #dce6e2;
+  /* Own stacking context, so Leaflet's panes cannot climb over dialogs. */
+  position: relative;
+  z-index: 0;
+}
+
+.mapNote,
+.mapCoords {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.mapCoords {
+  font-variant-numeric: tabular-nums;
+}
+
+.inputLocked {
+  background: #f4f8f7;
+  color: #4c5a56;
+  cursor: default;
+}
+
+/* Announcements: header, table cells and dialogs --------------------------- */
+
+.tableThumb {
+  display: block;
+  width: 56px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid #e8edf2;
+  object-fit: cover;
+}
+
+.thumbEmpty {
+  color: var(--text-secondary);
+}
+
+.cellSub {
+  margin: 3px 0 0;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+/* Bold / Bullet helpers above the announcement details textarea. */
+.bodyToolbar {
+  display: flex;
+  gap: 8px;
+}
+
+.toolbarBtn {
+  padding: 5px 12px;
+  border-radius: 9px;
+  border: 1px solid #dce6e2;
+  background: #fff;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.toolbarBtn:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.toolbarBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Pencil + kebab row actions, matching the admin catalog tables. */
+.rowTools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.iconBtn:hover:not(:disabled) {
+  background: rgba(27, 138, 112, 0.12);
+  border-color: rgba(27, 138, 112, 0.2);
+  color: var(--primary-dark);
+}
+
+.iconBtn:focus-visible {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(27, 138, 112, 0.16);
+}
+
+.iconBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* The announcement form is taller than the small confirm dialog, so it scrolls
+   between a pinned header and footer. */
+.formModal {
+  display: flex;
+  flex-direction: column;
+  width: min(640px, 100%);
+  max-height: 88vh;
+  background: var(--card);
+  border-radius: 18px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.22);
+  overflow: hidden;
+}
+
+.formBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 24px 24px;
+}
+
+.formFoot {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 24px;
+  border-top: 1px solid #e8edf2;
+  background: #fbfdfc;
+}
+
+.viewModal {
+  display: flex;
+  flex-direction: column;
+  width: min(420px, 100%);
+  max-height: 88vh;
+  background: var(--card);
+  border-radius: 18px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.22);
+  overflow: hidden;
+}
+
+.viewBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 24px 24px;
+}
+
+/* Matches one column of the traveler five-across grid. */
+.cardStage {
+  width: 264px;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+.dangerSolidBtn {
+  padding: 10px 18px;
+  border-radius: 12px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  border: none;
+  cursor: pointer;
+}
+
+.dangerSolidBtn:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.dangerSolidBtn:disabled {
+  opacity: 0.6;
+}
+
+/* Announcement cover ------------------------------------------------------- */
+
+.coverActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.coverPreview {
+  width: 200px;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid #e4ece9;
+  background: #f4f8f7;
+}
+
+.coverPreview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Photo editor ------------------------------------------------------------- */
+
+.photoGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.photoTile {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e4ece9;
+  background: #f4f8f7;
+}
+
+.photoImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.photoCover {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(22, 53, 46, 0.82);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.photoTools {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  display: flex;
+  gap: 6px;
+}
+
+.photoBtn {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: none;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.photoBtn:hover:not(:disabled) {
+  background: #fff;
+  color: var(--primary);
+}
+
+.photoBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.photoAdd {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 4 / 3;
+  border-radius: 12px;
+  border: 1px dashed #cbd8d4;
+  background: #fbfdfc;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.photoAdd:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* Reviews tab -------------------------------------------------------------- */
+
+/* Lives in the top bar beside the page title, matching the admin toolbar. */
+.search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 260px;
+  max-width: 100%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: var(--card);
+  color: var(--text-secondary);
+}
+
+.search:focus-within {
+  border-color: var(--primary);
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.summary {
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 8px;
+  font-size: 13px;
+}
+
+.table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  background: #f4f8f7;
+}
+
+.table th:first-child {
+  border-radius: 10px 0 0 10px;
+}
+
+.table th:last-child {
+  border-radius: 0 10px 10px 0;
+  text-align: right;
+}
+
+.table td {
+  padding: 12px;
+  background: #fff;
+  border-top: 1px solid #eef3f1;
+  border-bottom: 1px solid #eef3f1;
+  vertical-align: top;
+}
+
+.table td:first-child {
+  border-left: 1px solid #eef3f1;
+  border-radius: 12px 0 0 12px;
+}
+
+.table td:last-child {
+  border-right: 1px solid #eef3f1;
+  border-radius: 0 12px 12px 0;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.reviewBody {
+  max-width: 360px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.stars {
+  color: #f59e0b;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.toneAmber {
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+}
+
+/* Report dialog ------------------------------------------------------------ */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  /* Above Leaflet, which puts its map controls at z-index 1000. */
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.modal {
+  width: min(460px, 100%);
+  background: var(--card);
+  border-radius: 18px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.22);
+  padding: 22px 24px;
+}
+
+.modalTitle {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+/* Traveler preview dialog: wide enough to show the real place detail layout. */
+.previewModal {
+  display: flex;
+  flex-direction: column;
+  width: min(1280px, 100%);
+  height: min(92vh, 100%);
+  background: var(--card);
+  border-radius: 18px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.22);
+  overflow: hidden;
+}
+
+.previewHead {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid #e8edf2;
+  background: #fbfdfc;
+}
+
+.previewTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.previewClose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: 10px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.previewClose:hover {
+  background: #eef3f1;
+  color: var(--text);
+}
+
+.previewBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 24px 28px;
+  background: #fff;
 }

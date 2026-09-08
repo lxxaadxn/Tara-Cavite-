@@ -96,6 +96,47 @@
   color: var(--text-secondary);
 }
 
+.gripCell {
+  width: 36px;
+  padding-right: 0;
+}
+
+.grip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: grab;
+}
+
+.grip:hover:not(:disabled) {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.grip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.grip:active:not(:disabled) {
+  cursor: grabbing;
+}
+
+.rowDragging {
+  opacity: 0.45;
+}
+
+.rowDrop td {
+  box-shadow: inset 0 2px 0 0 var(--primary, #1b8a70);
+}
+
 .detail {
   color: var(--text-secondary);
 }

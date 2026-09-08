@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { isAllowedAdminEmail } from './adminEmail';
+import { isAllowedAdminEmail, ensureAdminAllowlist } from './adminEmail';
 
 export const USER_MANAGEMENT_SQL_HINT =
   'Run USER_MANAGEMENT_ADMIN.sql in the Supabase SQL Editor, then reload.';
@@ -216,6 +216,8 @@ function finishAccount(row: AdminTraveler): AdminTraveler {
 }
 
 export async function fetchAdminTravelers(client: SupabaseClient): Promise<AdminTraveler[]> {
+  await ensureAdminAllowlist(client);
+
   const [profilesRes, travelersRes, ownersRes, lastSignInsRes] = await Promise.all([
     client
       .from('user_profiles')

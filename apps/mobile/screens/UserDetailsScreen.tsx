@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,14 +9,21 @@ import {
   Alert,
   Image,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BirthdayPickerModal } from '../components/BirthdayPickerModal';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import { LinearGradient } from 'expo-linear-gradient';
 import { JamIcon } from '../components/JamIcon';
 import { Header } from '../components/Header';
 import { deleteUserAvatarFiles } from '../lib/avatarStorage';
+import {
+  imageExtensionFromUri,
+  imageMimeType,
+  readLocalImageBytes,
+} from '../lib/readImageBytes';
 import {
   hasCustomAvatarFromSources,
   resolveAvatarFromSources,
@@ -30,32 +37,25 @@ import {
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 import {
+  BIO_MAX_LENGTH,
+  TRAVELER_INTEREST_TAGS,
+  normalizeInterestTags,
+} from '../lib/travelerInterests';
+import {
+  fetchLocationOptions,
+  type LguFilterOption,
+} from '../lib/lguFilterOptions';
+import {
   dateOnly,
   displayBirthday,
   emitAvatarUpdated,
   fetchProfileRow,
+  removeUserAvatar,
+  removeUserCover,
   saveProfileIdentity,
+  uploadUserCover,
 } from '../lib/travelerProfile';
-import {
-  FILTER_OPTION_LABEL_BY_KEY,
-  WEB_CATEGORY_OPTIONS,
-  WEB_CITY_OPTIONS,
-  WEB_MUNICIPALITY_OPTIONS,
-} from '../lib/dashboardFilterOptions';
 
-const MAX_ACCESSIBILITY_NOTES = 500;
-const LOCATION_OPTIONS = [...WEB_CITY_OPTIONS, ...WEB_MUNICIPALITY_OPTIONS];
-const KNOWN_CATEGORY_KEYS = new Set(WEB_CATEGORY_OPTIONS.map((o) => o.key));
-const KNOWN_LGU_KEYS = new Set(LOCATION_OPTIONS.map((o) => o.key));
-
-function asStringList(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.map((v) => String(v ?? '').trim()).filter(Boolean);
-}
-
-function toggleKey(list: string[], key: string): string[] {
-  return list.includes(key) ? list.filter((k) => k !== key) : [...list, key];
-}
 const TEAL = '#1B8A70';
 const MUTED = '#737373';
 const TITLE = '#171717';
@@ -79,19 +79,46 @@ const UserDetailsScreen: React.FC = () => {
   const [city, setCity] = useState('');
   const [birthday, setBirthday] = useState('');
   const [birthdayPickerOpen, setBirthdayPickerOpen] = useState(false);
-  const [favoriteCategories, setFavoriteCategories] = useState<string[]>([]);
-  const [preferredLgus, setPreferredLgus] = useState<string[]>([]);
-  const [accessibilityNotes, setAccessibilityNotes] = useState('');
+  const [bio, setBio] = useState('');
+  const [interestTags, setInterestTags] = useState<string[]>([]);
+  const [coverUri, setCoverUri] = useState('');
+  const [hasCustomCover, setHasCustomCover] = useState(false);
+  /**
+   * This screen has no social inputs, but `saveProfileIdentity` writes all three
+   * columns on every upsert. Round-tripping the stored values keeps them intact.
+   */
+  const [socialLinks, setSocialLinks] = useState({ instagram: '', facebook: '', tiktok: '' });
+  const [locationOptions, setLocationOptions] = useState<LguFilterOption[]>([]);
+  const [locationPickerOpen, setLocationPickerOpen] = useState(false);
+  const [locationSearch, setLocationSearch] = useState('');
   const [avatarUri, setAvatarUri] = useState('');
   const [hasCustomPhoto, setHasCustomPhoto] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [coverUploading, setCoverUploading] = useState(false);
+  const [avatarRemoving, setAvatarRemoving] = useState(false);
+  const [coverRemoving, setCoverRemoving] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
+
+  useEffect(() => {
+    void fetchLocationOptions().then((opts) => setLocationOptions(opts));
+  }, []);
+
+  const filteredLocations = useMemo(() => {
+    const q = locationSearch.trim().toLowerCase();
+    if (!q) return locationOptions;
+    return locationOptions.filter((o) => o.label.toLowerCase().includes(q));
+  }, [locationOptions, locationSearch]);
+
+  const closeLocationPicker = () => {
+    setLocationPickerOpen(false);
+    setLocationSearch('');
+  };
 
   const loadProfile = useCallback(async () => {
     const { data: { user: u } } = await supabase.auth.getUser();
@@ -100,40 +127,30 @@ const UserDetailsScreen: React.FC = () => {
       setLoading(false);
       return;
     }
-    let row: Record<string, unknown> | null = null;
-    const full = await supabase
-      .from('user_profiles')
-      .select('username, avatar_url, city, phone, birthday, favorite_categories, preferred_lgus, accessibility_notes')
-      .eq('id', u.id)
-      .maybeSingle();
-    if (full.error && /favorite_categories|preferred_lgus|accessibility_notes|birthday|phone|column/i.test(String(full.error.message ?? ''))) {
-      const retry = await supabase
-        .from('user_profiles')
-        .select('username, avatar_url, city, favorite_categories, preferred_lgus, accessibility_notes')
-        .eq('id', u.id)
-        .maybeSingle();
-      row = (retry.data as Record<string, unknown> | null) ?? null;
-    } else {
-      row = (full.data as Record<string, unknown> | null) ?? null;
-    }
-    const identityRow = await fetchProfileRow(supabase, u.id);
-    const merged = { ...(identityRow ?? {}), ...(row ?? {}) };
-    const meta = u.user_metadata ?? {};
+    const profileRow = await fetchProfileRow(supabase, u.id);
+    const meta = (u.user_metadata ?? {}) as Record<string, unknown>;
     const nick =
-      String(merged.username ?? '') ||
+      String(profileRow?.username ?? '') ||
       (meta.nickname as string) ||
       (meta.username as string) ||
       (u.email ? u.email.split('@')[0] : '');
     setNickname(nick);
     setEmail(u.email || '');
-    setPhone(String(merged.phone || meta.phone || '').trim());
-    setCity(String(merged.city || meta.city || '').trim());
-    setBirthday(dateOnly(merged.birthday));
-    setFavoriteCategories(asStringList(merged.favorite_categories));
-    setPreferredLgus(asStringList(merged.preferred_lgus));
-    setAccessibilityNotes(String(merged.accessibility_notes ?? '').trim());
-    setAvatarUri(resolveAvatarFromSources(merged as { avatar_url?: string | null }, meta));
-    setHasCustomPhoto(hasCustomAvatarFromSources(merged as { avatar_url?: string | null }, meta));
+    setPhone(String(profileRow?.phone || meta.phone || '').trim());
+    setCity(String(profileRow?.city || meta.city || '').trim());
+    setBirthday(dateOnly(profileRow?.birthday));
+    setBio(String(profileRow?.bio ?? '').trim());
+    setInterestTags(normalizeInterestTags(profileRow?.interest_tags));
+    setSocialLinks({
+      instagram: String(profileRow?.social_instagram ?? '').trim(),
+      facebook: String(profileRow?.social_facebook ?? '').trim(),
+      tiktok: String(profileRow?.social_tiktok ?? '').trim(),
+    });
+    const cover = String(profileRow?.cover_url ?? '').trim();
+    setCoverUri(cover);
+    setHasCustomCover(Boolean(cover));
+    setAvatarUri(resolveAvatarFromSources(profileRow as { avatar_url?: string | null }, meta));
+    setHasCustomPhoto(hasCustomAvatarFromSources(profileRow as { avatar_url?: string | null }, meta));
     setLoading(false);
   }, []);
 
@@ -173,46 +190,19 @@ const UserDetailsScreen: React.FC = () => {
         phone,
         city,
         birthday,
+        bio,
+        interestTags,
+        socialInstagram: socialLinks.instagram,
+        socialFacebook: socialLinks.facebook,
+        socialTiktok: socialLinks.tiktok,
       });
-      const emailChangePending = identity.emailChangePending;
 
-      const payload = {
-        id: user.id,
-        username: nick,
-        city: city.trim() || null,
-        phone: phone.trim() || null,
-        birthday: dateOnly(birthday) || null,
-        favorite_categories: favoriteCategories.filter((k) => KNOWN_CATEGORY_KEYS.has(k)),
-        preferred_lgus: preferredLgus.filter((k) => KNOWN_LGU_KEYS.has(k)),
-        accessibility_notes: accessibilityNotes.trim().slice(0, MAX_ACCESSIBILITY_NOTES) || null,
-        updated_at: new Date().toISOString(),
-      };
-      let { error: upsertErr } = await supabase.from('user_profiles').upsert(payload, { onConflict: 'id' });
-      if (
-        upsertErr &&
-        /favorite_categories|preferred_lgus|accessibility_notes|birthday|column|schema cache/i.test(
-          String(upsertErr.message ?? '')
-        )
-      ) {
-        const retry = await supabase.from('user_profiles').upsert(
-          {
-            id: user.id,
-            username: nick,
-            city: payload.city,
-            phone: payload.phone,
-            birthday: payload.birthday,
-            updated_at: payload.updated_at,
-          },
-          { onConflict: 'id' }
+      if (identity.birthdaySkipped) {
+        Alert.alert(
+          'Profile saved',
+          'Saved nickname, city, phone, and bio. Birthday could not be stored until the profile table is updated.'
         );
-        upsertErr = retry.error;
-      }
-      if (upsertErr) throw upsertErr;
-      await supabase.auth.updateUser({
-        data: { ...user.user_metadata, username: nick, nickname: nick, city: city.trim() },
-      });
-
-      if (emailChangePending) {
+      } else if (identity.emailChangePending) {
         Alert.alert(
           'Profile saved',
           'We sent a confirmation link to your new email — open it to finish changing your address. This works for Google and email sign-in accounts.'
@@ -225,6 +215,67 @@ const UserDetailsScreen: React.FC = () => {
       setSaving(false);
     }
   };
+
+  const pickCover = async () => {
+    if (!user) return;
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Allow access to photos to change your cover banner.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets[0]) return;
+
+    const asset = result.assets[0];
+    setCoverUploading(true);
+    try {
+      const res = await uploadUserCover(
+        supabase,
+        { uri: asset.uri, mimeType: asset.mimeType ?? undefined },
+        nickname || usernameForRow(user)
+      );
+      setCoverUri(res.publicUrl);
+      setHasCustomCover(true);
+    } catch (e) {
+      Alert.alert('Upload failed', e instanceof Error ? e.message : 'Could not update cover banner.');
+    } finally {
+      setCoverUploading(false);
+    }
+  };
+
+  const confirmRemoveCover = () => {
+    Alert.alert(
+      'Remove cover photo?',
+      'Your uploaded cover picture will be deleted and the default gradient will be used.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove cover',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setCoverRemoving(true);
+              try {
+                await removeUserCover(supabase, nickname || (user ? usernameForRow(user) : undefined));
+                setCoverUri('');
+                setHasCustomCover(false);
+              } catch (e) {
+                Alert.alert('Edit profile', e instanceof Error ? e.message : 'Could not remove cover photo.');
+              } finally {
+                setCoverRemoving(false);
+              }
+            })();
+          },
+        },
+      ]
+    );
+  };
+
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -242,20 +293,12 @@ const UserDetailsScreen: React.FC = () => {
 
     const asset = result.assets[0];
     const uri = asset.uri;
-    setUploading(true);
+    setAvatarUploading(true);
     try {
-      const fileResponse = await fetch(uri);
-      if (!fileResponse.ok) throw new Error('Failed to read selected image file.');
-      const fileBuffer = await fileResponse.arrayBuffer();
-      if (!fileBuffer?.byteLength) throw new Error('Selected image is empty.');
-
-      const guessedExt = uri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
-      const ext = ['jpeg', 'jpg', 'png', 'webp'].includes(guessedExt) ? guessedExt : 'jpg';
-      const mimeType =
-        asset.mimeType ||
-        (ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg');
-      const normalizedExt = ext === 'jpeg' ? 'jpg' : ext;
-      const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${normalizedExt}`;
+      const fileBuffer = await readLocalImageBytes(uri);
+      const ext = imageExtensionFromUri(uri);
+      const mimeType = imageMimeType(ext, asset.mimeType);
+      const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
 
       const { error: uploadError } = await supabase.storage.from('avatars').upload(path, fileBuffer, {
         upsert: true,
@@ -308,7 +351,7 @@ const UserDetailsScreen: React.FC = () => {
     } catch (e) {
       Alert.alert('Upload failed', e instanceof Error ? e.message : 'Could not update profile picture.');
     } finally {
-      setUploading(false);
+      setAvatarUploading(false);
     }
   };
 
@@ -325,7 +368,7 @@ const UserDetailsScreen: React.FC = () => {
 
   const removeAvatar = async () => {
     if (!user) return;
-    setUploading(true);
+    setAvatarRemoving(true);
     try {
       const { data: profileBefore } = await supabase
         .from('user_profiles')
@@ -383,7 +426,7 @@ const UserDetailsScreen: React.FC = () => {
     } catch (e) {
       Alert.alert('Edit profile', e instanceof Error ? e.message : 'Could not remove profile photo.');
     } finally {
-      setUploading(false);
+      setAvatarRemoving(false);
     }
   };
 
@@ -464,10 +507,11 @@ const UserDetailsScreen: React.FC = () => {
     }
   };
 
+  const uploading = avatarUploading || coverUploading || avatarRemoving || coverRemoving;
   const busy = saving || uploading || deletingAccount || changingPassword;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <View style={styles.container}>
       <Header
         title="Edit profile"
         showBack
@@ -486,34 +530,89 @@ const UserDetailsScreen: React.FC = () => {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.avatarWrap}>
-            <View style={styles.avatarRing}>
-              <Image source={{ uri: avatarUri }} style={styles.avatar} resizeMode="cover" />
-            </View>
-            <TouchableOpacity
-              style={styles.avatarEditBtn}
-              onPress={() => void pickImage()}
-              disabled={busy}
-              accessibilityRole="button"
-              accessibilityLabel="Upload profile photo"
-            >
-              {uploading ? (
-                <ActivityIndicator size="small" color={MUTED} />
+          <View style={styles.coverSection}>
+            <View style={styles.coverBanner}>
+              {coverUri ? (
+                <Image source={{ uri: coverUri }} style={styles.coverImage} resizeMode="cover" />
               ) : (
-                <JamIcon name="pencil" size={14} color={MUTED} />
+                <LinearGradient
+                  colors={['#1B8A70', '#2A9B7F', '#D4EFE8']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.coverGradient}
+                />
               )}
-            </TouchableOpacity>
-            {hasCustomPhoto ? (
+            </View>
+            {/* Avatar overlaps the banner's bottom edge; action buttons sit below it */}
+            <View style={styles.avatarWrap}>
+              <View style={styles.avatarRing}>
+                <Image source={{ uri: avatarUri }} style={styles.avatar} resizeMode="cover" />
+              </View>
               <TouchableOpacity
-                style={styles.avatarRemoveBtn}
-                onPress={confirmRemoveAvatar}
+                style={styles.avatarEditBtn}
+                onPress={() => void pickImage()}
                 disabled={busy}
                 accessibilityRole="button"
-                accessibilityLabel="Remove profile photo"
+                accessibilityLabel="Upload profile photo"
               >
-                <JamIcon ionicon="trash-outline" size={14} color="#b91c1c" />
+                {avatarUploading ? (
+                  <ActivityIndicator size="small" color={MUTED} />
+                ) : (
+                  <JamIcon name="pencil" size={14} color={MUTED} />
+                )}
               </TouchableOpacity>
-            ) : null}
+              {hasCustomPhoto ? (
+                <TouchableOpacity
+                  style={styles.avatarRemoveBtn}
+                  onPress={confirmRemoveAvatar}
+                  disabled={busy}
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove profile photo"
+                >
+                  {avatarRemoving ? (
+                    <ActivityIndicator size="small" color="#b91c1c" />
+                  ) : (
+                    <JamIcon ionicon="trash-outline" size={14} color="#b91c1c" />
+                  )}
+                </TouchableOpacity>
+              ) : null}
+            </View>
+            <View style={styles.coverBtnRow}>
+              <TouchableOpacity
+                style={styles.coverBtn}
+                onPress={() => void pickCover()}
+                disabled={busy}
+                accessibilityRole="button"
+                accessibilityLabel="Upload cover photo"
+              >
+                {coverUploading ? (
+                  <ActivityIndicator size="small" color={TEAL} />
+                ) : (
+                  <>
+                    <JamIcon ionicon="camera-outline" size={14} color={TEAL} />
+                    <Text style={styles.coverBtnText}>{hasCustomCover ? 'Change cover' : 'Upload cover'}</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              {hasCustomCover ? (
+                <TouchableOpacity
+                  style={styles.coverRemoveBtn}
+                  onPress={confirmRemoveCover}
+                  disabled={busy}
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove cover photo"
+                >
+                  {coverRemoving ? (
+                    <ActivityIndicator size="small" color="#b91c1c" />
+                  ) : (
+                    <>
+                      <JamIcon ionicon="trash-outline" size={14} color="#b91c1c" />
+                      <Text style={styles.coverRemoveBtnText}>Remove cover</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              ) : null}
+            </View>
           </View>
 
           <View style={styles.card}>
@@ -559,86 +658,83 @@ const UserDetailsScreen: React.FC = () => {
               accessibilityLabel="Phone"
             />
 
-            <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>City</Text>
-            <TextInput
-              style={styles.input}
-              value={city}
-              onChangeText={setCity}
-              placeholder="City or municipality"
-              placeholderTextColor={MUTED}
-              autoCapitalize="words"
-              editable={!busy}
-              accessibilityLabel="City"
-            />
+            <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>City / Municipality</Text>
+            <TouchableOpacity
+              style={styles.inputTouchable}
+              onPress={() => setLocationPickerOpen(true)}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel="City or municipality"
+            >
+              <Text
+                style={{ fontFamily: 'Inter_400Regular', fontSize: 14, flex: 1, marginRight: 8, color: city ? TITLE : MUTED }}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {city || 'Select city or municipality'}
+              </Text>
+              <JamIcon ionicon="chevron-down" size={16} color={MUTED} />
+            </TouchableOpacity>
 
             <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>Birthday</Text>
             <TouchableOpacity
-              style={styles.input}
+              style={styles.inputTouchable}
               onPress={() => setBirthdayPickerOpen(true)}
               disabled={busy}
               accessibilityRole="button"
               accessibilityLabel="Birthday"
             >
-              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, color: birthday ? TITLE : MUTED }}>
+              <Text
+                style={{ fontFamily: 'Inter_400Regular', fontSize: 14, flex: 1, marginRight: 8, color: birthday ? TITLE : MUTED }}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
                 {displayBirthday(birthday) || 'Select date'}
               </Text>
+              <JamIcon ionicon="calendar-outline" size={16} color={MUTED} />
             </TouchableOpacity>
 
-            <Text style={[styles.sectionTitle, styles.interestsTitle]}>Travel interests</Text>
-            <Text style={styles.chipGroupLabel}>Favorite categories</Text>
-            <View style={styles.chipWrap}>
-              {WEB_CATEGORY_OPTIONS.map((opt) => {
-                const selected = favoriteCategories.includes(opt.key);
-                return (
-                  <TouchableOpacity
-                    key={opt.key}
-                    style={[styles.choiceChip, selected && styles.choiceChipOn]}
-                    onPress={() => setFavoriteCategories((prev) => toggleKey(prev, opt.key))}
-                    disabled={busy}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                  >
-                    <Text style={[styles.choiceChipText, selected && styles.choiceChipTextOn]}>
-                      {opt.shortLabel || opt.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            <Text style={styles.chipGroupLabel}>Preferred LGUs</Text>
-            <View style={styles.chipWrap}>
-              {LOCATION_OPTIONS.map((opt) => {
-                const selected = preferredLgus.includes(opt.key);
-                return (
-                  <TouchableOpacity
-                    key={opt.key}
-                    style={[styles.choiceChip, selected && styles.choiceChipOn]}
-                    onPress={() => setPreferredLgus((prev) => toggleKey(prev, opt.key))}
-                    disabled={busy}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                  >
-                    <Text style={[styles.choiceChipText, selected && styles.choiceChipTextOn]}>
-                      {FILTER_OPTION_LABEL_BY_KEY[opt.key] || opt.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            <Text style={styles.chipGroupLabel}>Accessibility notes</Text>
+            <Text style={[styles.fieldLabel, styles.fieldLabelSpaced]}>Bio</Text>
             <TextInput
               style={styles.notesInput}
-              value={accessibilityNotes}
-              onChangeText={(v) => setAccessibilityNotes(v.slice(0, MAX_ACCESSIBILITY_NOTES))}
-              placeholder="Wheelchair access, rest stops, or other needs we should keep in mind."
+              value={bio}
+              onChangeText={(v) => setBio(v.slice(0, BIO_MAX_LENGTH))}
+              placeholder="Tell other travelers about yourself..."
               placeholderTextColor={MUTED}
               multiline
+              maxLength={BIO_MAX_LENGTH}
               editable={!busy}
-              accessibilityLabel="Accessibility notes"
+              accessibilityLabel="Bio"
             />
             <Text style={styles.hint}>
-              {accessibilityNotes.length}/{MAX_ACCESSIBILITY_NOTES}
+              {bio.length}/{BIO_MAX_LENGTH}
             </Text>
+
+            <Text style={[styles.sectionTitle, styles.interestsTitle]}>Travel interests</Text>
+            <Text style={styles.hint}>Pick activities and travel styles you enjoy.</Text>
+            <View style={styles.chipWrap}>
+              {TRAVELER_INTEREST_TAGS.map((tag) => {
+                const selected = interestTags.includes(tag);
+                return (
+                  <TouchableOpacity
+                    key={tag}
+                    style={[styles.choiceChip, selected && styles.choiceChipOn]}
+                    onPress={() =>
+                      setInterestTags((prev) =>
+                        prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+                      )
+                    }
+                    disabled={busy}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                  >
+                    <Text style={[styles.choiceChipText, selected && styles.choiceChipTextOn]}>
+                      {tag}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
 
             <View style={styles.passwordSection}>
               <Text style={styles.sectionTitle}>Change password</Text>
@@ -705,17 +801,6 @@ const UserDetailsScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
 
-            {hasCustomPhoto ? (
-              <TouchableOpacity
-                style={styles.removePhotoBtn}
-                onPress={confirmRemoveAvatar}
-                disabled={busy}
-                accessibilityRole="button"
-              >
-                <Text style={styles.removePhotoBtnText}>{uploading ? 'Removing…' : 'Remove profile photo'}</Text>
-              </TouchableOpacity>
-            ) : null}
-
             <View style={styles.dangerSection}>
               <TouchableOpacity
                 style={styles.deleteAccountBtn}
@@ -768,7 +853,74 @@ const UserDetailsScreen: React.FC = () => {
         }}
         bottomInset={insets.bottom}
       />
-    </SafeAreaView>
+      <Modal
+        visible={locationPickerOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={closeLocationPicker}
+      >
+        <View style={styles.locModalOverlay}>
+          <View style={[styles.locModalCard, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+            <View style={styles.locModalHeader}>
+              <Text style={styles.locModalTitle}>Select City / Municipality</Text>
+              <TouchableOpacity
+                onPress={closeLocationPicker}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                accessibilityRole="button"
+                accessibilityLabel="Close location picker"
+              >
+                <JamIcon ionicon="close" size={22} color={MUTED} />
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              style={styles.locSearchInput}
+              value={locationSearch}
+              onChangeText={setLocationSearch}
+              placeholder="Search Cavite cities & towns…"
+              placeholderTextColor={MUTED}
+              autoCapitalize="none"
+              clearButtonMode="while-editing"
+            />
+            <ScrollView style={styles.locList} keyboardShouldPersistTaps="handled">
+              {city ? (
+                <TouchableOpacity
+                  style={[styles.locItem, styles.locItemClear]}
+                  onPress={() => {
+                    setCity('');
+                    closeLocationPicker();
+                  }}
+                >
+                  <Text style={styles.locItemClearText}>Clear location</Text>
+                </TouchableOpacity>
+              ) : null}
+              {filteredLocations.map((opt) => {
+                const selected = city.toLowerCase() === opt.label.toLowerCase();
+                return (
+                  <TouchableOpacity
+                    key={opt.key}
+                    style={[styles.locItem, selected && styles.locItemSelected]}
+                    onPress={() => {
+                      setCity(opt.label);
+                      closeLocationPicker();
+                    }}
+                  >
+                    <Text style={[styles.locItemText, selected && styles.locItemTextSelected]}>
+                      {opt.label}
+                    </Text>
+                    {selected ? <JamIcon ionicon="checkmark" size={18} color={TEAL} /> : null}
+                  </TouchableOpacity>
+                );
+              })}
+              {filteredLocations.length === 0 ? (
+                <View style={styles.locEmpty}>
+                  <Text style={styles.locEmptyText}>No locations match "{locationSearch}"</Text>
+                </View>
+              ) : null}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 };
 
@@ -789,10 +941,66 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  coverSection: {
+    marginTop: 8,
+    marginBottom: 0,
+  },
+  coverBanner: {
+    height: 120,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#e2e8f0',
+  },
+  coverImage: {
+    width: '100%',
+    height: '100%',
+  },
+  coverGradient: {
+    width: '100%',
+    height: '100%',
+  },
+  coverBtnRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+    marginTop: 0,
+  },
+  coverBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  coverBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: TEAL,
+  },
+  coverRemoveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  coverRemoveBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+    color: '#b91c1c',
+  },
   avatarWrap: {
     alignSelf: 'center',
-    marginTop: 8,
-    marginBottom: 20,
+    marginTop: -56,
+    marginBottom: 12,
     width: 112,
     height: 112,
   },
@@ -802,6 +1010,8 @@ const styles = StyleSheet.create({
     borderRadius: 56,
     overflow: 'hidden',
     backgroundColor: '#e8ecef',
+    borderWidth: 3,
+    borderColor: '#fff',
   },
   avatar: {
     width: '100%',
@@ -859,6 +1069,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: TITLE,
   },
+  inputTouchable: {
+    marginTop: 6,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+  },
   hint: {
     marginTop: 6,
     fontFamily: 'Inter_400Regular',
@@ -888,17 +1110,17 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   choiceChip: {
-    width: '47%',
-    flexGrow: 1,
-    maxWidth: '48.5%',
-    borderRadius: 12,
+    borderRadius: 20,
     backgroundColor: '#F1F7F6',
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     alignItems: 'center',
   },
   choiceChipOn: {
     backgroundColor: TEAL,
+    borderColor: TEAL,
   },
   choiceChipText: {
     fontFamily: 'Inter_600SemiBold',
@@ -922,6 +1144,84 @@ const styles = StyleSheet.create({
     color: TITLE,
     textAlignVertical: 'top',
   },
+  locModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  locModalCard: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  locModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  locModalTitle: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 17,
+    color: TITLE,
+  },
+  locSearchInput: {
+    height: 42,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
+    paddingHorizontal: 12,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    color: TITLE,
+    backgroundColor: '#f9fafb',
+    marginBottom: 12,
+  },
+  locList: {
+    maxHeight: 320,
+  },
+  locItem: {
+    paddingVertical: 13,
+    paddingHorizontal: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#f0f0f0',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  locItemSelected: {
+    backgroundColor: '#f0fdf4',
+  },
+  locItemText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    color: TITLE,
+  },
+  locItemTextSelected: {
+    fontFamily: 'Inter_600SemiBold',
+    color: TEAL,
+  },
+  locItemClear: {
+    backgroundColor: '#fef2f2',
+    borderRadius: 8,
+    marginBottom: 6,
+  },
+  locItemClearText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    color: '#b91c1c',
+  },
+  locEmpty: {
+    paddingVertical: 24,
+    alignItems: 'center',
+  },
+  locEmptyText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: MUTED,
+  },
   sectionTitle: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
@@ -942,20 +1242,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
     color: TEAL,
-  },
-  removePhotoBtn: {
-    marginTop: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#fecaca',
-    backgroundColor: '#fef2f2',
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  removePhotoBtnText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-    color: '#b91c1c',
   },
   dangerSection: {
     marginTop: 20,

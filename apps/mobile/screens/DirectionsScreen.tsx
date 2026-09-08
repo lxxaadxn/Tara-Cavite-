@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
+import { Header } from '../components/Header';
 import { JamIcon } from '../components/JamIcon';
 import { SaveToListSheet, type SaveToListRow } from '../components/SaveToListSheet';
 import { Place } from '../data/mockData';
@@ -590,22 +591,7 @@ const DirectionsScreen: React.FC = () => {
 
   return (
     <View style={[styles.root, { backgroundColor: PAGE_BG }]}>
-      <View style={[styles.greenHeader, { paddingTop: insets.top + 8 }]}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            style={styles.headerIconBtn}
-            onPress={() => navigation.goBack()}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <JamIcon ionicon="chevron-left" size={26} color={WHITE} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={1} pointerEvents="none">
-            {place.name}
-          </Text>
-          <View style={styles.headerIconBtn} />
-        </View>
-      </View>
+      <Header title={place.name} showBack darkBackground />
 
       <ScrollView
         style={styles.scroll}
@@ -900,30 +886,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_500Medium',
     fontSize: 16,
     color: GREEN,
-  },
-  greenHeader: {
-    backgroundColor: GREEN,
-    paddingBottom: 12,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
-  },
-  headerIconBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    fontFamily: 'Poppins_500Medium',
-    fontSize: 20,
-    lineHeight: 24,
-    color: WHITE,
-    textAlign: 'center',
   },
   scroll: {
     flex: 1,

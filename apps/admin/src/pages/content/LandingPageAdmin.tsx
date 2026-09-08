@@ -11,7 +11,7 @@ import { LandingDestinationsCatalogAdmin, LandingItinerariesCatalogAdmin } from 
 import styles from './LandingPageAdmin.module.css';
 
 const LANDING_STEPS = [
-  { id: 'hero', title: 'Hero', support: 'Photo, headline, and CTA' },
+  { id: 'hero', title: 'Hero', support: 'Photo, headline, CTA, and nav labels' },
   { id: 'why', title: 'Why', support: 'Pills and Live Updates' },
   { id: 'features', title: 'Features', support: 'Capability cards' },
   { id: 'catalog', title: 'Catalog', support: 'Destinations and itineraries' },

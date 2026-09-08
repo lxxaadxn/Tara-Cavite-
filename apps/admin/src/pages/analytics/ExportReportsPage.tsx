@@ -4,9 +4,9 @@ import { useToast } from '../../components/Toast';
 import {
   type AnalyticsReportBundle,
   type ReportRange,
+  REPORT_RANGE_OPTIONS,
   downloadReportCsv,
   fetchAnalyticsReportBundle,
-  printAnalyticsPdf,
   reportRangeLabel,
 } from '../../lib/adminAnalyticsExport';
 import { supabase } from '../../lib/supabase';
@@ -45,11 +45,6 @@ export function ExportReportsPage() {
     toast('Report downloaded', 'success');
   };
 
-  const printPdf = () => {
-    if (!bundle) return;
-    printAnalyticsPdf(bundle);
-  };
-
   return (
     <div className={styles.page}>
       <div className={styles.toolbar}>
@@ -59,16 +54,14 @@ export function ExportReportsPage() {
           onChange={(e) => setRange(e.target.value as ReportRange)}
           aria-label="Date range"
         >
-          <option value="month">This month</option>
-          <option value="quarter">This quarter</option>
-          <option value="year">This year</option>
-          <option value="all">All time</option>
+          {REPORT_RANGE_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
         </select>
         <button type="button" className={table.actionBtn} onClick={() => void reload()} disabled={loading}>
           Refresh
-        </button>
-        <button type="button" className={table.actionBtn} onClick={printPdf} disabled={!bundle || loading}>
-          Print PDF
         </button>
         <button type="button" className={table.primaryBtn} onClick={() => exportKind('all')} disabled={!bundle || loading}>
           Download all CSV

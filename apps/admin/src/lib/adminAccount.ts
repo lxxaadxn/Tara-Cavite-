@@ -6,6 +6,8 @@ export type AdminAccount = {
   initials: string;
   avatarUrl: string | null;
   role: string;
+  /** Office the admin belongs to, e.g. Provincial Tourism Office. */
+  department: string;
   lastSignIn: string | null;
 };
 
@@ -32,6 +34,7 @@ export function adminAccountFromUser(user: User | null | undefined): AdminAccoun
     initials: metaName ? initialsFromName(metaName) : 'AD',
     avatarUrl,
     role: 'Administrator',
+    department: String(meta.department ?? '').trim(),
     lastSignIn: user?.last_sign_in_at ?? null,
   };
 }

@@ -1,4 +1,4 @@
-import { isAdminReservedEmail } from './adminReservedEmail';
+import { isAdminReservedEmail, isAdminReservedEmailAsync } from './adminReservedEmail';
 import { ADMIN_APP_HOME_PATH } from './adminPortalPath';
 import { TRAVELER_ACCOUNT_DISABLED_MESSAGE } from 'cavitour-shared/accountStatus';
 
@@ -18,10 +18,13 @@ export const ESTABLISHMENT_SETUP_PATH = '/establishment/setup';
  *   businessType: string,
  *   lgu: string,
  *   address: string,
+ *   barangay: string,
+ *   googleMapsLink: string,
  *   verificationStatus: string,
  *   accountStatus: string,
  *   publicVisible: boolean,
  *   setupCompletedAt: string | null,
+ *   staPlaceId: string | null,
  * }} OwnEstablishment
  */
 
@@ -35,30 +38,43 @@ function mapOwner(row) {
     businessType: String(row.business_type ?? '').trim(),
     lgu: String(row.lgu ?? '').trim(),
     address: String(row.address ?? '').trim(),
+    barangay: String(row.barangay ?? '').trim(),
+    googleMapsLink: String(row.google_maps_link ?? '').trim(),
     verificationStatus: String(row.verification_status ?? '').trim().toLowerCase(),
     accountStatus: String(row.account_status ?? 'active').trim().toLowerCase(),
     publicVisible: row.public_visible === true,
     setupCompletedAt: row.setup_completed_at ? String(row.setup_completed_at) : null,
+    // The catalog row that carries the traveler-facing listing content.
+    staPlaceId: row.sta_place_id ? String(row.sta_place_id) : null,
   };
 }
 
+const OWNER_BASE_COLUMNS =
+  'id, email, full_name, phone, business_name, business_type, lgu, address, verification_status, account_status';
+
+/**
+ * Widest select first, then progressively narrower ones, so a database missing a
+ * late-migration column still returns the portal-critical sta_place_id.
+ */
+const OWNER_SELECTS = [
+  `${OWNER_BASE_COLUMNS}, barangay, google_maps_link, public_visible, setup_completed_at, sta_place_id`,
+  `${OWNER_BASE_COLUMNS}, public_visible, setup_completed_at, sta_place_id`,
+  `${OWNER_BASE_COLUMNS}, public_visible, setup_completed_at`,
+  OWNER_BASE_COLUMNS,
+];
+
 export async function fetchOwnEstablishment(client, userId) {
   if (!client || !userId) return null;
-  const full = await client
-    .from('establishment_owners')
-    .select(
-      'id, email, full_name, phone, business_name, business_type, lgu, address, verification_status, account_status, public_visible, setup_completed_at'
-    )
-    .eq('id', userId)
-    .maybeSingle();
-  if (!full.error && full.data) return mapOwner(full.data);
-  const base = await client
-    .from('establishment_owners')
-    .select('id, email, full_name, phone, business_name, business_type, lgu, address, verification_status, account_status')
-    .eq('id', userId)
-    .maybeSingle();
-  if (base.error || !base.data) return null;
-  return mapOwner({ ...base.data, public_visible: false, setup_completed_at: null });
+  for (const columns of OWNER_SELECTS) {
+    const { data, error } = await client
+      .from('establishment_owners')
+      .select(columns)
+      .eq('id', userId)
+      .maybeSingle();
+    if (!error && data) return mapOwner(data);
+    if (!error) return null;
+  }
+  return null;
 }
 
 export function isEstablishmentPendingSetup(owner) {
@@ -82,7 +98,7 @@ export async function resolveAccountHome(client, session, nextPath) {
   const safeNext =
     typeof nextPath === 'string' && nextPath.startsWith('/') && !nextPath.startsWith('//') ? nextPath : null;
 
-  if (email && isAdminReservedEmail(email)) {
+  if (email && (isAdminReservedEmail(email) || (await isAdminReservedEmailAsync(email, client)))) {
     if (safeNext?.startsWith('/admin') && !safeNext.startsWith('/admin/login')) {
       return { path: safeNext, owner: null };
     }
