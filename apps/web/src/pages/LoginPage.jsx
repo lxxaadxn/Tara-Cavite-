@@ -159,6 +159,11 @@ export function LoginPage() {
         setError(home.message || TRAVELER_ACCOUNT_DISABLED_MESSAGE);
         return;
       }
+      if (home.externalUrl) {
+        // Admin accounts continue in the separate admin app (different origin).
+        window.location.replace(home.externalUrl);
+        return;
+      }
       const email = session.user?.email?.trim().toLowerCase() ?? '';
       const isAdmin = await isAdminReservedEmailAsync(email);
       if (!isAdmin && !home.owner) {

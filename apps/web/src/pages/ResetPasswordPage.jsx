@@ -8,6 +8,7 @@ import {
   urlLooksLikePasswordRecovery,
 } from '../lib/passwordRecovery';
 import { isAdminReservedEmail } from '../lib/adminReservedEmail';
+import { ADMIN_APP_HOME_URL } from '../lib/adminPortalPath';
 import { resolveAccountHome } from '../lib/accountHome';
 
 const MIN_LEN = 8;
@@ -94,8 +95,9 @@ export function ResetPasswordPage() {
       const sessionRes = await supabase.auth.getSession();
       const session = sessionRes.data.session;
       const email = data.user?.email?.trim().toLowerCase() ?? '';
-      let nextPath = email && isAdminReservedEmail(email) ? '/admin' : '/login';
-      if (session && !isAdminReservedEmail(email)) {
+      const isAdminReset = Boolean(email && isAdminReservedEmail(email));
+      let nextPath = isAdminReset ? null : '/login';
+      if (session && !isAdminReset) {
         const home = await resolveAccountHome(supabase, session);
         if (home.path?.startsWith('/establishment')) {
           nextPath = home.path;
@@ -103,6 +105,11 @@ export function ResetPasswordPage() {
       }
       setSaved(true);
       window.setTimeout(() => {
+        if (isAdminReset) {
+          // Admin home is on the separate admin app origin.
+          window.location.replace(ADMIN_APP_HOME_URL);
+          return;
+        }
         navigate(nextPath, {
           replace: true,
           state: nextPath === '/login' ? { passwordReset: true } : undefined,

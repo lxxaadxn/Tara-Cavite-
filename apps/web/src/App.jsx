@@ -26,15 +26,9 @@ import { NotificationsPage } from './pages/NotificationsPage';
 import { TravelHistoryPage } from './pages/TravelHistoryPage';
 import { PrivacyPage } from './pages/PrivacyPage';
 import { TermsPage } from './pages/TermsPage';
-import { Layout as AdminLayout } from '../../admin/src/components/Layout';
-import {
-  AdminEmbedRoot,
-  AdminAuthGate,
-  adminLayoutChildRoutes,
-} from '../../admin/src/embed';
 import { EstablishmentSetupPage } from './pages/EstablishmentSetupPage';
 import { EstablishmentDashboardPage } from './pages/EstablishmentDashboardPage';
-import { ADMIN_APP_HOME_PATH } from './lib/adminPortalPath';
+import { ADMIN_APP_HOME_URL } from './lib/adminPortalPath';
 import { isAdminReservedEmail } from './lib/adminReservedEmail';
 import { PasswordRecoveryRedirect } from './components/PasswordRecoveryRedirect';
 import { SiteBrandEffects } from './components/SiteBrandEffects';
@@ -45,6 +39,14 @@ import { resolveAccountHome } from './lib/accountHome';
 function AuthGoogleLegacyRedirect() {
   const { search } = useLocation();
   return <Navigate to={`/auth/callback${search}`} replace />;
+}
+
+/** Full-page redirect to another origin (react-router navigate() cannot leave the app). */
+function ExternalRedirect({ url }) {
+  useEffect(() => {
+    window.location.replace(url);
+  }, [url]);
+  return null;
 }
 
 function ProtectedRoute({ children }) {
@@ -107,7 +109,7 @@ function ProtectedRoute({ children }) {
 
   const email = sessionUser.user?.email?.trim().toLowerCase() ?? '';
   if (email && isAdminReservedEmail(email)) {
-    return <Navigate to={ADMIN_APP_HOME_PATH} replace />;
+    return <ExternalRedirect url={ADMIN_APP_HOME_URL} />;
   }
   if (ownerPath) {
     return <Navigate to={ownerPath} replace />;
@@ -143,14 +145,8 @@ export default function App() {
         <Route path="/establishment/setup" element={<EstablishmentSetupPage />} />
         <Route path="/establishment" element={<EstablishmentDashboardPage />} />
 
-        {/* Admin (apps/admin) — same dev server as marketing web */}
-        <Route path="/admin" element={<AdminEmbedRoot />}>
-          <Route index element={<Navigate to="web/dashboard" replace />} />
-          <Route path="login" element={<Navigate to="/login?next=/admin/web/dashboard" replace />} />
-          <Route element={<AdminAuthGate loginPath="/login" />}>
-            <Route element={<AdminLayout />}>{adminLayoutChildRoutes()}</Route>
-          </Route>
-        </Route>
+        {/* Admin is a separate app/deployment (apps/admin). Send visitors there. */}
+        <Route path="/admin/*" element={<ExternalRedirect url={ADMIN_APP_HOME_URL} />} />
 
         <Route
           path="/search"

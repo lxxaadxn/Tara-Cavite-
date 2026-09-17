@@ -161,6 +161,11 @@ export function OAuthCallbackPage() {
         }, 2200);
         return;
       }
+      if (home.externalUrl) {
+        // Admin accounts continue in the separate admin app (different origin).
+        window.location.replace(home.externalUrl);
+        return;
+      }
       if (!String(home.path).startsWith('/establishment') && !isAdmin) {
         markLocationPromptPending(session.user?.id);
       }

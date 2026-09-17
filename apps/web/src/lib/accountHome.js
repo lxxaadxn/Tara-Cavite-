@@ -1,5 +1,5 @@
 import { isAdminReservedEmail, isAdminReservedEmailAsync } from './adminReservedEmail';
-import { ADMIN_APP_HOME_PATH } from './adminPortalPath';
+import { ADMIN_APP_HOME_URL, adminAppUrlForPath } from './adminPortalPath';
 import { TRAVELER_ACCOUNT_DISABLED_MESSAGE } from 'cavitour-shared/accountStatus';
 
 export const ESTABLISHMENT_DISABLED_MESSAGE =
@@ -100,9 +100,9 @@ export async function resolveAccountHome(client, session, nextPath) {
 
   if (email && (isAdminReservedEmail(email) || (await isAdminReservedEmailAsync(email, client)))) {
     if (safeNext?.startsWith('/admin') && !safeNext.startsWith('/admin/login')) {
-      return { path: safeNext, owner: null };
+      return { path: null, externalUrl: adminAppUrlForPath(safeNext), owner: null };
     }
-    return { path: ADMIN_APP_HOME_PATH, owner: null };
+    return { path: null, externalUrl: ADMIN_APP_HOME_URL, owner: null };
   }
   const userId = session?.user?.id;
   const owner = userId ? await fetchOwnEstablishment(client, userId) : null;
