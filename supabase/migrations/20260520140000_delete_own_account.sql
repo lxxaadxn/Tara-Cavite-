@@ -1,4 +1,4 @@
-﻿-- Allow signed-in users to delete their own auth account (cascades to user_profiles, etc.).
+-- Allow signed-in users to delete their own auth account (cascades to user_profiles, etc.).
 CREATE OR REPLACE FUNCTION public.delete_own_account()
 RETURNS void
 LANGUAGE plpgsql

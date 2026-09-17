@@ -1,0 +1,5 @@
+# Minimal config so `npx supabase functions deploy invite-establishment` works.
+project_id = "bmsftpvixpvtjrlclnlz"
+
+[functions.invite-establishment]
+verify_jwt = true
