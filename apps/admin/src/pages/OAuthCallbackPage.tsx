@@ -42,6 +42,7 @@ export function OAuthCallbackPage() {
       try {
         const href = window.location.href;
         if (urlHasOAuthParams(href)) {
+          if (active) setStatusMessage('Exchanging the Google security code…');
           await completeOAuthFromUrl(href);
           clearAdminOAuthNextPath();
           document.cookie = 'cavitour_oauth_intent=; path=/; max-age=0; SameSite=Lax';
@@ -58,13 +59,15 @@ export function OAuthCallbackPage() {
         setStatusMessage(message);
         window.setTimeout(() => {
           if (active) navigate(loginHref, { replace: true, state: { googleError: message } });
-        }, 1600);
+        }, 2500);
       };
 
       if (authError) {
         goLogin(authError);
         return;
       }
+
+      if (active) setStatusMessage('Reading your session…');
 
       let session = null;
       try {
@@ -76,13 +79,25 @@ export function OAuthCallbackPage() {
 
       if (!active) return;
 
-      const email = session?.user?.email?.trim().toLowerCase() ?? '';
-      if (!session || !(await isAllowedAdminEmailAsync(supabase, email))) {
-        await supabase.auth.signOut();
-        goLogin(`Only ${adminAllowlistHint()} can access the admin app.`);
+      if (!session) {
+        // Be explicit — a missing session here means the code exchange silently
+        // failed; a generic "not allowlisted" message would be misleading.
+        goLogin('Google finished, but no session was created. Please try again.');
         return;
       }
 
+      const email = session?.user?.email?.trim().toLowerCase() ?? '';
+      if (!(await isAllowedAdminEmailAsync(supabase, email))) {
+        // Show WHICH account Google actually returned — this exposes wrong-account
+        // auto-selection instead of hiding behind a generic allowlist message.
+        await supabase.auth.signOut();
+        goLogin(
+          `Google returned “${email || 'an unknown account'}”, but only ${adminAllowlistHint()} can access the admin app.`
+        );
+        return;
+      }
+
+      if (active) setStatusMessage(`Signed in as ${email}. Opening the dashboard…`);
       navigate(nextPath, { replace: true });
     };
 
