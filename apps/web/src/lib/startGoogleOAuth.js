@@ -100,6 +100,9 @@ export async function startGoogleOAuth({ callbackPath = DEFAULT_CALLBACK_PATH, n
     options: {
       redirectTo,
       skipBrowserRedirect: true,
+      // Always show Google's account chooser instead of auto-selecting the
+      // browser's currently signed-in Google account.
+      queryParams: { prompt: 'select_account' },
     },
   });
 

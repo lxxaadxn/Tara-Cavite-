@@ -61,6 +61,9 @@ export async function startAdminGoogleOAuth(next: string) {
     options: {
       redirectTo,
       skipBrowserRedirect: true,
+      // Always show Google's account chooser — otherwise Google auto-selects the
+      // browser's signed-in account, which may not be an allowlisted admin.
+      queryParams: { prompt: 'select_account' },
     },
   });
 
