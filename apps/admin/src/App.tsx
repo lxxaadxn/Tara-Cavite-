@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { ToastProvider } from './components/Toast';
 import { AuthProvider } from './contexts/AuthContext';
@@ -8,6 +8,19 @@ import { OAuthCallbackPage } from './pages/OAuthCallbackPage';
 import { AdminAuthGate, adminLayoutChildRoutes } from './embed';
 import './index.css';
 
+/**
+ * Supabase sometimes bounces stale/expired OAuth codes to the site root
+ * (/?code=...) instead of /auth/callback — forward them so the callback's
+ * stale-code recovery can run instead of dying in the auth gate.
+ */
+function RootOAuthForward() {
+  const { search } = useLocation();
+  if (/[?&]code=/.test(search)) {
+    return <Navigate to={`/auth/callback${search}`} replace />;
+  }
+  return <Navigate to="/web/dashboard" replace />;
+}
+
 export default function App() {
   return (
     <ToastProvider>
@@ -16,6 +29,7 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/auth/callback" element={<OAuthCallbackPage />} />
+            <Route path="/" element={<RootOAuthForward />} />
             <Route element={<AdminAuthGate loginPath="/login" />}>
               <Route path="/" element={<Layout />}>
                 {adminLayoutChildRoutes()}
