@@ -26,10 +26,17 @@ type GenerateItinerariesBatchParams = {
   status: AdminItinerary['status'];
   /** City / area from the chat (e.g. "Tagaytay"). Filters seed venues. */
   locationHint?: string | null;
-  onProgress?: (p: { created: number; total: number }) => void;
+  /**
+   * Every place mentioned in one prompt (e.g. ["Tagaytay","Silang"]). When set,
+   * the pool is the union of the places and coverage is spread across them —
+   * each place seeds at least one itinerary before pools mix. Supersedes
+   * locationHint when non-empty.
+   */
+  locationHints?: string[];
+  onProgress?: (p: { built: number; total: number }) => void;
 };
 
-type VenueCandidate = {
+export type VenueCandidate = {
   id: string;
   name: string;
   city: string;
@@ -1049,27 +1056,14 @@ function hintLooksLikeExactFold(hint: string, cityFold: string): boolean {
   return folded === cityFold || cityFold.includes(folded) || folded.includes(cityFold);
 }
 
-export async function generateItinerariesFromTouristAttractionsBatch({
-  count,
-  stopsPerItinerary,
-  days = 1,
-  status,
-  locationHint,
-  onProgress,
-}: GenerateItinerariesBatchParams): Promise<{
-  createdIds: string[];
-  failedIds: string[];
-  matchedLocation?: string | null;
-  spellingCorrected?: boolean;
-}> {
-  const total = Math.max(0, count);
-  if (total === 0) return { createdIds: [], failedIds: [] };
-
-  const tripDays: 1 | 2 | 3 = days === 2 || days === 3 ? days : 1;
-  const stopCount = Math.max(1, stopsPerItinerary);
-
+/**
+ * Builds itineraries without writing them. The chat shows each one as a preview
+ * card and only calls publishGeneratedItinerary once the admin approves it.
+ */
+/** Every published catalog place that has usable coordinates. */
+export async function fetchCatalogVenues(): Promise<VenueCandidate[]> {
   const all = await fetchAdminDestinations(supabase);
-  const candidates: VenueCandidate[] = all
+  return all
     .map((row) => {
       if (row.is_published === false) return null;
       const lat = parseCoord(row.latitude);
@@ -1095,9 +1089,445 @@ export async function generateItinerariesFromTouristAttractionsBatch({
           String(v.id).trim()
       )
     );
+}
+
+/**
+ * Catalog places whose name matches a typed query, best match first: exact
+ * name, then prefix, then substring. Callers decide what to do with ties.
+ */
+export function matchCatalogVenues(venues: VenueCandidate[], query: string): VenueCandidate[] {
+  const needle = foldLocation(query);
+  if (needle.length < 3) return [];
+
+  const scored: { venue: VenueCandidate; score: number }[] = [];
+  for (const venue of venues) {
+    const name = foldLocation(venue.name);
+    if (name === needle) scored.push({ venue, score: 0 });
+    else if (name.startsWith(needle)) scored.push({ venue, score: 1 });
+    else if (name.includes(needle)) scored.push({ venue, score: 2 });
+  }
+  return scored.sort((a, b) => a.score - b.score).map((s) => s.venue);
+}
+
+/**
+ * Keyword buckets for venue requests that describe a *kind* of place rather
+ * than a name ("a coffee shop", "somewhere for lunch", "a museum").
+ * Matched against the venue's category and name.
+ */
+const VENUE_KEYWORD_CATEGORIES: { keywords: string[]; categoryFolds: string[] }[] = [
+  {
+    keywords: ['coffee', 'cafe', 'café', 'coffee shop', 'coffeehouse', 'kapeng barako'],
+    categoryFolds: ['cafe', 'coffee'],
+  },
+  { keywords: ['lunch', 'dinner', 'eat', 'food', 'meal', 'snack'], categoryFolds: ['food', 'restaurant', 'dining'] },
+  { keywords: ['restaurant', 'eatery', 'bistro', 'buffet'], categoryFolds: ['restaurant', 'food', 'dining'] },
+  { keywords: ['seafood'], categoryFolds: ['seafood', 'food'] },
+  { keywords: ['pottery', 'ceramics', 'clay'], categoryFolds: ['culture', 'pottery'] },
+  { keywords: ['church', 'cathedral', 'basilica', 'chapel', 'shrine'], categoryFolds: ['heritage', 'church'] },
+  { keywords: ['museum'], categoryFolds: ['history', 'museum', 'heritage'] },
+  { keywords: ['farm', 'honeybee', 'honey'], categoryFolds: ['nature', 'farm'] },
+  { keywords: ['viewpoint', 'view deck', 'overlook', 'scenic', 'view'], categoryFolds: ['views', 'viewpoint'] },
+  { keywords: ['park', 'garden', 'gardens', 'botanical'], categoryFolds: ['gardens', 'nature', 'park'] },
+  { keywords: ['beach', 'swimming', 'resort'], categoryFolds: ['beach', 'coast'] },
+  { keywords: ['hike', 'hiking', 'trail', 'trek', 'mountain', 'mt'], categoryFolds: ['nature'] },
+  { keywords: ['shopping', 'shop', 'market', 'mall', 'pasalubong', 'souvenir'], categoryFolds: ['shopping'] },
+  { keywords: ['hotel', 'stay', 'lodge', 'accommodation'], categoryFolds: ['hotel', 'stay'] },
+  { keywords: ['history', 'historical', 'fort', 'ruins', 'landmark'], categoryFolds: ['history', 'heritage'] },
+  { keywords: ['culture', 'cultural', 'art'], categoryFolds: ['culture', 'art'] },
+];
+
+/** Words that mean "any place of this kind" or otherwise carry no name signal. */
+const VENUE_QUERY_FILLER = new Set([
+  'the',
+  'a',
+  'an',
+  'some',
+  'any',
+  'another',
+  'other',
+  'one',
+  'place',
+  'placea',
+  'places',
+  'spot',
+  'spots',
+  'stop',
+  'stops',
+  'instead',
+  'with',
+  'for',
+  'to',
+  'in',
+  'on',
+  'at',
+  'near',
+  'around',
+  'here',
+  'there',
+  'something',
+  'somewhere',
+  'good',
+  'nice',
+  'best',
+  'please',
+  'est',
+]);
+
+/** City/municipality words to peel off the end of a venue query ("coffee shop in silang"). */
+function cityFromVenueQuery(
+  query: string,
+  cityFolds: Map<string, string>
+): { cityFold: string; label: string } | null {
+  const tokens = foldLocation(query).split(' ').filter(Boolean);
+  for (let end = Math.min(tokens.length, 4); end >= 1; end -= 1) {
+    const slice = tokens.slice(-end).join(' ');
+    for (const [fold, label] of cityFolds) {
+      if (slice === fold || fold === slice.replace(/\s+(in|near|around|at)$/, '')) {
+        // Strip a leading "in/near/around" glued onto the city by the clause split.
+        return { cityFold: fold, label };
+      }
+    }
+  }
+  // Also try the whole query as a bare city name mention.
+  const whole = foldLocation(query);
+  for (const [fold, label] of cityFolds) {
+    if (whole === fold) return { cityFold: fold, label };
+  }
+  return null;
+}
+
+export type VenueResolution = {
+  /** Ranked best-first; empty when nothing matches at all. */
+  candidates: VenueCandidate[];
+  /**
+   * True when the query was descriptive ("a coffee shop in Silang") rather
+   * than a name, so equal-scored candidates should be surfaced, not guessed.
+   */
+  descriptive: boolean;
+  cityLabel: string | null;
+};
+
+/**
+ * Resolves what a chat edit means by a venue: an exact-ish name, a fuzzy name,
+ * or a descriptive kind-of-place query with an optional city preference.
+ * Unlike matchCatalogVenues this finds "the pottery place" and "lunch in Silang".
+ */
+export function resolveVenueSmart(
+  venues: VenueCandidate[],
+  query: string
+): VenueResolution {
+  const raw = String(query ?? '').trim();
+  const needle = foldLocation(raw);
+  if (needle.length < 3) return { candidates: [], descriptive: false, cityLabel: null };
+
+  // Layer 1: name match — exact, prefix, substring, then fuzzy tokens.
+  const byName: { venue: VenueCandidate; score: number }[] = [];
+  for (const venue of venues) {
+    const name = foldLocation(venue.name);
+    if (name === needle) byName.push({ venue, score: 100 });
+    else if (name.startsWith(needle)) byName.push({ venue, score: 80 });
+    else if (name.includes(needle) || needle.includes(name)) byName.push({ venue, score: 60 });
+  }
+  if (byName.length) {
+    const top = byName[0].score;
+    const tied = byName.filter((s) => s.score === top);
+    if (top >= 100 || tied.length === 1) {
+      return { candidates: byName.map((s) => s.venue), descriptive: false, cityLabel: null };
+    }
+    // Several near-equal name hits — let the caller pick among them.
+    return { candidates: tied.map((s) => s.venue), descriptive: true, cityLabel: null };
+  }
+
+  const meaningful = needle
+    .split(' ')
+    .filter((t) => t.length >= 3 && !VENUE_QUERY_FILLER.has(t));
+  if (!meaningful.length) return { candidates: [], descriptive: false, cityLabel: null };
+
+  // Peel a city mention off the query first — "coffee shop in Silang" is a
+  // city preference, and the city token must not be mistaken for a venue name
+  // ("Kapihan sa Silang" would otherwise win the fuzzy layer).
+  const cityFolds = new Map<string, string>();
+  for (const v of venues) {
+    const fold = foldLocation(v.city);
+    if (fold.length >= 3 && !cityFolds.has(fold)) cityFolds.set(fold, v.city.trim() || fold);
+  }
+  const city = cityFromVenueQuery(raw, cityFolds);
+  const cityTokens = new Set(city ? city.cityFold.split(' ') : []);
+  const nameTokens = meaningful.filter((t) => !cityTokens.has(t));
+
+  // Layer 2: fuzzy name match on the name-bearing tokens ("ilag maria").
+  if (nameTokens.length) {
+    const fuzzy: { venue: VenueCandidate; score: number }[] = [];
+    for (const venue of venues) {
+      const name = foldLocation(venue.name);
+      const hit = nameTokens.some((t) => fuzzyTokenInHay(t, name));
+      if (hit) fuzzy.push({ venue, score: 50 });
+    }
+    if (fuzzy.length) {
+      return { candidates: fuzzy.map((s) => s.venue), descriptive: false, cityLabel: city?.label ?? null };
+    }
+  }
+
+  // Layer 3: descriptive — category keywords + optional city preference.
+  const scored: { venue: VenueCandidate; score: number }[] = [];
+  for (const venue of venues) {
+    const categoryFold = foldLocation(venue.category);
+    const nameFold = foldLocation(venue.name);
+    const descFold = foldLocation(venue.description);
+    let score = 0;
+
+    for (const bucket of VENUE_KEYWORD_CATEGORIES) {
+      const keywordHit = bucket.keywords.some(
+        (k) => needle.includes(foldLocation(k)) || meaningful.includes(foldLocation(k))
+      );
+      if (!keywordHit) continue;
+      const categoryHit =
+        bucket.categoryFolds.some((c) => categoryFold.includes(c)) ||
+        bucket.categoryFolds.some((c) => nameFold.includes(c)) ||
+        bucket.categoryFolds.some((c) => descFold.includes(c));
+      if (categoryHit) score = Math.max(score, 40);
+    }
+    if (score === 0) continue;
+
+    if (city && foldLocation(venue.city) === city.cityFold) score += 20;
+    scored.push({ venue, score });
+  }
+
+  if (scored.length) {
+    scored.sort((a, b) => b.score - a.score);
+    return { candidates: scored.map((s) => s.venue), descriptive: true, cityLabel: city?.label ?? null };
+  }
+
+  return { candidates: [], descriptive: false, cityLabel: city?.label ?? null };
+}
+
+/** A catalog place turned into a stop, with the coordinates and place id intact. */
+export function buildStopFromVenue(
+  venue: VenueCandidate,
+  timeWindow: string,
+  durationHint: string
+): AdminItineraryStop {
+  return buildStop({ venue, aiStop: undefined, timeWindow, durationHint });
+}
+
+/** Time windows for a stop count, matching what generation produces. */
+export function scheduleForStops(stopCount: number, days: 1 | 2 | 3) {
+  return multiDayTimeSchedule(stopCount, days);
+}
+
+export function routeFromVenues(venues: VenueCandidate[]): string {
+  return buildRouteFromVenues(venues);
+}
+
+export function categoriesFromVenues(venues: VenueCandidate[]): string[] {
+  return deriveCategoriesFromVenues(venues);
+}
+
+/**
+ * One resolved place from a multi-place prompt: its city pool and label.
+ * A place with too few published venues is reported but contributes nothing.
+ */
+type PlacePool = {
+  label: string;
+  fold: string;
+  venues: VenueCandidate[];
+  usable: boolean;
+};
+
+/**
+ * Multi-place generation. Builds one pool per place, then walks a round-robin
+ * seed order so each place headlines at least one itinerary (when count allows)
+ * before mixed routes from the union appear.
+ */
+async function buildMultiPlaceBatch({
+  count,
+  stopsPerItinerary,
+  days,
+  status,
+  hints,
+  allCandidates,
+  onProgress,
+}: {
+  count: number;
+  stopsPerItinerary: number;
+  days: 1 | 2 | 3;
+  status: AdminItinerary['status'];
+  hints: string[];
+  allCandidates: VenueCandidate[];
+  onProgress?: (p: { built: number; total: number }) => void;
+}): Promise<{
+  rows: AdminItinerary[];
+  matchedLocations: string[];
+  matchedLocation: string | null;
+  spellingCorrected: boolean;
+}> {
+  const pools: PlacePool[] = hints.slice(0, 3).map((hint) => {
+    const preferred = resolvePreferredCity(hint, allCandidates);
+    if (!preferred) {
+      return { label: hint, fold: foldLocation(hint), venues: [], usable: false };
+    }
+    const cityOnly = allCandidates.filter((v) => foldLocation(v.city) === preferred.fold);
+    return {
+      label: preferred.label,
+      fold: preferred.fold,
+      venues: cityOnly,
+      usable: cityOnly.length > 0,
+    };
+  });
+
+  const matchedLocations = pools.filter((p) => p.usable).map((p) => p.label);
+  const spellingCorrected = pools.some(
+    (p) => p.usable && p.venues.length && foldLocation(p.label) !== foldLocation(hints.find((h) => h) ?? p.label)
+  );
+
+  if (matchedLocations.length === 0) {
+    const listed = pools.map((p) => p.label).join('", "');
+    throw new Error(
+      `No published catalog places match “${listed}”. Try Cavite city or municipality names from the catalog.`
+    );
+  }
+
+  const usablePools = pools.filter((p) => p.usable);
+  const union = usablePools.flatMap((p) => p.venues);
+
+  // A usable place whose pool alone can't fill an itinerary still joins the
+  // union; its solo slot is simply skipped in the seed rotation.
+  const fullPools = usablePools.filter((p) => p.venues.length >= stopsPerItinerary);
+  const thinPools = usablePools.filter((p) => p.venues.length < stopsPerItinerary);
+
+  if (union.length < stopsPerItinerary) {
+    throw new Error(
+      `Not enough published places across ${matchedLocations.join(' and ')} to build a ${stopsPerItinerary}-stop itinerary.`
+    );
+  }
+
+  const [{ signatures: publishedSigs, placeUsage }, popularityMap] = await Promise.all([
+    loadPublishedStopMeta(),
+    fetchPopularityScores(),
+  ]);
+
+  const scoreOf = (c: VenueCandidate) =>
+    (popularityMap.get(c.id) ?? 0) - (placeUsage.get(c.id) ?? 0) * 2 + Math.random() * 0.5;
+
+  const rankPool = (venues: VenueCandidate[], n: number) =>
+    [...venues].sort((a, b) => scoreOf(b) - scoreOf(a)).slice(0, Math.max(n, 1));
+
+  // Seed rotation: round-robin the full pools first (one itinerary each pass),
+  // interleaving places so consecutive drafts differ; then thin pools join the
+  // union for the remaining slots.
+  const seedRotation: VenueCandidate[] = [];
+  const passCount = Math.max(1, Math.ceil(count / Math.max(fullPools.length, 1)));
+  const perPoolSeeds = rankPool(
+    fullPools.flatMap((p) => p.venues),
+    Math.min(fullPools.reduce((n, p) => n + p.venues.length, 0), passCount * 8)
+  );
+  for (let pass = 0; pass < passCount; pass += 1) {
+    for (const pool of fullPools) {
+      const pick = perPoolSeeds.find(
+        (s) => foldLocation(s.city) === pool.fold && !seedRotation.includes(s)
+      );
+      if (pick) seedRotation.push(pick);
+      if (seedRotation.length >= count) break;
+    }
+    if (seedRotation.length >= count) break;
+  }
+  const filler = rankPool(union, count * 3).filter((s) => !seedRotation.includes(s));
+  seedRotation.push(...filler.slice(0, Math.max(count - seedRotation.length, 0)));
+
+  const usedSignatures = new Set<string>(publishedSigs);
+  const rows: AdminItinerary[] = [];
+  const clusterPool = union.length >= stopsPerItinerary ? union : allCandidates;
+
+  for (const seed of seedRotation) {
+    if (rows.length >= count) break;
+
+    const homeFold = foldLocation(seed.city);
+    const homePool = usablePools.find((p) => p.fold === homeFold);
+    // Once every place has headlined, seeds may draw clusters from the union —
+    // that is the "smart mix": single-place routes first, mixed ones after.
+    const everyPlaceHeadlined =
+      rows.length >= Math.min(usablePools.length, count) ||
+      thinPools.length > 0;
+
+    const pool =
+      homePool && homePool.venues.length >= stopsPerItinerary && !everyPlaceHeadlined
+        ? homePool.venues
+        : clusterPool;
+
+    const cluster =
+      pickClusterPreferFresh(pool, seed, stopsPerItinerary, placeUsage) ??
+      pickCluster(clusterPool, seed, stopsPerItinerary);
+    if (!cluster) continue;
+
+    const venuesOrdered = nearestNeighborOrder(cluster, seed.id);
+    if (venuesOrdered.length !== stopsPerItinerary) continue;
+
+    const sig = signatureFromVenues(venuesOrdered);
+    if (sig && usedSignatures.has(sig)) continue;
+
+    const aiText = await generateAiTextOrFallback({
+      venuesOrdered,
+      stopsPerItinerary,
+      days,
+    });
+    const row = buildItinerary({ venuesOrdered, status, aiText, days });
+    rows.push(row);
+    if (sig) usedSignatures.add(sig);
+
+    onProgress?.({ built: rows.length, total: count });
+  }
+
+  if (rows.length === 0) {
+    throw new Error(
+      `No itineraries could be built across ${matchedLocations.join(' and ')} — try fewer stops or another place.`
+    );
+  }
+
+  return { rows, matchedLocations, matchedLocation: matchedLocations[0] ?? null, spellingCorrected };
+}
+
+export async function buildItinerariesFromTouristAttractionsBatch({
+  count,
+  stopsPerItinerary,
+  days = 1,
+  status,
+  locationHint,
+  locationHints,
+  onProgress,
+}: GenerateItinerariesBatchParams): Promise<{
+  rows: AdminItinerary[];
+  matchedLocation?: string | null;
+  spellingCorrected?: boolean;
+  matchedLocations?: string[];
+}> {
+  const total = Math.max(0, count);
+  if (total === 0) return { rows: [] };
+
+  const tripDays: 1 | 2 | 3 = days === 2 || days === 3 ? days : 1;
+  const stopCount = Math.max(1, stopsPerItinerary);
+
+  const candidates = await fetchCatalogVenues();
 
   if (candidates.length < stopCount) {
     throw new Error('Not enough published establishments to generate itineraries.');
+  }
+
+  // Multi-place prompt: every hint resolves to its city pool; the batch draws
+  // from the union, spreading coverage so each place seeds at least one
+  // itinerary (when count allows) before mixed routes take over.
+  const multiHints = (locationHints ?? []).map((h) => String(h ?? '').trim()).filter(Boolean);
+
+  if (multiHints.length > 1) {
+    const result = await buildMultiPlaceBatch({
+      count: total,
+      stopsPerItinerary: stopCount,
+      days: tripDays,
+      status,
+      hints: multiHints,
+      allCandidates: candidates,
+      onProgress,
+    });
+    return result;
   }
 
   const hint = String(locationHint ?? '').trim();
@@ -1156,11 +1586,10 @@ export async function generateItinerariesFromTouristAttractionsBatch({
   // Over-sample seeds so we can skip published stop-set clones.
   const seedLimit = Math.min(Math.max(total * 4, total), scored.length);
   const seeds = scored.slice(0, seedLimit).map((x) => x.c);
-  const createdIds: string[] = [];
-  const failedIds: string[] = [];
+  const rows: AdminItinerary[] = [];
   const usedSignatures = new Set<string>(publishedSigs);
 
-  for (let i = 0; i < seeds.length && createdIds.length < total; i += 1) {
+  for (let i = 0; i < seeds.length && rows.length < total; i += 1) {
     const seed = seeds[i];
     const cluster = pickClusterPreferFresh(clusterPool, seed, stopCount, placeUsage) ?? pickCluster(clusterPool, seed, stopCount);
     if (!cluster) continue;
@@ -1177,28 +1606,32 @@ export async function generateItinerariesFromTouristAttractionsBatch({
       days: tripDays,
     });
     const row = buildItinerary({ venuesOrdered, status, aiText, days: tripDays });
-    // Keep title clean; uniquify slug so UNIQUE(itineraries.slug) still holds.
-    const slugBase = toFixedHtmlSafeText(row.title, 60)
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 48);
-    row.slug = `${slugBase || 'itin'}-${Date.now().toString(36).slice(-4)}${createdIds.length}`;
+    rows.push(row);
+    if (sig) usedSignatures.add(sig);
 
-    try {
-      const createdId = await persistAdminItinerary(row);
-      createdIds.push(createdId);
-      if (sig) usedSignatures.add(sig);
-    } catch (e) {
-      failedIds.push(seed.id);
-      // eslint-disable-next-line no-console
-      console.warn('Could not persist generated itinerary:', e);
-    }
-
-    onProgress?.({ created: createdIds.length, total });
+    onProgress?.({ built: rows.length, total });
   }
 
-  return { createdIds, failedIds, matchedLocation, spellingCorrected };
+  return { rows, matchedLocation, spellingCorrected };
+}
+
+/**
+ * Publishes a previewed itinerary straight into the itineraries table. The slug
+ * is minted here rather than at build time so its timestamp suffix reflects the
+ * publish, keeping UNIQUE(slug) safe even when the admin publishes the same
+ * preview twice.
+ */
+export async function publishGeneratedItinerary(row: AdminItinerary): Promise<string> {
+  const slugBase = toFixedHtmlSafeText(row.title, 60)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
+  const slug = `${slugBase || 'itin'}-${Date.now().toString(36).slice(-4)}${Math.floor(
+    Math.random() * 100
+  )}`;
+
+  return persistAdminItinerary({ ...row, id: '', slug, status: 'published' });
 }

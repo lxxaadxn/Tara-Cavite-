@@ -10,10 +10,14 @@ const fs = require('fs');
 const os = require('os');
 
 const projectRoot = path.join(__dirname, '..');
-const expoCli = path.join(projectRoot, 'node_modules', 'expo', 'bin', 'cli');
+const repoRoot = path.join(projectRoot, '..', '..');
+const expoCli = [
+  path.join(projectRoot, 'node_modules', 'expo', 'bin', 'cli'),
+  path.join(repoRoot, 'node_modules', 'expo', 'bin', 'cli'),
+].find((p) => fs.existsSync(p));
 const universe = path.join(projectRoot, 'expo-offline-universe');
 
-if (!fs.existsSync(expoCli)) {
+if (!expoCli) {
   console.error('Expo CLI not found. From repo root run: npm install');
   process.exit(1);
 }

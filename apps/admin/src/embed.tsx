@@ -85,6 +85,7 @@ export function adminLayoutChildRoutes() {
 
     <Route key="itin-created" path="web/itineraries/created" element={<ContentItineraries />} />,
     <Route key="itin-ai-generator" path="web/itineraries/ai" element={<ItineraryAiPage />} />,
+    <Route key="itin-ai-session" path="web/itineraries/ai/:sessionId" element={<ItineraryAiPage />} />,
     <Route key="itin-create" path="web/itineraries/create" element={<RedirectToNewItinerary />} />,
     <Route key="itin-created-new" path="web/itineraries/created/new" element={<ItineraryEditorPage />} />,
     <Route key="itin-created-edit" path="web/itineraries/created/:id/edit" element={<ItineraryEditorPage />} />,

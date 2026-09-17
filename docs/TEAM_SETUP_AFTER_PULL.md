@@ -21,6 +21,8 @@ In [Supabase SQL Editor](https://supabase.com/dashboard), run **in order** (new 
 
 Skip if your team lead already applied them. Success = **No rows returned** (not an error).
 
+For the admin **AI Generator** chat history, also run `supabase/migrations/20260909120000_itinerary_ai_chats.sql` (needs `20260831120000_itineraries.sql` first).
+
 Optional later (full Cavite LGU data): `20260414052141_cavite_lgu_establishments.sql`, then section 5 of `20260510120000_admin_destinations_places.sql`.
 
 ## 3. Supabase Auth (admin login)

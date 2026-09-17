@@ -6,5 +6,145 @@
   max-width: none;
   margin: 0;
   display: flex;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.rail {
+  flex: 0 0 250px;
+  display: flex;
   flex-direction: column;
+  min-height: 0;
+  background: #fff;
+  border: 1px solid #e8edf2;
+  border-radius: 16px;
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+}
+
+.railHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 14px 12px;
+  border-bottom: 1px solid #e8edf2;
+}
+
+.railHead h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.newBtn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.newBtn:hover {
+  background: var(--primary-dark);
+}
+
+.railEmpty {
+  margin: 0;
+  padding: 16px 14px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.railList {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 8px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.railItem {
+  border-radius: 10px;
+  padding: 2px;
+}
+
+.railItem:hover {
+  background: #f6f8fa;
+}
+
+.railItemActive {
+  background: rgba(107, 142, 35, 0.1);
+}
+
+.railOpen {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.railTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.railWhen {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.railActions {
+  display: none;
+  gap: 10px;
+  padding: 0 10px 8px;
+}
+
+.railItem:hover .railActions,
+.railItemActive .railActions {
+  display: flex;
+}
+
+.railActions button {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.railActions button:hover {
+  color: var(--primary-dark);
+  text-decoration: underline;
+}
+
+@media (max-width: 900px) {
+  .page {
+    flex-direction: column;
+  }
+
+  .rail {
+    flex: 0 0 auto;
+    max-height: 220px;
+  }
 }
