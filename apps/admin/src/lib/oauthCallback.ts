@@ -27,6 +27,11 @@ function isRecoverableOAuthExchangeError(message: string) {
   );
 }
 
+/** Match the web app's `isStaleOAuthStateError` naming for shared semantics. */
+export function isStaleOAuthStateError(message: string): boolean {
+  return isRecoverableOAuthExchangeError(message);
+}
+
 async function waitForExistingSession(attempts = 10, delayMs = 60) {
   for (let i = 0; i < attempts; i += 1) {
     const { data } = await supabase.auth.getSession();

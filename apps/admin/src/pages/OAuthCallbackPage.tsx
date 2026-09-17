@@ -1,8 +1,17 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { adminAllowlistHint, isAllowedAdminEmailAsync } from '../lib/adminEmail';
-import { completeOAuthFromUrl, urlHasOAuthParams, waitForSupabaseSession } from '../lib/oauthCallback';
-import { clearAdminOAuthNextPath, peekAdminOAuthNextPath } from '../lib/startGoogleOAuth';
+import {
+  completeOAuthFromUrl,
+  isStaleOAuthStateError,
+  urlHasOAuthParams,
+  waitForSupabaseSession,
+} from '../lib/oauthCallback';
+import {
+  clearAdminOAuthNextPath,
+  peekAdminOAuthNextPath,
+  startAdminGoogleOAuth,
+} from '../lib/startGoogleOAuth';
 import { supabase } from '../lib/supabase';
 import { useAdminHref } from '../contexts/AdminPathPrefixContext';
 import styles from './LoginPage.module.css';
@@ -19,9 +28,29 @@ function friendlyGoogleError(message: string) {
     return 'Google sign-in expired. Please try Sign in with Google again.';
   }
   if (/pkce code verifier/i.test(text)) {
-    return 'Google sign-in could not finish in this browser tab. Try again from http://localhost:3001/login.';
+    return 'Google sign-in could not finish in this browser tab. Please try again from the login page.';
   }
   return text || 'Google sign in failed';
+}
+
+/** Guards the one automatic restart so a broken redirect config cannot loop. */
+const OAUTH_RESTARTED_KEY = 'cavitour.adminOauth.restarted';
+
+function oauthRestartUsed(): boolean {
+  try {
+    return sessionStorage.getItem(OAUTH_RESTARTED_KEY) === '1';
+  } catch {
+    return true;
+  }
+}
+
+function setOAuthRestartUsed(used: boolean) {
+  try {
+    if (used) sessionStorage.setItem(OAUTH_RESTARTED_KEY, '1');
+    else sessionStorage.removeItem(OAUTH_RESTARTED_KEY);
+  } catch {
+    /* ignore */
+  }
 }
 
 export function OAuthCallbackPage() {
@@ -38,19 +67,23 @@ export function OAuthCallbackPage() {
 
     const finish = async () => {
       let authError: string | null = null;
+      let staleState = false;
 
       try {
         const href = window.location.href;
         if (urlHasOAuthParams(href)) {
-          if (active) setStatusMessage('Exchanging the Google security code…');
+          if (active) setStatusMessage('Exchanging the Google security codeâ€¦');
           await completeOAuthFromUrl(href);
           clearAdminOAuthNextPath();
+          setOAuthRestartUsed(false);
           document.cookie = 'cavitour_oauth_intent=; path=/; max-age=0; SameSite=Lax';
           const cleanPath = window.location.pathname;
           window.history.replaceState({}, document.title, `${cleanPath}?next=${encodeURIComponent(nextPath)}`);
         }
       } catch (err) {
-        authError = friendlyGoogleError(err instanceof Error ? err.message : 'Google sign in failed');
+        const raw = err instanceof Error ? err.message : 'Google sign in failed';
+        staleState = isStaleOAuthStateError(raw);
+        authError = friendlyGoogleError(raw);
       }
 
       if (!active) return;
@@ -62,12 +95,26 @@ export function OAuthCallbackPage() {
         }, 2500);
       };
 
+      // The security code that pairs this browser with Google is missing or spent â€”
+      // usually a reused link or a stale tab (Supabase also bounces those to the
+      // site root). One fresh round trip fixes it.
+      if (authError && staleState && !oauthRestartUsed()) {
+        setOAuthRestartUsed(true);
+        if (active) setStatusMessage('Restarting Google sign-inâ€¦');
+        try {
+          await startAdminGoogleOAuth(nextPath);
+          return;
+        } catch {
+          /* fall through to the error message below */
+        }
+      }
+
       if (authError) {
         goLogin(authError);
         return;
       }
 
-      if (active) setStatusMessage('Reading your session…');
+      if (active) setStatusMessage('Reading your sessionâ€¦');
 
       let session = null;
       try {
@@ -80,7 +127,7 @@ export function OAuthCallbackPage() {
       if (!active) return;
 
       if (!session) {
-        // Be explicit — a missing session here means the code exchange silently
+        // Be explicit â€” a missing session here means the code exchange silently
         // failed; a generic "not allowlisted" message would be misleading.
         goLogin('Google finished, but no session was created. Please try again.');
         return;
@@ -88,16 +135,16 @@ export function OAuthCallbackPage() {
 
       const email = session?.user?.email?.trim().toLowerCase() ?? '';
       if (!(await isAllowedAdminEmailAsync(supabase, email))) {
-        // Show WHICH account Google actually returned — this exposes wrong-account
+        // Show WHICH account Google actually returned â€” this exposes wrong-account
         // auto-selection instead of hiding behind a generic allowlist message.
         await supabase.auth.signOut();
         goLogin(
-          `Google returned “${email || 'an unknown account'}”, but only ${adminAllowlistHint()} can access the admin app.`
+          `Google returned â€œ${email || 'an unknown account'}â€, but only ${adminAllowlistHint()} can access the admin app.`
         );
         return;
       }
 
-      if (active) setStatusMessage(`Signed in as ${email}. Opening the dashboard…`);
+      if (active) setStatusMessage(`Signed in as ${email}. Opening the dashboardâ€¦`);
       navigate(nextPath, { replace: true });
     };
 
