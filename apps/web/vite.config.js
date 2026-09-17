@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
@@ -26,7 +27,14 @@ export default defineConfig({
       ignored: ['**/public/landing/**'],
     },
     fs: {
-      allow: [path.resolve(__dirname, '..'), path.resolve(__dirname, '../..')],
+      // 'C:/tara-cavite' is an optional NTFS junction to this repo (no comma/space in
+      // the path) used to dodge a Node/libuv fs-event assertion on paths like
+      // "C:\Tara, Cavite!". Ignored if the junction does not exist.
+      allow: [
+        path.resolve(__dirname, '..'),
+        path.resolve(__dirname, '../..'),
+        ...(fs.existsSync('C:/tara-cavite') ? ['C:/tara-cavite'] : []),
+      ],
     },
   },
 });
