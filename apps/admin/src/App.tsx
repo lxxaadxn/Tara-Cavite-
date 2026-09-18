@@ -6,6 +6,7 @@ import { AdminPathPrefixProvider } from './contexts/AdminPathPrefixContext';
 import { LoginPage } from './pages/LoginPage';
 import { OAuthCallbackPage } from './pages/OAuthCallbackPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { urlLooksLikePasswordRecovery, storedVerifierLooksLikeRecovery } from './lib/passwordRecovery';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { AdminAuthGate, adminLayoutChildRoutes } from './embed';
 import './index.css';
@@ -18,7 +19,15 @@ import './index.css';
 function RootOAuthForward() {
   const { search } = useLocation();
   if (/[?&]code=/.test(search)) {
-    return <Navigate to={`/auth/callback${search}`} replace />;
+    // Recovery links bounced to the Site URL root belong on the reset page;
+    // Google OAuth codes belong on /auth/callback (matches the web app's behavior).
+    const target = storedVerifierLooksLikeRecovery()
+      ? '/auth/reset-password'
+      : '/auth/callback';
+    return <Navigate to={`${target}${search}`} replace />;
+  }
+  if (urlLooksLikePasswordRecovery()) {
+    return <Navigate to="/auth/reset-password" replace />;
   }
   return <Navigate to="/web/dashboard" replace />;
 }

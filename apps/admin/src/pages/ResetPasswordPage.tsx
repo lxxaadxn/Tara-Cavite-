@@ -2,80 +2,75 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { AdminBrandMark } from '../components/AdminBrandMark';
 import { supabase } from '../lib/supabase';
+import {
+  completePasswordRecoveryFromUrl,
+  stripAuthParamsFromUrl,
+  urlLooksLikePasswordRecovery,
+} from '../lib/passwordRecovery';
 import styles from './LoginPage.module.css';
 
 const MIN_LEN = 8;
 
-type Phase = 'verifying' | 'ready' | 'done' | 'error';
+type Phase = 'bootstrapping' | 'ready' | 'done';
 
 /**
  * Landing target of the password-reset email link (`/auth/reset-password`).
- * Supports both Supabase link styles:
- *  - `?token_hash=…&type=recovery`  → verifyOtp
- *  - `#access_token=…&refresh_token=…` (legacy implicit link) → setSession
- * Then lets the admin set a new password.
+ * Mirrors the web app's ResetPasswordPage: completes the recovery link
+ * (PKCE code or implicit tokens), then lets the admin set a new password.
  */
 export function ResetPasswordPage() {
   const navigate = useNavigate();
-  const [phase, setPhase] = useState<Phase>('verifying');
-  const [message, setMessage] = useState('Verifying your reset link…');
+  const [phase, setPhase] = useState<Phase>('bootstrapping');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     let active = true;
 
-    const parseFragmentParams = (): URLSearchParams => {
-      const hashIdx = window.location.href.indexOf('#');
-      if (hashIdx < 0) return new URLSearchParams();
-      return new URLSearchParams(window.location.href.slice(hashIdx + 1));
-    };
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active) return;
+      if (event === 'PASSWORD_RECOVERY' && session) {
+        setPhase('ready');
+        setError('');
+      }
+    });
 
-    const verify = async () => {
-      const query = new URLSearchParams(window.location.search);
-      const tokenHash = query.get('token_hash');
-      const queryType = query.get('type');
-      const fragment = parseFragmentParams();
-      const accessToken = fragment.get('access_token');
-      const refreshToken = fragment.get('refresh_token');
-
+    const bootstrap = async () => {
       try {
-        if (tokenHash) {
-          const type = queryType === 'recovery' || !queryType ? 'recovery' : queryType;
-          const { error: err } = await supabase.auth.verifyOtp({
-            token_hash: tokenHash,
-            type: type as 'recovery',
-          });
-          if (err) throw err;
-        } else if (accessToken && refreshToken) {
-          const { error: err } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          });
-          if (err) throw err;
-        } else {
-          // Maybe the SDK already picked up a session (e.g. detectSessionInUrl).
-          const { data } = await supabase.auth.getSession();
-          if (!data.session) {
-            throw new Error('This reset link is invalid or has expired.');
+        const href = window.location.href;
+        // Only exchange recovery links here — never steal Google OAuth codes.
+        if (urlLooksLikePasswordRecovery(href)) {
+          const session = await completePasswordRecoveryFromUrl(supabase, href);
+          if (!active) return;
+          if (session) {
+            stripAuthParamsFromUrl('/auth/reset-password');
+            setPhase('ready');
+            setError('');
+            return;
           }
         }
 
-        // Clean the URL so tokens do not linger in history.
-        window.history.replaceState({}, document.title, window.location.pathname);
-        if (active) setPhase('ready');
+        const { data } = await supabase.auth.getSession();
+        if (!active) return;
+        if (data.session) {
+          // Already in a recovery/session from the email link.
+          setPhase('ready');
+        }
       } catch (err) {
         if (!active) return;
-        setMessage(err instanceof Error ? err.message : 'Could not verify the reset link.');
-        setPhase('error');
+        setError(err instanceof Error ? err.message : 'This reset link is invalid or expired.');
+      } finally {
+        if (active) setPhase((p) => (p === 'bootstrapping' ? 'bootstrapping' : p));
       }
     };
 
-    void verify();
+    void bootstrap();
+
     return () => {
       active = false;
+      subscription.unsubscribe();
     };
   }, []);
 
@@ -90,16 +85,16 @@ export function ResetPasswordPage() {
       setError('Passwords do not match.');
       return;
     }
-    setBusy(true);
+    setLoading(true);
     try {
       const { error: err } = await supabase.auth.updateUser({ password });
       if (err) throw err;
       await supabase.auth.signOut();
       setPhase('done');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not update the password.');
+      setError(err instanceof Error ? err.message : 'Could not update password.');
     } finally {
-      setBusy(false);
+      setLoading(false);
     }
   };
 
@@ -111,24 +106,20 @@ export function ResetPasswordPage() {
           <span className={styles.badge}>Admin</span>
         </div>
 
-        {phase === 'verifying' && (
+        {phase === 'bootstrapping' && (
           <>
             <h1 className={styles.title}>Reset password</h1>
             <p className={styles.hint} role="status">
-              {message}
+              Opening your reset link…
             </p>
-          </>
-        )}
-
-        {phase === 'error' && (
-          <>
-            <h1 className={styles.title}>Reset link problem</h1>
-            <p className={styles.error} role="alert">
-              {message}
-            </p>
+            {error ? (
+              <p className={styles.error} role="alert">
+                {error}
+              </p>
+            ) : null}
             <p className={styles.forgotRow}>
               <Link to="/forgot-password" className={styles.forgotLink}>
-                Request a new reset link
+                Request a new link
               </Link>
               {' | '}
               <Link to="/login" className={styles.forgotLink}>
@@ -176,8 +167,8 @@ export function ResetPasswordPage() {
                   {error}
                 </p>
               ) : null}
-              <button type="submit" className={styles.submit} disabled={busy}>
-                {busy ? 'Saving…' : 'Update password'}
+              <button type="submit" className={styles.submit} disabled={loading}>
+                {loading ? 'Saving…' : 'Save new password'}
               </button>
             </form>
           </>
