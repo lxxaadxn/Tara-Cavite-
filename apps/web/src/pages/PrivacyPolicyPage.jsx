@@ -1,4 +1,4 @@
-﻿const ink = 'var(--ct-ink)';
+const ink = 'var(--ct-ink)';
 const teal = 'var(--ct-teal)';
 const cream = 'var(--ct-cream)';
 const mint = '#D4EFE8';

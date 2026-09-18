@@ -5,6 +5,9 @@
   "private": true,
   "scripts": {
     "expo": "node scripts/run-expo.cjs",
+    "prebuild:android": "npm run expo -- prebuild -p android",
+    "apk": "cd android && gradlew.bat assembleRelease",
+    "aab": "cd android && gradlew.bat bundleRelease",
     "start": "npm run expo -- start",
     "mobile": "npm run start",
     "start:clear": "npm run expo -- start --clear",

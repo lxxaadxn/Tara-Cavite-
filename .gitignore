@@ -59,3 +59,14 @@ app-example
 # generated native folders
 /ios
 /android
+apps/mobile/android
+apps/mobile/ios
+
+# Android signing material (never commit keys)
+*.keystore
+*.jks
+apps/mobile/credentials.json
+apps/mobile/credentials/
+apps/mobile/build-aab.bat
+apps/mobile/prebuild.log
+apps/mobile/aab-build.log
