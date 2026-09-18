@@ -1,5 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+﻿import { useEffect, useState, type FormEvent } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AdminBrandMark } from '../components/AdminBrandMark';
 import { ADMIN_ALLOWED_EMAIL, adminAllowlistHint, isAllowedAdminEmailAsync } from '../lib/adminEmail';
 import { consumePendingAdminGoogleOAuth, startAdminGoogleOAuth } from '../lib/startGoogleOAuth';
@@ -36,7 +36,7 @@ export function LoginPage() {
   const location = useLocation();
   const { session, loading: authLoading } = useAuth();
   const dashboardHref = useAdminHref('/web/dashboard');
-  const forgotHref = '/forgot-password';
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -146,7 +146,7 @@ export function LoginPage() {
             Email
             <input
               type="email"
-              autoComplete="email"
+              id="admin-email" name="email" autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className={styles.input}
@@ -158,7 +158,7 @@ export function LoginPage() {
             Password
             <input
               type="password"
-              autoComplete="current-password"
+              id="admin-password" name="password" autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className={styles.input}
@@ -171,12 +171,12 @@ export function LoginPage() {
             </p>
           ) : null}
           <button type="submit" className={styles.submit} disabled={loading || authLoading}>
-            {loading ? 'Signing in…' : 'Log in'}
+            {loading ? 'Signing inâ€¦' : 'Log in'}
           </button>
           <p className={styles.forgotRow}>
-            <a href={forgotHref} className={styles.forgotLink}>
+            <Link to="/forgot-password" className={styles.forgotLink}>
               Forgot password?
-            </a>
+            </Link>
           </p>
         </form>
       </div>
