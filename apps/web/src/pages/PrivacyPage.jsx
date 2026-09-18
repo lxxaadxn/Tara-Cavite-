@@ -22,6 +22,19 @@ export function PrivacyPage() {
         <h1 className="mt-3 font-['Poppins',sans-serif] text-2xl font-bold text-neutral-900">Privacy</h1>
 
         <section className="mt-5 max-w-xl rounded-[28px] bg-white p-5 sm:p-6">
+          <h2 className="font-['Poppins',sans-serif] text-base font-semibold text-neutral-900">Full privacy policy</h2>
+          <p className="mt-2 text-sm leading-relaxed text-neutral-600">
+            The complete Privacy Policy — what we collect, how we use it, and your rights — lives on its own page.
+          </p>
+          <Link
+            to="/privacy-policy"
+            className="mt-4 inline-flex rounded-full bg-[#D4EFE8] px-4 py-2 text-sm font-semibold text-[#1B8A70] transition hover:bg-[#C8EBDD]"
+          >
+            Read the full Privacy Policy
+          </Link>
+        </section>
+
+        <section className="mt-4 max-w-xl rounded-[28px] bg-white p-5 sm:p-6">
           <h2 className="font-['Poppins',sans-serif] text-base font-semibold text-neutral-900">Saved list visibility</h2>
           <p className="mt-2 text-sm leading-relaxed text-neutral-600">
             Each saved list can be private or public. You choose that when you create or edit a list — there is no

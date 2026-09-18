@@ -722,6 +722,24 @@ const ProfileScreen: React.FC = () => {
             hint="Password and account access"
             onPress={() => openEdit(true)}
           />
+          <SettingsRow
+            icon="world"
+            title="Privacy"
+            hint="Saved list visibility and public profile"
+            onPress={() => go('Privacy')}
+          />
+          <SettingsRow
+            icon="document"
+            title="Privacy Policy"
+            hint="How we handle your information"
+            onPress={() => go('PrivacyPolicy')}
+          />
+          <SettingsRow
+            icon="book"
+            title="Terms of Use"
+            hint="The rules for using Tara, Cavite!"
+            onPress={() => go('Terms')}
+          />
         </View>
       </ScrollView>
 

@@ -33,6 +33,10 @@ yarn-error.*
 debug-*.log
 .cursor/debug-*.log
 
+# local dev-server logs
+expo-run.log
+web-run.log
+
 # Supabase CLI local link state (machine specific)
 supabase/.temp/
 

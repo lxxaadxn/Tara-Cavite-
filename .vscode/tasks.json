@@ -1,0 +1,30 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Tara Cavite: Start Mobile (Expo)",
+      "type": "shell",
+      "command": "npm run mobile",
+      "options": { "cwd": "${workspaceFolder}" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "Tara Cavite: Start Mobile (clear cache)",
+      "type": "shell",
+      "command": "npm run mobile:clear",
+      "options": { "cwd": "${workspaceFolder}" },
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Tara Cavite: Start Web",
+      "type": "shell",
+      "command": "npm run web",
+      "options": { "cwd": "${workspaceFolder}" },
+      "isBackground": true,
+      "problemMatcher": []
+    }
+  ]
+}

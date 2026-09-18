@@ -25,6 +25,7 @@ import { PublicProfilePage } from './pages/PublicProfilePage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { TravelHistoryPage } from './pages/TravelHistoryPage';
 import { PrivacyPage } from './pages/PrivacyPage';
+import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 import { TermsPage } from './pages/TermsPage';
 import { EstablishmentSetupPage } from './pages/EstablishmentSetupPage';
 import { EstablishmentDashboardPage } from './pages/EstablishmentDashboardPage';
@@ -130,6 +131,7 @@ export default function App() {
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/checkin" element={<CheckinPage />} />

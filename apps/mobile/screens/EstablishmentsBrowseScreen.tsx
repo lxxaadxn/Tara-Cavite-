@@ -74,7 +74,6 @@ export default function EstablishmentsBrowseScreen() {
         title="All establishments"
         showBack
         showNotification
-        onNotificationPress={() => navigation.navigate('Notifications' as never)}
       />
       <View style={styles.searchWrap}>
         <JamIcon name="search" size={18} color={Colors.text.light} />

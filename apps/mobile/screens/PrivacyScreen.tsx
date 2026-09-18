@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,6 +21,20 @@ export default function PrivacyScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.card}>
+          <Text style={styles.heading}>Full privacy policy</Text>
+          <Text style={styles.body}>
+            The complete Privacy Policy — what we collect, how we use it, and your rights — lives on its own page.
+          </Text>
+          <TouchableOpacity
+            style={styles.linkBtn}
+            onPress={() => (navigation as { navigate: (name: string) => void }).navigate('PrivacyPolicy')}
+            accessibilityRole="button"
+          >
+            <Text style={styles.linkBtnText}>Read the full Privacy Policy</Text>
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.card}>
           <Text style={styles.heading}>Saved list visibility</Text>
           <Text style={styles.body}>

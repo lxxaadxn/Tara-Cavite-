@@ -3,5 +3,13 @@
     "source.fixAll": "explicit",
     "source.organizeImports": "explicit",
     "source.sortMembers": "explicit"
-  }
+  },
+  // Node lives in Program Files but isn't on the default PATH — this makes every
+  // VS Code terminal (and npm scripts) see node/npm/npx.
+  "terminal.integrated.env.windows": {
+    "PATH": "C:\\Program Files\\nodejs;${env:PATH}"
+  },
+  "eslint.workingDirectories": [
+    { "pattern": "apps/*" }
+  ]
 }

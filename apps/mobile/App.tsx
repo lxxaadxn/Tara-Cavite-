@@ -66,6 +66,7 @@ import SignUpScreen from './screens/SignUpScreen';
 import UserDetailsScreen from './screens/UserDetailsScreen';
 import TravelHistoryScreen from './screens/TravelHistoryScreen';
 import PrivacyScreen from './screens/PrivacyScreen';
+import PrivacyPolicyScreen from './screens/PrivacyPolicyScreen';
 import TermsScreen from './screens/TermsScreen';
 import NewListScreen from './screens/NewListScreen';
 import CreateItineraryScreen from './screens/CreateItineraryScreen';
@@ -165,6 +166,8 @@ const ProfileStack = () => (
     <Stack.Screen name="History" component={HistoryScreen} />
     <Stack.Screen name="TravelHistory" component={TravelHistoryScreen} />
     <Stack.Screen name="Privacy" component={PrivacyScreen} />
+    <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+    <Stack.Screen name="Terms" component={TermsScreen} />
     <Stack.Screen name="PlaceDetail" component={PlaceDetailScreen} />
     <Stack.Screen name="AboutEstablishment" component={AboutEstablishmentScreen} />
     <Stack.Screen name="Checkin" component={CheckinScreen} />
@@ -230,6 +233,8 @@ const HIDE_TAB_ROUTES = new Set([
   'UserDetails',
   'TravelHistory',
   'Privacy',
+  'PrivacyPolicy',
+  'Terms',
 ]);
 
 function shouldHideTabBar(route: object, fallback: string) {
